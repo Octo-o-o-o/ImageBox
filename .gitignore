@@ -50,3 +50,4 @@ dev.db-journal
 # internal development documentation
 CLAUDE.md
 PRODUCT_DESIGN.md
+/docs/
