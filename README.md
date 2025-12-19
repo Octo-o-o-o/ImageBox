@@ -22,14 +22,62 @@
 
 ## Features
 
-- **100% Free & Open Source** - No API costs beyond your own Gemini key, no hidden fees
-- **Local-First Storage** - All images and data stored locally on your machine
-- **Template Management** - Create reusable prompt templates with variable substitution
-- **Modern UI** - Beautiful dark glassmorphism design with smooth animations
-- **Cross-Platform Access** - Use via localhost or LAN from any device
-- **Privacy Focused** - Your API keys and images never leave your machine
-- **SQLite Database** - Lightweight, portable, zero-configuration database
-- **Server Actions** - Fast, secure API calls with Next.js Server Actions
+### Core Capabilities
+
+- **🎨 Multi-Model Support** - Seamlessly integrate multiple AI providers:
+  - Google Gemini Official API (Gemini 2.5 Flash, Gemini 3 Pro)
+  - OpenAI Official API (DALL-E 3)
+  - OpenAI-compatible endpoints (OpenRouter, custom providers)
+  - Auto-adaptive parameter configuration with built-in presets
+  - Smart parameter mapping for different API formats
+
+- **📝 Advanced Template System** - Powerful prompt management workflow:
+  - Create reusable templates with `{{variable}}` syntax
+  - Two-stage generation: Prompt optimization → Image generation
+  - Separate model selection for prompt enhancement and image creation
+  - Customizable system prompts for prompt optimization
+  - Dynamic form generation from template variables
+
+- **🖼️ Image-to-Image Generation** - Reference-guided creation:
+  - Upload reference images to guide generation (supports 2-14 images per model)
+  - Smart validation for image size and aspect ratio
+  - Automatic adjustment based on model capabilities
+  - Visual feedback for image compatibility
+
+- **📁 Complete Asset Management** - Organize your creations:
+  - Folder-based organization system
+  - Masonry grid gallery with responsive layout
+  - Quick actions: Download, copy to clipboard, favorite, delete
+  - Image metadata tracking (prompt, model, parameters, timestamp)
+
+- **📊 Full Run Logs** - Complete generation history tracking:
+  - Detailed logs for every API call (prompt generation & image generation)
+  - Request/response timing and duration
+  - Success/failure status with error messages
+  - Configuration parameters for each generation
+  - Searchable history for debugging and analysis
+
+### Privacy & Storage
+
+- **🔒 Privacy First** - Your data stays yours:
+  - All images and metadata stored locally (SQLite database)
+  - API keys stored locally, never transmitted except to chosen providers
+  - Only necessary AI model API calls go to external services
+  - No telemetry, no analytics, no data collection
+  - Full control over your creative assets
+
+- **💾 Local-First Architecture**:
+  - SQLite database - Lightweight, portable, zero-configuration
+  - File-based image storage in `public/generated/`
+  - No cloud dependencies (except AI model APIs)
+  - Works offline for management and viewing
+
+### User Experience
+
+- **✨ Modern UI** - Beautiful dark glassmorphism design with smooth animations
+- **🌐 Cross-Platform Access** - Use via localhost or LAN from any device
+- **⚡ Fast & Secure** - Next.js Server Actions for optimized API calls
+- **🆓 100% Free & Open Source** - No hidden fees, only your own API key costs
 
 ## Screenshots
 
