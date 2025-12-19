@@ -46,3 +46,7 @@ next-env.d.ts
 dev.db
 dev.db-journal
 /public/generated/
+
+# internal development documentation
+CLAUDE.md
+PRODUCT_DESIGN.md

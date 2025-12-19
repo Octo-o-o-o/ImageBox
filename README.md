@@ -121,8 +121,6 @@ imagebox/
 
 ## Roadmap
 
-See [CLAUDE.md](./CLAUDE.md#roadmap--todo) for detailed roadmap.
-
 ### High Priority
 - [ ] **Internationalization (i18n)** - English & Chinese language support
 - [ ] **Dark/Light Theme** - User-selectable theme with smooth transitions
