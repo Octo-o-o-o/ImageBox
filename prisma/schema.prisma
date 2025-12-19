@@ -69,12 +69,13 @@ model Folder {
 }
 
 model Image {
-  id          String   @id @default(uuid())
-  path        String   // Relative URL/path to the image file
-  finalPrompt String
-  modelName   String
-  params      String   // JSON of generation params
-  isFavorite  Boolean  @default(false)
+  id            String   @id @default(uuid())
+  path          String   // Relative URL/path to the image file
+  thumbnailPath String?  // Relative URL/path to the thumbnail (optional for backward compat)
+  finalPrompt   String
+  modelName     String
+  params        String   // JSON of generation params
+  isFavorite    Boolean  @default(false)
 
   template    Template? @relation(fields: [templateId], references: [id])
   templateId  String?
@@ -102,4 +103,16 @@ model RunLog {
   output          String?          // Image path/URL or Text Output or Error Info
   parentTaskId    String?
   configParams    String?          // JSON of config
+}
+
+// 远程访问授权码
+model AccessToken {
+  id          String    @id @default(uuid())
+  name        String                          // 用户自定义名称，方便识别
+  description String?                         // 可选备注
+  token       String    @unique               // 随机生成的授权码 (32字符)
+  expiresAt   DateTime                        // 过期时间
+  isRevoked   Boolean   @default(false)       // 是否已撤销
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?                       // 最后使用时间
 }

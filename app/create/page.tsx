@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,7 +32,7 @@ type Template = {
   defaultParams: string;
 };
 
-export default function StudioPage() {
+function StudioPageContent() {
   const searchParams = useSearchParams();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [models, setModels] = useState<any[]>([]);
@@ -960,6 +960,18 @@ export default function StudioPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function StudioPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <StudioPageContent />
+    </Suspense>
   );
 }
 

@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '30mb',
     },
   },
+  images: {
+    // Custom image sizes for better thumbnail optimization
+    // Smaller sizes for grid thumbnails, larger for previews
+    imageSizes: [64, 96, 128, 192, 256, 384],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+  },
 };
 
 export default nextConfig;

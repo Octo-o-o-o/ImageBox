@@ -7,6 +7,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { mapParametersForAPI } from '@/lib/modelParameters';
+import sharp from 'sharp';
+
+// Thumbnail configuration
+const THUMBNAIL_SIZE = 384; // px - good balance between quality and size
+const THUMBNAIL_QUALITY = 80; // JPEG quality
 
 // --- Types ---
 
@@ -541,12 +546,32 @@ export async function generateImageAction(modelId: string, prompt: string, param
 export async function saveGeneratedImage(base64Data: string, finalPrompt: string, modelName: string, params: string, templateId?: string, folderId?: string) {
   const buffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), 'base64');
   const filename = `${Date.now()}-${uuidv4()}.png`;
+  const thumbnailFilename = `thumb_${filename.replace('.png', '.jpg')}`; // Use JPEG for smaller size
   const relativePath = `/generated/${filename}`;
+  const thumbnailPath = `/generated/thumbnails/${thumbnailFilename}`;
   const outputDir = path.join(process.cwd(), 'public', 'generated');
+  const thumbnailDir = path.join(outputDir, 'thumbnails');
 
+  // Ensure directories exist
   try { await fs.access(outputDir); } catch { await fs.mkdir(outputDir, { recursive: true }); }
+  try { await fs.access(thumbnailDir); } catch { await fs.mkdir(thumbnailDir, { recursive: true }); }
 
+  // Save original image
   await fs.writeFile(path.join(outputDir, filename), buffer);
+
+  // Generate and save thumbnail
+  try {
+    await sharp(buffer)
+      .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+        fit: 'cover',
+        position: 'centre'
+      })
+      .jpeg({ quality: THUMBNAIL_QUALITY })
+      .toFile(path.join(thumbnailDir, thumbnailFilename));
+  } catch (e) {
+    console.error('Failed to generate thumbnail:', e);
+    // Continue without thumbnail if it fails
+  }
 
   // If no folder specified, use default folder
   let targetFolderId = folderId;
@@ -558,6 +583,7 @@ export async function saveGeneratedImage(base64Data: string, finalPrompt: string
   const image = await prisma.image.create({
     data: {
       path: relativePath,
+      thumbnailPath,
       finalPrompt,
       modelName,
       params,
@@ -664,7 +690,7 @@ export async function deleteImage(id: string) {
   const image = await prisma.image.findUnique({ where: { id } });
   if (!image) throw new Error('图片不存在');
 
-  // Delete file from disk
+  // Delete original file from disk
   try {
     // Remove leading slash from path to avoid path.join truncation issue
     const cleanPath = image.path.replace(/^\//, '');
@@ -673,6 +699,18 @@ export async function deleteImage(id: string) {
   } catch (e) {
     console.error('删除文件失败:', e);
     // Continue to delete DB record even if file deletion fails
+  }
+
+  // Delete thumbnail from disk
+  if (image.thumbnailPath) {
+    try {
+      const cleanThumbPath = image.thumbnailPath.replace(/^\//, '');
+      const thumbFilePath = path.join(process.cwd(), 'public', cleanThumbPath);
+      await fs.unlink(thumbFilePath);
+    } catch (e) {
+      console.error('删除缩略图失败:', e);
+      // Continue even if thumbnail deletion fails
+    }
   }
 
   // Delete DB record
@@ -700,4 +738,147 @@ export async function moveImageToFolder(imageId: string, folderId: string) {
     where: { id: imageId },
     data: { folderId }
   });
+}
+
+// --- Remote Access ---
+
+/**
+ * 获取远程访问开关状态
+ */
+export async function getRemoteAccessEnabled(): Promise<boolean> {
+  const setting = await prisma.setting.findUnique({
+    where: { key: 'remoteAccessEnabled' }
+  });
+  return setting?.value === 'true';
+}
+
+/**
+ * 设置远程访问开关
+ */
+export async function setRemoteAccessEnabled(enabled: boolean) {
+  await prisma.setting.upsert({
+    where: { key: 'remoteAccessEnabled' },
+    update: { value: enabled ? 'true' : 'false' },
+    create: { key: 'remoteAccessEnabled', value: enabled ? 'true' : 'false' }
+  });
+}
+
+/**
+ * 生成随机授权码
+ */
+function generateToken(): string {
+  // 排除容易混淆的字符: 0, O, o, 1, l, I
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+/**
+ * 获取所有授权码（返回完整token，个人项目无需隐藏）
+ */
+export async function getAccessTokens() {
+  const tokens = await prisma.accessToken.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+  
+  return tokens.map(t => ({
+    ...t,
+    isExpired: t.expiresAt < new Date()
+  }));
+}
+
+/**
+ * 创建授权码（简化版，自动生成名称）
+ * @param expiresIn 有效期（小时），-1 表示永久
+ * @returns 包含完整 token 的对象
+ */
+export async function createAccessToken(expiresIn: number) {
+  const token = generateToken();
+  
+  // 计算过期时间
+  let expiresAt: Date;
+  if (expiresIn === -1) {
+    // 永久：设置为100年后
+    expiresAt = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+  } else {
+    expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
+  }
+  
+  // 自动生成名称：Token + 序号
+  const count = await prisma.accessToken.count();
+  const name = `Token ${count + 1}`;
+  
+  const accessToken = await prisma.accessToken.create({
+    data: {
+      name,
+      token,
+      expiresAt
+    }
+  });
+  
+  return {
+    id: accessToken.id,
+    name: accessToken.name,
+    description: accessToken.description,
+    token: accessToken.token,
+    expiresAt: accessToken.expiresAt,
+    createdAt: accessToken.createdAt
+  };
+}
+
+/**
+ * 更新授权码描述/备注
+ */
+export async function updateAccessTokenDescription(id: string, description: string) {
+  return await prisma.accessToken.update({
+    where: { id },
+    data: { description: description || null }
+  });
+}
+
+/**
+ * 删除授权码
+ */
+export async function deleteAccessToken(id: string) {
+  return await prisma.accessToken.delete({
+    where: { id }
+  });
+}
+
+/**
+ * 撤销授权码（软删除）
+ */
+export async function revokeAccessToken(id: string) {
+  return await prisma.accessToken.update({
+    where: { id },
+    data: { isRevoked: true }
+  });
+}
+
+/**
+ * 验证授权码
+ * @returns 验证成功返回 token 信息，失败返回 null
+ */
+export async function validateAccessToken(token: string) {
+  const accessToken = await prisma.accessToken.findUnique({
+    where: { token }
+  });
+  
+  if (!accessToken) return null;
+  if (accessToken.isRevoked) return null;
+  if (accessToken.expiresAt < new Date()) return null;
+  
+  // 更新最后使用时间
+  await prisma.accessToken.update({
+    where: { id: accessToken.id },
+    data: { lastUsedAt: new Date() }
+  });
+  
+  return {
+    id: accessToken.id,
+    name: accessToken.name
+  };
 }

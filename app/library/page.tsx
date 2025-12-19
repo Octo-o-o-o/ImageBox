@@ -1,8 +1,9 @@
 'use client';
 
 import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder } from '@/app/actions';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import {
   Image as ImageIcon,
   Folder,
@@ -36,7 +37,23 @@ type FolderType = {
   _count: { images: number };
 };
 
+type ImageType = {
+  id: string;
+  path: string;
+  thumbnailPath?: string | null;
+  finalPrompt: string;
+  createdAt: string;
+  isFavorite: boolean;
+  modelName: string;
+  params: string;
+  template?: { name: string } | null;
+  folder?: { name: string } | null;
+};
+
 type ViewMode = 'grid' | 'list';
+
+// Maximum number of items to animate with delay
+const MAX_ANIMATED_ITEMS = 12;
 
 export default function LibraryPage() {
   const { t } = useLanguage();
@@ -44,7 +61,7 @@ export default function LibraryPage() {
     vars ? replaceTemplate(t(key), vars) : t(key);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [images, setImages] = useState<any[]>([]);
+  const [images, setImages] = useState<ImageType[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -75,9 +92,6 @@ export default function LibraryPage() {
     templateName?: string,
     folderName?: string
   } | null>(null);
-
-  // Image dimensions cache
-  const [imageDimensions, setImageDimensions] = useState<Record<string, { width: number, height: number }>>({});
   
   // Move image state
   const [movingImageId, setMovingImageId] = useState<string | null>(null);
@@ -113,22 +127,30 @@ export default function LibraryPage() {
     setLoading(false);
   };
 
-  const totalImagesCount = folders.reduce((sum, folder) => sum + folder._count.images, 0);
-  const favoriteImagesCount = images.filter(img => img.isFavorite).length;
+  const totalImagesCount = useMemo(() => 
+    folders.reduce((sum, folder) => sum + folder._count.images, 0), 
+    [folders]
+  );
+  
+  const favoriteImagesCount = useMemo(() => 
+    images.filter(img => img.isFavorite).length, 
+    [images]
+  );
   
   // Filter images based on favorites and search
-  let filteredImages = showFavoritesOnly ? images.filter(img => img.isFavorite) : images;
-  
-  // Apply search filter
-  if (searchKeyword.trim()) {
-    const keyword = searchKeyword.toLowerCase();
-    filteredImages = filteredImages.filter(img => 
-      img.finalPrompt?.toLowerCase().includes(keyword) || 
-      img.modelName?.toLowerCase().includes(keyword)
-    );
-  }
-  
-  const displayedImages = filteredImages;
+  const displayedImages = useMemo(() => {
+    let filtered = showFavoritesOnly ? images.filter(img => img.isFavorite) : images;
+    
+    if (searchKeyword.trim()) {
+      const keyword = searchKeyword.toLowerCase();
+      filtered = filtered.filter(img => 
+        img.finalPrompt?.toLowerCase().includes(keyword) || 
+        img.modelName?.toLowerCase().includes(keyword)
+      );
+    }
+    
+    return filtered;
+  }, [images, showFavoritesOnly, searchKeyword]);
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
@@ -192,7 +214,7 @@ export default function LibraryPage() {
     }
   };
 
-  const handleDownloadImage = (url: string, prompt: string, e?: React.MouseEvent) => {
+  const handleDownloadImage = useCallback((url: string, prompt: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const link = document.createElement('a');
     link.href = url;
@@ -200,9 +222,9 @@ export default function LibraryPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+  }, []);
 
-  const handleCopyImage = async (url: string, e?: React.MouseEvent) => {
+  const handleCopyImage = useCallback(async (url: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
       const response = await fetch(url);
@@ -215,7 +237,7 @@ export default function LibraryPage() {
       console.error('Copy failed:', err);
       alert(tr('library.copyFailed'));
     }
-  };
+  }, [tr]);
 
   const handleToggleFavorite = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -265,30 +287,6 @@ export default function LibraryPage() {
     setMovingImageId(imageId);
     const firstFolder = folders.find(f => !f.isDefault) || folders[0];
     setTargetFolderId(firstFolder?.id || '');
-  };
-
-  const handleImageLoad = (imgId: string, e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    if (img.naturalWidth && img.naturalHeight) {
-      setImageDimensions(prev => ({
-        ...prev,
-        [imgId]: { width: img.naturalWidth, height: img.naturalHeight }
-      }));
-    }
-  };
-
-  const handleImageRef = (imgId: string, element: HTMLImageElement | null) => {
-    if (element && element.complete && element.naturalWidth && element.naturalHeight) {
-      if (!imageDimensions[imgId]) {
-        setImageDimensions(prev => {
-          if (prev[imgId]) return prev;
-          return {
-            ...prev,
-            [imgId]: { width: element.naturalWidth, height: element.naturalHeight }
-          };
-        });
-      }
-    }
   };
 
   // Batch selection handlers
@@ -360,6 +358,20 @@ export default function LibraryPage() {
       }
     });
   };
+
+  const openPreview = useCallback((img: ImageType) => {
+    setPreviewImage({
+      id: img.id,
+      url: img.path,
+      prompt: img.finalPrompt,
+      createdAt: img.createdAt,
+      isFavorite: img.isFavorite,
+      modelName: img.modelName,
+      params: img.params,
+      templateName: img.template?.name,
+      folderName: img.folder?.name
+    });
+  }, []);
 
   return (
     <div className="flex h-[calc(100vh-2rem)] -m-8 bg-background text-foreground overflow-hidden">
@@ -704,115 +716,21 @@ export default function LibraryPage() {
              viewMode === 'grid' ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
                 {displayedImages.map((img, i) => (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05, duration: 0.3 }}
+                  <ImageGridItem
                     key={img.id}
-                    className={clsx(
-                      "group relative aspect-square rounded-xl overflow-hidden bg-card border transition-all duration-300",
-                      isSelectionMode
-                        ? "cursor-pointer hover:shadow-md"
-                        : "hover:shadow-lg hover:border-primary/50",
-                      selectedImageIds.includes(img.id)
-                        ? "ring-2 ring-primary border-primary shadow-lg"
-                        : "border-border/50"
-                    )}
-                    onClick={(e) => {
-                      if (isSelectionMode) {
-                        toggleImageSelection(img.id);
-                      } else {
-                        setPreviewImage({
-                          id: img.id,
-                          url: img.path,
-                          prompt: img.finalPrompt,
-                          createdAt: img.createdAt,
-                          isFavorite: img.isFavorite,
-                          modelName: img.modelName,
-                          params: img.params,
-                          templateName: img.template?.name,
-                          folderName: img.folder?.name
-                        });
-                      }
-                    }}
-                  >
-                    <img
-                      src={img.path}
-                      alt={img.finalPrompt}
-                      loading="lazy"
-                      onLoad={(e) => handleImageLoad(img.id, e)}
-                      ref={(el) => handleImageRef(img.id, el)}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                    
-                    {/* Selection Checkbox */}
-                    {isSelectionMode && (
-                      <div className="absolute top-3 left-3 z-10">
-                        <div className={clsx(
-                          "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors",
-                          selectedImageIds.includes(img.id)
-                            ? "bg-primary border-primary"
-                            : "bg-black/20 border-white backdrop-blur-sm"
-                        )}>
-                          {selectedImageIds.includes(img.id) && (
-                            <Check className="w-4 h-4 text-white" />
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Overlay */}
-                    <div className={clsx(
-                      "absolute inset-0 bg-black/40 transition-opacity duration-300 flex flex-col justify-between p-3",
-                      isSelectionMode ? "opacity-0" : "opacity-0 group-hover:opacity-100"
-                    )}>
-                      <div className="flex justify-between items-start">
-                        <button
-                          onClick={(e) => handleToggleFavorite(img.id, e)}
-                          className={clsx(
-                            "p-2 rounded-lg backdrop-blur-md transition-colors",
-                            img.isFavorite 
-                              ? "bg-yellow-500/90 hover:bg-yellow-600 text-white" 
-                              : "bg-black/20 hover:bg-yellow-500/90 text-white"
-                          )}
-                          title={img.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
-                        >
-                          <Star className={clsx("w-4 h-4", img.isFavorite && "fill-white")} />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteImage(img.id, e)}
-                          className="p-2 rounded-lg bg-black/20 hover:bg-red-500/90 text-white backdrop-blur-md transition-colors"
-                          title={tr('library.actions.delete')}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                        <button
-                          onClick={(e) => openMoveDialog(img.id, e)}
-                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-                          title={tr('library.actions.move')}
-                        >
-                          <FolderInput className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleCopyImage(img.path, e)}
-                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-                          title={tr('library.actions.copy')}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDownloadImage(img.path, img.finalPrompt, e)}
-                          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-                          title={tr('library.actions.download')}
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
+                    img={img}
+                    index={i}
+                    isSelectionMode={isSelectionMode}
+                    isSelected={selectedImageIds.includes(img.id)}
+                    onToggleSelection={() => toggleImageSelection(img.id)}
+                    onOpenPreview={() => openPreview(img)}
+                    onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
+                    onDelete={(e) => handleDeleteImage(img.id, e)}
+                    onMove={(e) => openMoveDialog(img.id, e)}
+                    onCopy={(e) => handleCopyImage(img.path, e)}
+                    onDownload={(e) => handleDownloadImage(img.path, img.finalPrompt, e)}
+                    tr={tr}
+                  />
                 ))}
               </div>
             ) : (
@@ -847,151 +765,21 @@ export default function LibraryPage() {
                 {/* Table Rows */}
                 <div className="divide-y divide-border/40">
                   {displayedImages.map((img, i) => (
-                     <motion.div
-                       initial={{ opacity: 0, y: 10 }}
-                       animate={{ opacity: 1, y: 0 }}
-                       transition={{ delay: i * 0.03, duration: 0.2 }}
-                       key={img.id}
-                       className={clsx(
-                         "group gap-4 px-4 py-3 items-center transition-colors cursor-pointer",
-                         isSelectionMode ? "grid grid-cols-[auto_1fr_auto_auto_auto]" : "grid grid-cols-12",
-                         selectedImageIds.includes(img.id)
-                           ? "bg-primary/10 hover:bg-primary/15"
-                           : "hover:bg-secondary/30"
-                       )}
-                       onClick={(e) => {
-                        if (isSelectionMode) {
-                          toggleImageSelection(img.id);
-                        } else {
-                          setPreviewImage({
-                            id: img.id,
-                            url: img.path,
-                            prompt: img.finalPrompt,
-                            createdAt: img.createdAt,
-                            isFavorite: img.isFavorite,
-                            modelName: img.modelName,
-                            params: img.params,
-                            templateName: img.template?.name,
-                            folderName: img.folder?.name
-                          });
-                        }
-                      }}
-                     >
-                       {/* Checkbox Column (Selection Mode) */}
-                       {isSelectionMode && (
-                         <div className="flex items-center" onClick={e => e.stopPropagation()}>
-                           <button
-                             onClick={() => toggleImageSelection(img.id)}
-                             className={clsx(
-                               "w-5 h-5 rounded border-2 transition-colors flex items-center justify-center",
-                               selectedImageIds.includes(img.id)
-                                 ? "bg-primary border-primary"
-                                 : "border-border hover:border-primary"
-                             )}
-                           >
-                             {selectedImageIds.includes(img.id) && (
-                               <Check className="w-3 h-3 text-white" />
-                             )}
-                           </button>
-                         </div>
-                       )}
-
-                       {/* Column 1: Image & Prompt */}
-                       <div className={clsx(
-                         "flex items-center gap-3 min-w-0",
-                         isSelectionMode ? "" : "col-span-6 md:col-span-5"
-                       )}>
-                          <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0 border border-border">
-                             <img src={img.path} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          </div>
-                          <p className="text-sm text-foreground truncate">{img.finalPrompt}</p>
-                       </div>
-
-                       {/* Column 2: Dimensions (Hidden in selection mode) */}
-                       {!isSelectionMode && (
-                         <div className="col-span-2 hidden md:flex items-center text-sm text-muted-foreground">
-                            {imageDimensions[img.id] ? 
-                              `${imageDimensions[img.id].width} × ${imageDimensions[img.id].height}` : 
-                              <span className="text-xs opacity-50">-</span>
-                            }
-                         </div>
-                       )}
-
-                       {/* Column 3: Date */}
-                       <div className={clsx(
-                         "text-sm text-muted-foreground",
-                         isSelectionMode ? "hidden md:block" : "col-span-3 md:col-span-3"
-                       )}>
-                         {new Date(img.createdAt).toLocaleDateString()} {!isSelectionMode && <span className="text-xs opacity-50 hidden md:inline ml-1">{new Date(img.createdAt).toLocaleTimeString()}</span>}
-                       </div>
-
-                       {/* Column 4: Actions (Hidden in selection mode) */}
-                       {!isSelectionMode && (
-                         <div className="col-span-3 md:col-span-2 flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={(e) => handleToggleFavorite(img.id, e)}
-                            className={clsx(
-                              "p-1.5 rounded-md border transition-all",
-                              img.isFavorite
-                                ? "text-yellow-500 hover:bg-yellow-500/10 hover:shadow-sm border-yellow-500/20"
-                                : "text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border-transparent hover:border-border"
-                            )}
-                            title={img.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
-                          >
-                            <Star className={clsx("w-3.5 h-3.5", img.isFavorite && "fill-yellow-500")} />
-                          </button>
-                          <button
-                            onClick={(e) => openMoveDialog(img.id, e)}
-                            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-                            title={tr('library.actions.move')}
-                          >
-                            <FolderInput className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handleCopyImage(img.path, e)}
-                            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-                            title={tr('library.actions.copy')}
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDownloadImage(img.path, img.finalPrompt, e)}
-                            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-                            title={tr('library.actions.download')}
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          
-                          <button
-                            onClick={(e) => {
-                                setPreviewImage({
-                                id: img.id,
-                                url: img.path,
-                                prompt: img.finalPrompt,
-                                createdAt: img.createdAt,
-                                isFavorite: img.isFavorite,
-                                modelName: img.modelName,
-                                params: img.params,
-                                templateName: img.template?.name,
-                                folderName: img.folder?.name
-                              });
-                            }}
-                            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-                            title={tr('library.actions.view')}
-                          >
-                            <Maximize2 className="w-3.5 h-3.5" />
-                          </button>
-                          
-                           <button
-                            onClick={(e) => handleDeleteImage(img.id, e)}
-                            className="p-1.5 rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-destructive hover:shadow-sm border border-transparent hover:border-destructive/20 transition-all"
-                            title={tr('library.actions.delete')}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                         </div>
-                       )}
-                     </motion.div>
+                    <ImageListItem
+                      key={img.id}
+                      img={img}
+                      index={i}
+                      isSelectionMode={isSelectionMode}
+                      isSelected={selectedImageIds.includes(img.id)}
+                      onToggleSelection={() => toggleImageSelection(img.id)}
+                      onOpenPreview={() => openPreview(img)}
+                      onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
+                      onDelete={(e) => handleDeleteImage(img.id, e)}
+                      onMove={(e) => openMoveDialog(img.id, e)}
+                      onCopy={(e) => handleCopyImage(img.path, e)}
+                      onDownload={(e) => handleDownloadImage(img.path, img.finalPrompt, e)}
+                      tr={tr}
+                    />
                   ))}
                 </div>
               </div>
@@ -1063,214 +851,15 @@ export default function LibraryPage() {
       {/* Preview Modal */}
       <AnimatePresence>
         {previewImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4 md:p-10"
-            onClick={() => setPreviewImage(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative w-full max-w-6xl h-full max-h-[90vh] flex flex-col md:flex-row gap-6 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors backdrop-blur-md md:hidden"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Image Area */}
-              <div className="flex-1 bg-black/5 dark:bg-black/40 relative flex items-center justify-center p-4">
-                <img
-                  src={previewImage.url}
-                  alt={previewImage.prompt}
-                  className="max-w-full max-h-full object-contain shadow-sm"
-                />
-              </div>
-
-              {/* Sidebar Info */}
-              <div className="w-full md:w-80 lg:w-96 bg-card flex flex-col border-l border-border">
-                <div className="p-6 flex items-center justify-between border-b border-border">
-                  <h3 className="font-semibold text-lg">{tr('library.details.title')}</h3>
-                  <button
-                    onClick={() => setPreviewImage(null)}
-                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground transition-colors hidden md:block"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                  {/* Prompt */}
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.prompt')}</label>
-                    <p className="text-sm text-foreground leading-relaxed bg-secondary/30 p-3 rounded-lg border border-border/50">
-                      {previewImage.prompt}
-                    </p>
-                  </div>
-
-                  {/* Model & Template */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.model')}</label>
-                      <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 font-mono">
-                        {previewImage.modelName}
-                      </p>
-                    </div>
-                    {previewImage.templateName && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.template')}</label>
-                        <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 truncate">
-                          {previewImage.templateName}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Parameters */}
-                  {previewImage.params && previewImage.params !== '{}' && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.params')}</label>
-                      <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
-                        {(() => {
-                          try {
-                            const params = JSON.parse(previewImage.params);
-                            return (
-                              <div className="space-y-2">
-                                {Object.entries(params).map(([key, value]: [string, any]) => (
-                                  <div key={key} className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                                    <span className="text-foreground font-medium">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          } catch {
-                            return <p className="text-xs text-muted-foreground italic">{tr('library.details.paramsInvalid')}</p>;
-                          }
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Metadata Grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1 block">{tr('library.details.created')}</label>
-                      <p className="text-sm text-foreground">
-                        {new Date(previewImage.createdAt).toLocaleDateString()}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(previewImage.createdAt).toLocaleTimeString()}
-                      </p>
-                    </div>
-                    {imageDimensions[previewImage.id] && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1 block">{tr('library.details.dimensions')}</label>
-                        <p className="text-sm text-foreground">
-                          {imageDimensions[previewImage.id].width} × {imageDimensions[previewImage.id].height}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {tr('library.details.ratio', { ratio: (imageDimensions[previewImage.id].width / imageDimensions[previewImage.id].height).toFixed(2) })}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Folder */}
-                  {previewImage.folderName && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.folder')}</label>
-                      <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
-                        <Folder className="w-4 h-4 text-muted-foreground" />
-                        {previewImage.folderName}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-6 border-t border-border bg-muted/10 space-y-3">
-                  {/* Recreate Actions */}
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => {
-                        const params = new URLSearchParams({
-                          prompt: previewImage.prompt,
-                          model: previewImage.modelName,
-                          params: previewImage.params
-                        });
-                        window.location.href = `/create?${params.toString()}`;
-                      }}
-                      className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      {tr('library.details.recreate')}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(previewImage.prompt);
-                          alert(tr('library.details.copyPromptSuccess'));
-                        } catch (err) {
-                          console.error('Failed to copy:', err);
-                          alert(tr('library.details.copyPromptFail'));
-                        }
-                      }}
-                      className="w-full py-2.5 px-4 rounded-lg bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium transition-colors flex items-center justify-center gap-2 border border-border"
-                    >
-                      <Copy className="w-4 h-4" />
-                      {tr('library.details.copyPrompt')}
-                    </button>
-                  </div>
-                  
-                  {/* Divider */}
-                  <div className="h-px bg-border/50" />
-                  
-                  {/* Standard Actions */}
-                  <button
-                    onClick={() => handleToggleFavorite(previewImage.id)}
-                    className={clsx(
-                      "w-full py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm border",
-                      previewImage.isFavorite
-                        ? "bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500"
-                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80 border-border"
-                    )}
-                  >
-                    <Star className={clsx("w-4 h-4", previewImage.isFavorite && "fill-white")} />
-                    {previewImage.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
-                  </button>
-                  <button
-                    onClick={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
-                    className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    {tr('library.downloadImage')}
-                  </button>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleCopyImage(previewImage.url)}
-                      className="flex-1 py-2.5 px-4 rounded-lg bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2 border border-border"
-                    >
-                      <Copy className="w-4 h-4" />
-                      {tr('library.copyImage')}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteImage(previewImage.id)}
-                      className="flex-1 py-2.5 px-4 rounded-lg bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors flex items-center justify-center gap-2 border border-destructive/20"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {tr('library.delete')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+          <PreviewModal 
+            previewImage={previewImage}
+            onClose={() => setPreviewImage(null)}
+            onToggleFavorite={() => handleToggleFavorite(previewImage.id)}
+            onDelete={() => handleDeleteImage(previewImage.id)}
+            onDownload={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
+            onCopy={() => handleCopyImage(previewImage.url)}
+            tr={tr}
+          />
         )}
       </AnimatePresence>
 
@@ -1312,5 +901,550 @@ export default function LibraryPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// Optimized Grid Item Component - extracted for better performance
+interface ImageGridItemProps {
+  img: ImageType;
+  index: number;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelection: () => void;
+  onOpenPreview: () => void;
+  onToggleFavorite: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onMove: (e: React.MouseEvent) => void;
+  onCopy: (e: React.MouseEvent) => void;
+  onDownload: (e: React.MouseEvent) => void;
+  tr: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function ImageGridItem({ 
+  img, 
+  index, 
+  isSelectionMode, 
+  isSelected,
+  onToggleSelection,
+  onOpenPreview,
+  onToggleFavorite,
+  onDelete,
+  onMove,
+  onCopy,
+  onDownload,
+  tr
+}: ImageGridItemProps) {
+  // Only apply animation delay for first MAX_ANIMATED_ITEMS items
+  const shouldAnimate = index < MAX_ANIMATED_ITEMS;
+  const animationDelay = shouldAnimate ? index * 0.03 : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: animationDelay, duration: 0.2 }}
+      className={clsx(
+        "group relative aspect-square rounded-xl overflow-hidden bg-card border transition-all duration-300",
+        isSelectionMode
+          ? "cursor-pointer hover:shadow-md"
+          : "hover:shadow-lg hover:border-primary/50",
+        isSelected
+          ? "ring-2 ring-primary border-primary shadow-lg"
+          : "border-border/50"
+      )}
+      onClick={() => {
+        if (isSelectionMode) {
+          onToggleSelection();
+        } else {
+          onOpenPreview();
+        }
+      }}
+    >
+      <Image
+        src={img.thumbnailPath || img.path}
+        alt={img.finalPrompt || 'Generated image'}
+        fill
+        sizes="384px"
+        className="object-cover transition-transform duration-500 group-hover:scale-110"
+        loading="lazy"
+        quality={75}
+      />
+      
+      {/* Selection Checkbox */}
+      {isSelectionMode && (
+        <div className="absolute top-3 left-3 z-10">
+          <div className={clsx(
+            "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors",
+            isSelected
+              ? "bg-primary border-primary"
+              : "bg-black/20 border-white backdrop-blur-sm"
+          )}>
+            {isSelected && (
+              <Check className="w-4 h-4 text-white" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Overlay */}
+      <div className={clsx(
+        "absolute inset-0 bg-black/40 transition-opacity duration-300 flex flex-col justify-between p-3",
+        isSelectionMode ? "opacity-0" : "opacity-0 group-hover:opacity-100"
+      )}>
+        <div className="flex justify-between items-start">
+          <button
+            onClick={onToggleFavorite}
+            className={clsx(
+              "p-2 rounded-lg backdrop-blur-md transition-colors",
+              img.isFavorite 
+                ? "bg-yellow-500/90 hover:bg-yellow-600 text-white" 
+                : "bg-black/20 hover:bg-yellow-500/90 text-white"
+            )}
+            title={img.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
+          >
+            <Star className={clsx("w-4 h-4", img.isFavorite && "fill-white")} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-2 rounded-lg bg-black/20 hover:bg-red-500/90 text-white backdrop-blur-md transition-colors"
+            title={tr('library.actions.delete')}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-2 justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+          <button
+            onClick={onMove}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+            title={tr('library.actions.move')}
+          >
+            <FolderInput className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onCopy}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+            title={tr('library.actions.copy')}
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onDownload}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+            title={tr('library.actions.download')}
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// Optimized List Item Component
+interface ImageListItemProps {
+  img: ImageType;
+  index: number;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelection: () => void;
+  onOpenPreview: () => void;
+  onToggleFavorite: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onMove: (e: React.MouseEvent) => void;
+  onCopy: (e: React.MouseEvent) => void;
+  onDownload: (e: React.MouseEvent) => void;
+  tr: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function ImageListItem({
+  img,
+  index,
+  isSelectionMode,
+  isSelected,
+  onToggleSelection,
+  onOpenPreview,
+  onToggleFavorite,
+  onDelete,
+  onMove,
+  onCopy,
+  onDownload,
+  tr
+}: ImageListItemProps) {
+  // Only apply animation delay for first MAX_ANIMATED_ITEMS items
+  const shouldAnimate = index < MAX_ANIMATED_ITEMS;
+  const animationDelay = shouldAnimate ? index * 0.02 : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: animationDelay, duration: 0.15 }}
+      className={clsx(
+        "group gap-4 px-4 py-3 items-center transition-colors cursor-pointer",
+        isSelectionMode ? "grid grid-cols-[auto_1fr_auto_auto_auto]" : "grid grid-cols-12",
+        isSelected
+          ? "bg-primary/10 hover:bg-primary/15"
+          : "hover:bg-secondary/30"
+      )}
+      onClick={() => {
+        if (isSelectionMode) {
+          onToggleSelection();
+        } else {
+          onOpenPreview();
+        }
+      }}
+    >
+      {/* Checkbox Column (Selection Mode) */}
+      {isSelectionMode && (
+        <div className="flex items-center" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={onToggleSelection}
+            className={clsx(
+              "w-5 h-5 rounded border-2 transition-colors flex items-center justify-center",
+              isSelected
+                ? "bg-primary border-primary"
+                : "border-border hover:border-primary"
+            )}
+          >
+            {isSelected && (
+              <Check className="w-3 h-3 text-white" />
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Column 1: Image & Prompt */}
+      <div className={clsx(
+        "flex items-center gap-3 min-w-0",
+        isSelectionMode ? "" : "col-span-6 md:col-span-5"
+      )}>
+        <div className="relative w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0 border border-border">
+          <Image 
+            src={img.thumbnailPath || img.path} 
+            alt="" 
+            fill
+            sizes="40px"
+            className="object-cover" 
+            loading="lazy"
+            quality={50}
+          />
+        </div>
+        <p className="text-sm text-foreground truncate">{img.finalPrompt}</p>
+      </div>
+
+      {/* Column 2: Dimensions placeholder (Hidden in selection mode) */}
+      {!isSelectionMode && (
+        <div className="col-span-2 hidden md:flex items-center text-sm text-muted-foreground">
+          <span className="text-xs opacity-50">-</span>
+        </div>
+      )}
+
+      {/* Column 3: Date */}
+      <div className={clsx(
+        "text-sm text-muted-foreground",
+        isSelectionMode ? "hidden md:block" : "col-span-3 md:col-span-3"
+      )}>
+        {new Date(img.createdAt).toLocaleDateString()} 
+        {!isSelectionMode && (
+          <span className="text-xs opacity-50 hidden md:inline ml-1">
+            {new Date(img.createdAt).toLocaleTimeString()}
+          </span>
+        )}
+      </div>
+
+      {/* Column 4: Actions (Hidden in selection mode) */}
+      {!isSelectionMode && (
+        <div className="col-span-3 md:col-span-2 flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={onToggleFavorite}
+            className={clsx(
+              "p-1.5 rounded-md border transition-all",
+              img.isFavorite
+                ? "text-yellow-500 hover:bg-yellow-500/10 hover:shadow-sm border-yellow-500/20"
+                : "text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border-transparent hover:border-border"
+            )}
+            title={img.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
+          >
+            <Star className={clsx("w-3.5 h-3.5", img.isFavorite && "fill-yellow-500")} />
+          </button>
+          <button
+            onClick={onMove}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+            title={tr('library.actions.move')}
+          >
+            <FolderInput className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onCopy}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+            title={tr('library.actions.copy')}
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onDownload}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+            title={tr('library.actions.download')}
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenPreview();
+            }}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+            title={tr('library.actions.view')}
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+          
+          <button
+            onClick={onDelete}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-destructive hover:shadow-sm border border-transparent hover:border-destructive/20 transition-all"
+            title={tr('library.actions.delete')}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+// Extracted Preview Modal Component
+interface PreviewModalProps {
+  previewImage: {
+    id: string;
+    url: string;
+    prompt: string;
+    createdAt: string;
+    isFavorite: boolean;
+    modelName: string;
+    params: string;
+    templateName?: string;
+    folderName?: string;
+  };
+  onClose: () => void;
+  onToggleFavorite: () => void;
+  onDelete: () => void;
+  onDownload: () => void;
+  onCopy: () => void;
+  tr: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function PreviewModal({ 
+  previewImage, 
+  onClose, 
+  onToggleFavorite, 
+  onDelete, 
+  onDownload, 
+  onCopy,
+  tr 
+}: PreviewModalProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4 md:p-10"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="relative w-full max-w-6xl h-full max-h-[90vh] flex flex-col md:flex-row gap-6 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors backdrop-blur-md md:hidden"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Image Area */}
+        <div className="flex-1 bg-black/5 dark:bg-black/40 relative flex items-center justify-center p-4 min-h-[300px]">
+          <Image
+            src={previewImage.url}
+            alt={previewImage.prompt}
+            fill
+            className="object-contain"
+            sizes="(max-width: 768px) 100vw, 60vw"
+            priority
+            quality={90}
+          />
+        </div>
+
+        {/* Sidebar Info */}
+        <div className="w-full md:w-80 lg:w-96 bg-card flex flex-col border-l border-border">
+          <div className="p-6 flex items-center justify-between border-b border-border">
+            <h3 className="font-semibold text-lg">{tr('library.details.title')}</h3>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-secondary text-muted-foreground transition-colors hidden md:block"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            {/* Prompt */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.prompt')}</label>
+              <p className="text-sm text-foreground leading-relaxed bg-secondary/30 p-3 rounded-lg border border-border/50">
+                {previewImage.prompt}
+              </p>
+            </div>
+
+            {/* Model & Template */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.model')}</label>
+                <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 font-mono">
+                  {previewImage.modelName}
+                </p>
+              </div>
+              {previewImage.templateName && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.template')}</label>
+                  <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 truncate">
+                    {previewImage.templateName}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Parameters */}
+            {previewImage.params && previewImage.params !== '{}' && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.params')}</label>
+                <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
+                  {(() => {
+                    try {
+                      const params = JSON.parse(previewImage.params);
+                      return (
+                        <div className="space-y-2">
+                          {Object.entries(params).map(([key, value]: [string, unknown]) => (
+                            <div key={key} className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                              <span className="text-foreground font-medium">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } catch {
+                      return <p className="text-xs text-muted-foreground italic">{tr('library.details.paramsInvalid')}</p>;
+                    }
+                  })()}
+                </div>
+              </div>
+            )}
+            
+            {/* Metadata Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1 block">{tr('library.details.created')}</label>
+                <p className="text-sm text-foreground">
+                  {new Date(previewImage.createdAt).toLocaleDateString()}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {new Date(previewImage.createdAt).toLocaleTimeString()}
+                </p>
+              </div>
+            </div>
+
+            {/* Folder */}
+            {previewImage.folderName && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.folder')}</label>
+                <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-muted-foreground" />
+                  {previewImage.folderName}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 border-t border-border bg-muted/10 space-y-3">
+            {/* Recreate Actions */}
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    prompt: previewImage.prompt,
+                    model: previewImage.modelName,
+                    params: previewImage.params
+                  });
+                  window.location.href = `/create?${params.toString()}`;
+                }}
+                className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium transition-all flex items-center justify-center gap-2 shadow-sm"
+              >
+                <Wand2 className="w-4 h-4" />
+                {tr('library.details.recreate')}
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(previewImage.prompt);
+                    alert(tr('library.details.copyPromptSuccess'));
+                  } catch (err) {
+                    console.error('Failed to copy:', err);
+                    alert(tr('library.details.copyPromptFail'));
+                  }
+                }}
+                className="w-full py-2.5 px-4 rounded-lg bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium transition-colors flex items-center justify-center gap-2 border border-border"
+              >
+                <Copy className="w-4 h-4" />
+                {tr('library.details.copyPrompt')}
+              </button>
+            </div>
+            
+            {/* Divider */}
+            <div className="h-px bg-border/50" />
+            
+            {/* Standard Actions */}
+            <button
+              onClick={onToggleFavorite}
+              className={clsx(
+                "w-full py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm border",
+                previewImage.isFavorite
+                  ? "bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500"
+                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80 border-border"
+              )}
+            >
+              <Star className={clsx("w-4 h-4", previewImage.isFavorite && "fill-white")} />
+              {previewImage.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
+            </button>
+            <button
+              onClick={onDownload}
+              className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              {tr('library.downloadImage')}
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={onCopy}
+                className="flex-1 py-2.5 px-4 rounded-lg bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2 border border-border"
+              >
+                <Copy className="w-4 h-4" />
+                {tr('library.copyImage')}
+              </button>
+              <button
+                onClick={onDelete}
+                className="flex-1 py-2.5 px-4 rounded-lg bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors flex items-center justify-center gap-2 border border-destructive/20"
+              >
+                <Trash2 className="w-4 h-4" />
+                {tr('library.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, PlusSquare, Settings, Library, Box, Activity, Sun, Moon, Monitor, Languages, ChevronDown, Github } from 'lucide-react';
+import { LayoutGrid, PlusSquare, Settings, Library, Box, Activity, Sun, Moon, Monitor, Languages, ChevronDown, Github, Cog } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
@@ -46,6 +46,7 @@ export function Sidebar() {
     { name: t('sidebar.templates'), icon: Library, href: '/templates' },
     { name: t('sidebar.logs'), icon: Activity, href: '/run_log' },
     { name: t('sidebar.models'), icon: Settings, href: '/models' },
+    { name: t('sidebar.settings'), icon: Cog, href: '/settings' },
   ];
 
   const themeOptions = [
