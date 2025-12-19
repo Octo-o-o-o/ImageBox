@@ -75,6 +75,8 @@
 ### 用户体验
 
 - **✨ 现代化界面** - 精美的暗色玻璃拟态设计，流畅动画效果
+- **🌍 多语言支持** - 13 种语言：英语、简体中文、繁体中文、日语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语、阿拉伯语（RTL）、挪威语、瑞典语
+- **🎨 主题系统** - 深色/浅色/跟随系统主题模式，无缝切换
 - **🌐 跨平台访问** - 通过 localhost 或局域网从任何设备访问
 - **⚡ 快速安全** - Next.js Server Actions 优化的 API 调用
 - **🆓 100% 免费开源** - 无隐藏费用，仅需您自己的 API 密钥
@@ -112,19 +114,19 @@ npm run dev
 
 ### 首次设置
 
-1. 进入 **Settings（设置）** 页面
-2. 输入您的 Google Gemini API 密钥
-3. 点击 **Save Settings（保存设置）**
-4. 前往 **Studio（工作室）** 开始生成图像！
+1. 进入 **Models（模型管理）** 页面 (`/models`)
+2. 添加新的服务商并配置您的 API 密钥
+3. 添加新的模型并选择适当的服务商
+4. 前往 **Create（创建）** 页面 (`/create`) 开始生成图像！
 
 ## 使用方法
 
 ### 创建模板
 
-1. 前往 **Templates（模板）** 页面
-2. 点击 **New Template（新建模板）**
+1. 前往 **Templates（模板）** 页面 (`/templates`)
+2. 点击 **新建模板**
 3. 使用 `{{变量名}}` 语法添加变量（例如：`{{subject}}`、`{{style}}`）
-4. 保存并在工作室中使用
+4. 保存并在创建页面中使用
 
 **示例模板：**
 ```
@@ -133,11 +135,11 @@ npm run dev
 
 ### 生成图像
 
-1. 前往 **Studio（工作室）** 页面
+1. 前往 **Create（创建）** 页面 (`/create`)
 2. 输入提示词或选择模板
 3. 如适用，填写模板变量
-4. 点击 **Generate（生成）**
-5. 在 **Gallery（图库）** 中查看结果
+4. 点击 **生成**
+5. 在 **Library（图库）** (`/library`) 中查看结果
 
 ## 技术栈
 
@@ -152,16 +154,22 @@ npm run dev
 ```
 imagebox/
 ├── app/
-│   ├── page.tsx              # 图库（主页）
-│   ├── studio/page.tsx       # 图像生成界面
+│   ├── page.tsx              # 首页（重定向到 /library）
+│   ├── library/page.tsx      # 图库与图片管理
+│   ├── create/page.tsx       # 图像生成界面
 │   ├── templates/page.tsx    # 模板管理
-│   ├── settings/page.tsx     # 设置和 API 密钥
+│   ├── models/page.tsx       # 模型与服务商配置
+│   ├── run_log/page.tsx      # 生成历史日志
 │   ├── actions.ts            # Server Actions（数据库 + API）
 │   └── layout.tsx            # 根布局和导航
 ├── components/
-│   └── Sidebar.tsx           # 导航侧边栏
+│   ├── Sidebar.tsx           # 导航侧边栏
+│   ├── ThemeProvider.tsx     # 主题管理
+│   └── LanguageProvider.tsx  # 国际化支持
 ├── lib/
-│   └── prisma.ts             # Prisma 客户端单例
+│   ├── prisma.ts             # Prisma 客户端单例
+│   ├── modelParameters.ts    # 参数映射系统
+│   └── i18n/                 # 翻译文件
 ├── prisma/
 │   └── schema.prisma         # 数据库模式
 └── public/generated/         # 生成的图像（自动创建）

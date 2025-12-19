@@ -22,12 +22,17 @@ model AIModel {
   name            String   // Display Name e.g. "GPT-4o"
   modelIdentifier String   // API ID e.g. "gpt-4o"
   type            String   // "TEXT" | "IMAGE"
-  
+
+  // Parameter configuration for image generation models
+  // JSON string containing parameter definitions and mappings
+  // Example: {"supportedParams": ["aspectRatio", "imageSize"], "defaults": {"aspectRatio": "1:1"}}
+  parameterConfig String?  @default("{}")
+
   provider        Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
   providerId      String?
-  
+
   createdAt       DateTime @default(now())
-  
+
   templatesAsPrompter Template[] @relation("PromptGen")
   templatesAsImager   Template[] @relation("ImageGen")
 }

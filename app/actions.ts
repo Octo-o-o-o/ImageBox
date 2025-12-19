@@ -6,6 +6,7 @@ import OpenAI from 'openai';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { mapParametersForAPI } from '@/lib/modelParameters';
 
 // --- Types ---
 
@@ -51,11 +52,15 @@ export async function getModels() {
   });
 }
 
-export async function saveModel(data: { id?: string; name: string; modelIdentifier: string; type: string; providerId: string }) {
-  if (data.id) {
-    return await prisma.aIModel.update({ where: { id: data.id }, data });
+export async function saveModel(data: { id?: string; name: string; modelIdentifier: string; type: string; providerId: string; parameterConfig?: string }) {
+  // Extract only the fields that should be saved (exclude id, createdAt, and any relation objects)
+  const { id, name, modelIdentifier, type, providerId, parameterConfig } = data;
+  const saveData = { name, modelIdentifier, type, providerId, parameterConfig };
+
+  if (id) {
+    return await prisma.aIModel.update({ where: { id }, data: saveData });
   } else {
-    return await prisma.aIModel.create({ data });
+    return await prisma.aIModel.create({ data: saveData });
   }
 }
 
@@ -108,18 +113,9 @@ async function getClientForModel(modelId: string) {
   if (provider.type === 'GEMINI') {
     if (!apiKey) throw new Error('未设置 Gemini 的 API 密钥');
 
-    // If baseUrl is custom (e.g., OpenRouter), use OpenAI-compatible mode
-    if (provider.baseUrl) {
-      const client = new OpenAI({
-        apiKey: apiKey,
-        baseURL: provider.baseUrl,
-      });
-      return { type: 'OPENAI', client, modelId: modelDef.modelIdentifier, isGemini: true, baseUrl: provider.baseUrl };
-    }
-
-    // Otherwise use official Google Gemini SDK
+    // Always use official Google Gemini SDK for GEMINI type
     const genAI = new GoogleGenerativeAI(apiKey);
-    return { type: 'GEMINI', client: genAI, modelId: modelDef.modelIdentifier };
+    return { type: 'GEMINI', client: genAI, modelId: modelDef.modelIdentifier, baseUrl: provider.baseUrl };
   }
 
   if (provider.type === 'OPENAI') {
@@ -139,14 +135,23 @@ async function getClientForModel(modelId: string) {
 export async function generateTextAction(modelId: string, prompt: string, systemInstruction?: string, configParams: any = {}) {
   const startTime = Date.now();
   let runLogId = '';
-  
+
   try {
+    // Fetch model and provider info for logging
+    const modelDef = await prisma.aIModel.findUnique({
+      where: { id: modelId },
+      include: { provider: true }
+    });
+    const modelDisplayName = modelDef?.provider?.name && modelDef?.name
+      ? `${modelDef.provider.name}+${modelDef.name}`
+      : modelDef?.name || modelId;
+
     // 1. Start Log
     const log = await prisma.runLog.create({
       data: {
         type: 'PROMPT_GEN',
         status: 'RUNNING',
-        modelUsed: modelId, // We might want the name, but ID is ok for now. 
+        modelUsed: modelDisplayName,
         actualInput: prompt,
         configParams: JSON.stringify(configParams),
       }
@@ -157,10 +162,13 @@ export async function generateTextAction(modelId: string, prompt: string, system
     let outputText = '';
 
     if (wrapper.type === 'GEMINI') {
+      const requestOptions: any = {};
+      if (wrapper.baseUrl) requestOptions.baseUrl = wrapper.baseUrl;
+
       const model = (wrapper.client as GoogleGenerativeAI).getGenerativeModel({ 
         model: wrapper.modelId,
         systemInstruction: systemInstruction || undefined
-      });
+      }, requestOptions);
       const result = await model.generateContent(prompt);
       outputText = result.response.text();
     } 
@@ -215,15 +223,35 @@ export async function generateImageAction(modelId: string, prompt: string, param
   let runLogId = '';
 
   try {
+    // Fetch model and provider info for logging
+    const modelDef = await prisma.aIModel.findUnique({
+      where: { id: modelId },
+      include: { provider: true }
+    });
+    const modelDisplayName = modelDef?.provider?.name && modelDef?.name
+      ? `${modelDef.provider.name}+${modelDef.name}`
+      : modelDef?.name || modelId;
+
+    if (!modelDef || !modelDef.provider) {
+      throw new Error('未找到模型或服务商配置');
+    }
+
+    // Map parameters based on provider type
+    const mappedParams = mapParametersForAPI(
+      modelDef.provider.type,
+      modelDef.provider.baseUrl || null,
+      params
+    );
+
     // 1. Start Log
     const log = await prisma.runLog.create({
       data: {
         type: 'IMAGE_GEN',
         status: 'RUNNING',
-        modelUsed: modelId,
+        modelUsed: modelDisplayName,
         actualInput: prompt,
         parentTaskId: parentTaskId || null,
-        configParams: JSON.stringify(params),
+        configParams: JSON.stringify(mappedParams),
       }
     });
     runLogId = log.id;
@@ -234,28 +262,34 @@ export async function generateImageAction(modelId: string, prompt: string, param
     if (wrapper.type === 'GEMINI') {
       const generationConfig: any = {};
 
-      // Map params to generationConfig if they exist
-      // Gemini SDK uses camelCase for all parameters
-      if (params.aspectRatio || params.imageSize || params.numberOfImages) {
-          generationConfig.imageConfig = {};
-          if (params.aspectRatio) generationConfig.imageConfig.aspectRatio = params.aspectRatio;
-          if (params.imageSize) generationConfig.imageConfig.imageSize = params.imageSize;
-          if (params.numberOfImages) generationConfig.imageConfig.numberOfImages = params.numberOfImages;
+      // Use mapped parameters from parameter mapping system
+      if (mappedParams.responseModalities) {
+        generationConfig.responseModalities = mappedParams.responseModalities;
       }
-      if (params.responseModalities) {
-          generationConfig.responseModalities = params.responseModalities;
+
+      if (mappedParams.numberOfImages) {
+        generationConfig.numberOfImages = mappedParams.numberOfImages;
       }
+
+      // imageConfig (aspectRatio and/or imageSize)
+      if (mappedParams.imageConfig) {
+        generationConfig.imageConfig = mappedParams.imageConfig;
+      }
+
+      const requestOptions: any = {};
+      // Pass baseUrl to requestOptions if present
+      if ((wrapper as any).baseUrl) requestOptions.baseUrl = (wrapper as any).baseUrl;
 
       const model = (wrapper.client as GoogleGenerativeAI).getGenerativeModel({
         model: wrapper.modelId,
-        generationConfig
-      });
+        generationConfig: Object.keys(generationConfig).length > 0 ? generationConfig : undefined
+      }, requestOptions);
 
       // Construct Prompt Parts
       const parts: any[] = [{ text: prompt }];
-      
-      if (params.refImages && Array.isArray(params.refImages)) {
-          for (const imgStr of params.refImages) {
+
+      if (mappedParams.refImages && Array.isArray(mappedParams.refImages)) {
+          for (const imgStr of mappedParams.refImages) {
               // imgStr is expected to be "data:image/png;base64,..."
               const match = imgStr.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
               if (match) {
@@ -269,9 +303,9 @@ export async function generateImageAction(modelId: string, prompt: string, param
           }
       }
 
-      const result = await model.generateContent(parts); 
+      const result = await model.generateContent(parts);
       const response = await result.response;
-      
+
       if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
@@ -283,19 +317,20 @@ export async function generateImageAction(modelId: string, prompt: string, param
     }
     
     else if (wrapper.type === 'OPENAI') {
-       const hasCustomBaseUrl = !!(wrapper as any).baseUrl;
-       const isOfficialOpenAI = !hasCustomBaseUrl; // No custom baseUrl = official OpenAI
+       const baseUrl = (wrapper as any).baseUrl;
+       // Treat as official OpenAI if baseUrl is empty OR equals official OpenAI URL
+       const isOfficialOpenAI = !baseUrl || baseUrl === 'https://api.openai.com/v1' || baseUrl === 'https://api.openai.com';
 
        // If using custom baseUrl (OpenRouter, etc.), use Chat Completions API
        // Official OpenAI DALL-E uses images.generate API
-       if (hasCustomBaseUrl) {
+       if (!isOfficialOpenAI) {
            // Chat Completions API for OpenRouter and other compatible services
            const messages: any[] = [];
 
            const userContent: any[] = [{ type: 'text', text: prompt }];
 
-           if (params.refImages && Array.isArray(params.refImages)) {
-               params.refImages.forEach((img: string) => {
+           if (mappedParams.refImages && Array.isArray(mappedParams.refImages)) {
+               mappedParams.refImages.forEach((img: string) => {
                    userContent.push({
                        type: 'image_url',
                        image_url: { url: img } // img is already base64 data url
@@ -315,11 +350,11 @@ export async function generateImageAction(modelId: string, prompt: string, param
            }
 
            // Add image generation parameters (works for most providers)
-           if (params.aspectRatio || params.imageSize || params.numberOfImages) {
+           if (mappedParams.aspectRatio || mappedParams.imageSize || mappedParams.numberOfImages) {
                if (!extraBody.image_config) extraBody.image_config = {};
-               if (params.aspectRatio) extraBody.image_config.aspect_ratio = params.aspectRatio;
-               if (params.imageSize) extraBody.image_config.image_size = params.imageSize;
-               if (params.numberOfImages) extraBody.image_config.number_of_images = params.numberOfImages;
+               if (mappedParams.aspectRatio) extraBody.image_config.aspect_ratio = mappedParams.aspectRatio;
+               if (mappedParams.imageSize) extraBody.image_config.image_size = mappedParams.imageSize;
+               if (mappedParams.numberOfImages) extraBody.image_config.number_of_images = mappedParams.numberOfImages;
            }
 
            // Call Chat Completions API
@@ -328,9 +363,6 @@ export async function generateImageAction(modelId: string, prompt: string, param
                messages: messages,
                ...extraBody
            });
-
-           console.log('Chat Completions API 响应 choices 数量:', completion.choices?.length);
-           console.log('完整响应结构:', JSON.stringify(completion, null, 2).substring(0, 2000));
 
            // Try to extract image from response in multiple ways
            let imageFound = false;
@@ -341,11 +373,9 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
                // Check for images array (OpenRouter Gemini format)
                if (Array.isArray(message?.images) && message.images.length > 0) {
-                   console.log('发现 message.images 数组，图片数量:', message.images.length);
                    for (const imgObj of message.images) {
                        if (imgObj.type === 'image_url' && imgObj.image_url?.url) {
                            const imageUrl = imgObj.image_url.url;
-                           console.log('从 images 数组提取图片 URL:', imageUrl.substring(0, 100));
 
                            // If already base64 data URL
                            if (imageUrl.startsWith('data:image/')) {
@@ -377,7 +407,6 @@ export async function generateImageAction(modelId: string, prompt: string, param
                    const urlMatch = content.match(/!\[.*?\]\((.*?)\)/) || content.match(/https?:\/\/[^\s)]+/);
                    if (urlMatch) {
                        const imageUrl = urlMatch[1] || urlMatch[0];
-                       console.log('从 content 提取图片 URL:', imageUrl);
 
                        // Download image to convert to base64
                        const imgRes = await fetch(imageUrl);
@@ -394,7 +423,6 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
                    // Check if content itself is base64 image data
                    if (content.length > 100 && /^[A-Za-z0-9+/=]+$/.test(content.substring(0, 100))) {
-                       console.log('检测到直接的 base64 图片数据，长度:', content.length);
                        base64Images.push(`data:image/png;base64,${content}`);
                        imageFound = true;
                        break;
@@ -447,18 +475,19 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
        } else {
            // Official OpenAI DALL-E - use images.generate API
-           let size = "1024x1024";
-           if (params.imageSize === '1K') size = "1024x1024";
-           // DALL-E 3 supports 1024x1024, 1024x1792, 1792x1024.
-           // We might map aspect ratio to DALL-E sizes if we wanted to be fancy, but keeping it simple for now.
-
-           const response = await (wrapper.client as OpenAI).images.generate({
+           const requestBody: any = {
              model: wrapper.modelId,
              prompt: prompt,
              n: 1,
-             size: size as any, // "1024x1024"
+             size: mappedParams.size || "1024x1024",
              response_format: "b64_json"
-           });
+           };
+
+           // Add quality and style if provided
+           if (mappedParams.quality) requestBody.quality = mappedParams.quality;
+           if (mappedParams.style) requestBody.style = mappedParams.style;
+
+           const response = await (wrapper.client as OpenAI).images.generate(requestBody);
            base64Images = response.data?.map(d => `data:image/png;base64,${d.b64_json}`) || [];
        }
     }
@@ -538,21 +567,6 @@ export async function saveGeneratedImage(base64Data: string, finalPrompt: string
   });
 
   return image;
-}
-
-export async function getRecentImages() {
-  try {
-    console.log('正在获取最新图片...');
-    const images = await prisma.image.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { template: true }
-    });
-    console.log('获取图片完成，数量:', images.length);
-  return images;
-  } catch (error) {
-    console.error('获取最新图片时出错:', error);
-    throw error;
-  }
 }
 
 // --- Run Logs ---
@@ -652,7 +666,9 @@ export async function deleteImage(id: string) {
 
   // Delete file from disk
   try {
-    const filePath = path.join(process.cwd(), 'public', image.path);
+    // Remove leading slash from path to avoid path.join truncation issue
+    const cleanPath = image.path.replace(/^\//, '');
+    const filePath = path.join(process.cwd(), 'public', cleanPath);
     await fs.unlink(filePath);
   } catch (e) {
     console.error('删除文件失败:', e);
@@ -661,4 +677,27 @@ export async function deleteImage(id: string) {
 
   // Delete DB record
   return await prisma.image.delete({ where: { id } });
+}
+
+export async function toggleFavorite(id: string) {
+  const image = await prisma.image.findUnique({ where: { id } });
+  if (!image) throw new Error('图片不存在');
+  
+  return await prisma.image.update({
+    where: { id },
+    data: { isFavorite: !image.isFavorite }
+  });
+}
+
+export async function moveImageToFolder(imageId: string, folderId: string) {
+  const image = await prisma.image.findUnique({ where: { id: imageId } });
+  if (!image) throw new Error('图片不存在');
+  
+  const folder = await prisma.folder.findUnique({ where: { id: folderId } });
+  if (!folder) throw new Error('目标文件夹不存在');
+  
+  return await prisma.image.update({
+    where: { id: imageId },
+    data: { folderId }
+  });
 }

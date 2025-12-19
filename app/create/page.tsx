@@ -1,21 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder, AlertTriangle } from 'lucide-react';
+import { getMaxRefImages, getModelParameters } from '@/lib/modelParameters';
+import { useLanguage } from '@/components/LanguageProvider';
+import { replaceTemplate } from '@/lib/i18n';
 
 const ASPECT_RATIOS = [
-  { value: "1:1", label: "1:1", title: "正方形" },
-  { value: "2:3", label: "2:3", title: "竖版" },
-  { value: "3:2", label: "3:2", title: "横版" },
-  { value: "3:4", label: "3:4", title: "竖版全屏" },
-  { value: "4:3", label: "4:3", title: "横版全屏" },
-  { value: "4:5", label: "4:5", title: "竖版" },
-  { value: "5:4", label: "5:4", title: "横版" },
-  { value: "9:16", label: "9:16", title: "竖版加长" },
-  { value: "16:9", label: "16:9", title: "横版加宽" },
-  { value: "21:9", label: "21:9", title: "超宽屏" },
+  { value: "1:1", label: "1:1", title: "Square" },
+  { value: "2:3", label: "2:3", title: "Portrait" },
+  { value: "3:2", label: "3:2", title: "Landscape" },
+  { value: "3:4", label: "3:4", title: "Portrait Full" },
+  { value: "4:3", label: "4:3", title: "Landscape Full" },
+  { value: "4:5", label: "4:5", title: "Portrait" },
+  { value: "5:4", label: "5:4", title: "Landscape" },
+  { value: "9:16", label: "9:16", title: "Tall Portrait" },
+  { value: "16:9", label: "16:9", title: "Wide" },
+  { value: "21:9", label: "21:9", title: "Ultra Wide" },
 ];
 
 type Template = {
@@ -29,9 +33,12 @@ type Template = {
 };
 
 export default function StudioPage() {
+  const searchParams = useSearchParams();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [models, setModels] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const { t } = useLanguage();
+  const tr = (key: string, vars?: Record<string, string | number>) => vars ? replaceTemplate(t(key), vars) : t(key);
 
   // Generation State
   const [templatePrompt, setTemplatePrompt] = useState(''); // The prompt with {{vars}} or the raw prompt gen prompt
@@ -39,7 +46,7 @@ export default function StudioPage() {
   const [variableKeys, setVariableKeys] = useState<string[]>([]);
 
   const [finalImagePrompt, setFinalImagePrompt] = useState(''); // The result of "Generate Prompt"
-  const [isPromptGenerated, setIsPromptGenerated] = useState(false);
+  const [_isPromptGenerated, setIsPromptGenerated] = useState(false); // Reserved for future use
 
   // Configuration Overrides
   const [selectedPromptModelId, setSelectedPromptModelId] = useState('');
@@ -49,6 +56,7 @@ export default function StudioPage() {
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
 
   // Results
   const [results, setResults] = useState<{ id: string, url: string, prompt: string }[]>([]);
@@ -56,8 +64,11 @@ export default function StudioPage() {
   // Config State
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1K');
+  const [numberOfImages, setNumberOfImages] = useState(1); // Number of images to generate (1-4)
   const [returnType, setReturnType] = useState('IMAGE'); // IMAGE or TEXT_IMAGE
   const [refImages, setRefImages] = useState<{file: File, preview: string, base64: string}[]>([]);
+  const [maxRefImages, setMaxRefImages] = useState<number>(14); // Dynamically adjusted based on model config
+  const [supportedParams, setSupportedParams] = useState<string[]>(['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled']); // Params supported by current model
 
   // Folder State
   const [folders, setFolders] = useState<any[]>([]);
@@ -66,25 +77,94 @@ export default function StudioPage() {
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<{ url: string, prompt: string } | null>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files) {
           const newFiles = Array.from(e.target.files);
-          if (refImages.length + newFiles.length > 14) {
-              setError("最多可添加 14 张参考图。");
+          if (refImages.length + newFiles.length > maxRefImages) {
+              setError(tr('create.error.maxRefImages', { count: maxRefImages }));
               return;
           }
-          
-          newFiles.forEach(file => {
+
+          // Reset error and warning
+          setError('');
+          setWarning('');
+
+          // Process each file
+          for (const file of newFiles) {
+              // Check file size (30MB limit - hard block)
+              const MAX_SIZE = 30 * 1024 * 1024; // 30MB in bytes
+              if (file.size > MAX_SIZE) {
+                  setError(tr('create.error.fileTooLarge', { name: file.name, size: (file.size / 1024 / 1024).toFixed(2) }));
+                  continue; // Skip this file
+              }
+
+              // Read file as data URL
               const reader = new FileReader();
-              reader.onloadend = () => {
-                  setRefImages(prev => [...prev, {
-                      file,
-                      preview: URL.createObjectURL(file), // for preview
-                      base64: reader.result as string
-                  }]);
+              reader.onloadend = async () => {
+                  const base64 = reader.result as string;
+                  const preview = URL.createObjectURL(file);
+
+                  // Load image to check dimensions
+                  const img = new Image();
+                  img.onload = () => {
+                      const warnings: string[] = [];
+
+                      // Check resolution (512x512 minimum - warning only)
+                      const MIN_RESOLUTION = 512;
+                      if (img.width < MIN_RESOLUTION || img.height < MIN_RESOLUTION) {
+                          warnings.push(tr('create.warning.lowResolution', { width: img.width, height: img.height }));
+                      }
+
+                      // Check aspect ratio match (warning only)
+                      const imageAspect = img.width / img.height;
+                      const [targetW, targetH] = aspectRatio.split(':').map(Number);
+                      const targetAspect = targetW / targetH;
+                      const aspectDiff = Math.abs(imageAspect - targetAspect);
+
+                      // Allow 10% tolerance for aspect ratio matching
+                      if (aspectDiff > targetAspect * 0.1) {
+                          warnings.push(tr('create.warning.aspectMismatchSingle', { ratio: imageAspect.toFixed(2), aspect: aspectRatio, target: targetAspect.toFixed(2) }));
+                      }
+
+                      // Display warnings if any
+                      if (warnings.length > 0) {
+                          setWarning(warnings.join('\n\n'));
+                      }
+
+                      // Add image to state
+                      setRefImages(prev => [...prev, {
+                          file,
+                          preview,
+                          base64
+                      }]);
+                  };
+
+                  img.onerror = () => {
+                      setError(tr('create.error.imageLoad', { name: file.name }));
+                  };
+
+                  img.src = base64;
               };
+
+              reader.onerror = () => {
+                  setError(tr('create.error.fileRead', { name: file.name }));
+              };
+
               reader.readAsDataURL(file);
-          });
+          }
       }
   };
 
@@ -106,6 +186,107 @@ export default function StudioPage() {
     });
   }, []);
 
+  // Read URL parameters for recreating from library
+  useEffect(() => {
+    if (models.length === 0) return; // Wait for models to load
+    
+    const prompt = searchParams.get('prompt');
+    const modelName = searchParams.get('model');
+    const paramsStr = searchParams.get('params');
+
+    if (prompt) {
+      setFinalImagePrompt(prompt);
+      setIsPromptGenerated(true);
+    }
+
+    if (modelName && models.length > 0) {
+      // Try to find model by name
+      const model = models.find(m => m.name === modelName || m.modelIdentifier === modelName);
+      if (model) {
+        setSelectedImageModelId(model.id);
+      }
+    }
+
+    if (paramsStr) {
+      try {
+        const params = JSON.parse(paramsStr);
+        if (params.aspectRatio) setAspectRatio(params.aspectRatio);
+        if (params.imageSize) setResolution(params.imageSize);
+        if (params.numberOfImages) setNumberOfImages(params.numberOfImages);
+        if (params.responseModalities) {
+          const hasText = params.responseModalities.includes('TEXT');
+          setReturnType(hasText ? 'TEXT_IMAGE' : 'IMAGE');
+        }
+      } catch (e) {
+        console.error('Failed to parse params from URL:', e);
+      }
+    }
+  }, [searchParams, models]);
+
+  // Update maxRefImages and supportedParams when image model changes
+  useEffect(() => {
+    if (selectedImageModelId && models.length > 0) {
+      const selectedModel = models.find(m => m.id === selectedImageModelId);
+      if (selectedModel && selectedModel.parameterConfig) {
+        // Get max ref images
+        const max = getMaxRefImages(selectedModel.parameterConfig);
+        setMaxRefImages(max);
+
+        // Get supported parameters
+        const params = getModelParameters(selectedModel.parameterConfig);
+        const paramKeys = params.map(p => p.key);
+        setSupportedParams(paramKeys);
+
+        // If current ref images exceed the new limit, show warning and trim
+        if (refImages.length > max) {
+          setWarning(tr('create.warning.limitTrimmed', { count: max }));
+          setRefImages(prev => prev.slice(0, max));
+        }
+      } else {
+        // Default to all params if no config
+        setSupportedParams(['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled']);
+        setMaxRefImages(14);
+      }
+    }
+  }, [selectedImageModelId, models]);
+
+  // Check aspect ratio mismatch when aspect ratio changes
+  useEffect(() => {
+    if (refImages.length > 0) {
+      const [targetW, targetH] = aspectRatio.split(':').map(Number);
+      const targetAspect = targetW / targetH;
+
+      // Check if any uploaded images don't match the aspect ratio
+      const mismatchedImages: string[] = [];
+
+      refImages.forEach((refImg, index) => {
+        const img = new Image();
+        img.onload = () => {
+          const imageAspect = img.width / img.height;
+          const aspectDiff = Math.abs(imageAspect - targetAspect);
+
+          // Allow 10% tolerance for aspect ratio matching
+          if (aspectDiff > targetAspect * 0.1) {
+            mismatchedImages.push(tr('create.warning.aspectMismatchItem', { index: index + 1, width: img.width, height: img.height, ratio: imageAspect.toFixed(2) }));
+
+            // Update warning after checking all images
+            if (mismatchedImages.length > 0) {
+              setWarning(tr('create.warning.aspectMismatchList', { aspect: aspectRatio, target: targetAspect.toFixed(2), list: mismatchedImages.join('\n') }));
+            }
+          }
+        };
+        img.src = refImg.base64;
+      });
+
+      // Clear warning if no mismatches found after a delay
+      setTimeout(() => {
+        if (mismatchedImages.length === 0) {
+          setWarning('');
+        }
+      }, 500);
+    }
+  }, [aspectRatio, refImages]);
+
   useEffect(() => {
     if (selectedTemplateId) {
       const tmpl = templates.find(t => t.id === selectedTemplateId);
@@ -113,6 +294,16 @@ export default function StudioPage() {
         setTemplatePrompt(tmpl.promptTemplate);
         if (tmpl.promptGeneratorId) setSelectedPromptModelId(tmpl.promptGeneratorId);
         if (tmpl.imageGeneratorId) setSelectedImageModelId(tmpl.imageGeneratorId);
+        
+        // Apply default params from template
+        try {
+          const defaultParams = JSON.parse(tmpl.defaultParams || '{}');
+          if (defaultParams.aspectRatio) setAspectRatio(defaultParams.aspectRatio);
+          if (defaultParams.resolution) setResolution(defaultParams.resolution);
+          if (defaultParams.numberOfImages) setNumberOfImages(defaultParams.numberOfImages);
+        } catch (e) {
+          console.error('Failed to parse template defaultParams:', e);
+        }
         
         // Extract variables {{var}}
         const regex = /\{\{([^}]+)\}\}/g;
@@ -178,7 +369,7 @@ export default function StudioPage() {
             setIsPromptGenerated(true);
             setLastPromptRunId(res.runId);
         } else {
-            setError(res.error || '生成提示词失败');
+            setError(res.error || tr('create.error.promptGenerateFail'));
         }
     } catch (e: any) {
         setError(e.message);
@@ -197,18 +388,26 @@ export default function StudioPage() {
   // Step 2: Generate Image
   const handleGenerateImage = async () => {
     if (!finalImagePrompt.trim() || !selectedImageModelId) {
-        setError('请先选择图像模型并准备好提示词。');
+        setError(tr('create.error.imageGeneratePrereq'));
         return;
     }
 
     // If there are existing results, show confirmation
     if (results.length > 0) {
-        const confirmed = window.confirm(
-            '重新生成将清空当前的图片结果。\n\n确定要继续吗？之前生成的图片仍会保存在资料库中。'
-        );
-        if (!confirmed) return;
+        setConfirmDialog({
+          isOpen: true,
+          title: tr('create.confirmRegenerate.title'),
+          message: tr('create.confirmRegenerate.message'),
+          onConfirm: () => performImageGeneration(),
+        });
+        return;
     }
 
+    performImageGeneration();
+  };
+
+  // Perform the actual image generation
+  const performImageGeneration = async () => {
     setGeneratingImage(true);
     setError('');
 
@@ -216,6 +415,7 @@ export default function StudioPage() {
       const params = {
           aspectRatio,
           imageSize: resolution,
+          numberOfImages,
           responseModalities: returnType === 'TEXT_IMAGE' ? ['TEXT', 'IMAGE'] : ['IMAGE'],
           refImages: refImages.map(img => img.base64) // Pass base64 strings
       };
@@ -227,7 +427,7 @@ export default function StudioPage() {
         const newImages = res.images as { id: string, url: string, prompt: string }[];
         setResults(newImages); // Replace instead of prepend when regenerating
       } else {
-        setError(res.error || '发生未知错误');
+        setError(res.error || tr('create.error.unknown'));
       }
     } catch (err: any) {
       setError(err.message);
@@ -254,10 +454,10 @@ export default function StudioPage() {
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': blob })
       ]);
-      alert('图片已复制到剪贴板');
+      alert(tr('create.copy.success'));
     } catch (err) {
-      console.error('复制失败:', err);
-      alert('复制失败，请重试');
+      console.error('copy failed:', err);
+      alert(tr('create.copy.fail'));
     }
   };
 
@@ -269,26 +469,26 @@ export default function StudioPage() {
       
       {/* 1. Parameters Column */}
       <div className="w-[320px] flex-none flex flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-6 p-5 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-md min-h-full">
+        <div className="flex flex-col gap-6 p-5 rounded-2xl bg-card border border-border backdrop-blur-md min-h-full shadow-sm">
             
             {/* Header */}
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-indigo-400" />
-                生成图片
+              <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
+                <Wand2 className="w-5 h-5 text-primary" />
+                {tr('create.title')}
               </h2>
-              <p className="text-zinc-500 text-sm mt-1">配置生成参数与模型。</p>
+              <p className="text-muted-foreground text-sm mt-1">{tr('create.subtitle')}</p>
             </div>
 
             {/* Template */}
             <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">模板</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.templateLabel')}</label>
                 <select 
                     value={selectedTemplateId}
                     onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="w-full bg-black/40 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500/50 outline-none text-white"
+                    className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none text-foreground"
                 >
-                    <option value="">自定义（直接输入）</option>
+                    <option value="">{tr('create.template.customOption')}</option>
                     {templates.map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
@@ -297,18 +497,18 @@ export default function StudioPage() {
 
              {/* Input Variables */}
             {selectedTemplateId && variableKeys.length > 0 && (
-                <div className="p-3 bg-zinc-800/30 rounded-xl border border-white/5 space-y-3">
-                    <h3 className="text-xs font-bold text-zinc-300 uppercase flex items-center gap-2">
-                        <PenLine className="w-3 h-3" /> 变量输入
+                <div className="p-3 bg-secondary/20 rounded-xl border border-border space-y-3">
+                    <h3 className="text-xs font-bold text-foreground/80 uppercase flex items-center gap-2">
+                        <PenLine className="w-3 h-3" /> {tr('create.variables.title')}
                     </h3>
                     {variableKeys.map(key => (
                         <div key={key}>
-                            <label className="text-xs text-zinc-500 block mb-1">{key}</label>
+                            <label className="text-xs text-muted-foreground block mb-1">{key}</label>
                             <input 
                                 value={variables[key]}
                                 onChange={e => setVariables(p => ({...p, [key]: e.target.value}))}
-                                className="w-full bg-black/20 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500/50 outline-none"
-                                placeholder={`填写 ${key}...`}
+                                className="w-full bg-background/50 border border-border/50 rounded-lg px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none"
+                                placeholder={tr('create.variables.placeholder', { key })}
                             />
                         </div>
                     ))}
@@ -317,20 +517,21 @@ export default function StudioPage() {
 
             {/* Image Model */}
             <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">图像模型</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.imageModelLabel')}</label>
                 <select 
                     value={selectedImageModelId}
                     onChange={(e) => setSelectedImageModelId(e.target.value)}
-                    className="w-full bg-black/40 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
+                    className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
                 >
-                    <option value="">请选择模型</option>
+                    <option value="">{tr('create.imageModelPlaceholder')}</option>
                     {imageModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
             </div>
 
-            {/* Aspect Ratio */}
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">画幅比例</label>
+            {/* Aspect Ratio - Only show if model supports aspectRatio */}
+            {supportedParams.includes('aspectRatio') && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.aspectRatioLabel')}</label>
                 <div className="grid grid-cols-3 gap-2">
                     {ASPECT_RATIOS.map(ratio => {
                         const [w, h] = ratio.value.split(':').map(Number);
@@ -345,16 +546,16 @@ export default function StudioPage() {
                         onClick={() => setAspectRatio(ratio.value)}
                         className={`group relative py-2 px-1 rounded-lg text-xs font-medium transition-colors flex flex-col items-center gap-1 ${
                             aspectRatio === ratio.value
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground'
                         }`}
                         >
                             <span className="truncate w-full text-center">{ratio.label}</span>
                              {/* Visual Tooltip (Simplified) */}
-                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-zinc-900 border border-zinc-700 p-2 rounded-lg shadow-xl z-[100] pointer-events-none">
-                                <div className="w-8 h-8 flex items-center justify-center bg-zinc-800/50 rounded mb-1">
+                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-popover border border-border p-2 rounded-lg shadow-xl z-[100] pointer-events-none">
+                                <div className="w-8 h-8 flex items-center justify-center bg-secondary/50 rounded mb-1">
                                     <div 
-                                        className="bg-indigo-500 rounded-[1px]"
+                                        className="bg-primary rounded-[1px]"
                                         style={{ width: `${width}px`, height: `${height}px` }}
                                     />
                                 </div>
@@ -363,49 +564,77 @@ export default function StudioPage() {
                         );
                     })}
                 </div>
-            </div>
+              </div>
+            )}
 
-            {/* Resolution */}
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">分辨率</label>
-                <select
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value)}
-                className="w-full bg-black/40 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
-                >
-                <option value="1K">1024x1024 (1K)</option>
-                <option value="2K">2048x2048 (2K)</option>
-                <option value="4K">4096x4096 (4K)</option>
-                </select>
-            </div>
+            {/* Number of Images - Only show if model supports numberOfImages */}
+            {supportedParams.includes('numberOfImages') && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                  <span>{tr('create.numberOfImagesLabel')}</span>
+                  <span className="text-primary font-bold">{numberOfImages}</span>
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="4"
+                  step="1"
+                  value={numberOfImages}
+                  onChange={(e) => setNumberOfImages(parseInt(e.target.value))}
+                  className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground px-0.5">
+                  <span>1</span>
+                  <span>2</span>
+                  <span>3</span>
+                  <span>4</span>
+                </div>
+              </div>
+            )}
+
+            {/* Resolution - Only show if model supports imageSize */}
+            {supportedParams.includes('imageSize') && (
+              <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.resolutionLabel')}</label>
+                  <select
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                  className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
+                  >
+                  <option value="1K">1024x1024 (1K)</option>
+                  <option value="2K">2048x2048 (2K)</option>
+                  <option value="4K">4096x4096 (4K)</option>
+                  </select>
+              </div>
+            )}
 
             {/* Return Type */}
             <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">返回类型</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.returnTypeLabel')}</label>
                 <select
                 value={returnType}
                 onChange={(e) => setReturnType(e.target.value as 'IMAGE' | 'TEXT_IMAGE')}
-                className="w-full bg-black/40 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
+                className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
                 >
-                <option value="IMAGE">仅图片</option>
-                <option value="TEXT_IMAGE">图片 + 文本描述</option>
+                <option value="IMAGE">{tr('create.returnType.imageOnly')}</option>
+                <option value="TEXT_IMAGE">{tr('create.returnType.imageText')}</option>
                 </select>
             </div>
 
             {/* Folder Selection */}
             <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Folder className="w-3 h-3" />
-                  保存到文件夹
+                  {tr('create.folderLabel')}
                 </label>
                 <select
                 value={selectedFolderId}
                 onChange={(e) => setSelectedFolderId(e.target.value)}
-                className="w-full bg-black/40 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500/50 outline-none"
+                className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
                 >
                 {folders.map(folder => (
                   <option key={folder.id} value={folder.id}>
-                    {folder.name} {folder.isDefault ? '(默认)' : ''}
+                    {folder.name} {folder.isDefault ? `(${tr('create.folderDefault')})` : ''}
                   </option>
                 ))}
                 </select>
@@ -416,15 +645,15 @@ export default function StudioPage() {
       {/* 2. Prompt & Upload Column */}
       <div className="w-[440px] flex-none flex flex-col gap-4">
           
-          <div className="flex-1 flex flex-col gap-6 p-5 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-md overflow-y-auto">
+          <div className="flex-1 flex flex-col gap-6 p-5 rounded-2xl bg-card border border-border backdrop-blur-md overflow-y-auto">
              
             {/* Final Image Prompt & Optimizer */}
             <div className="space-y-2 flex-1 flex flex-col">
                 <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">提示词</label>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.promptLabel')}</label>
                     {selectedPromptModelId && (
-                         <span className="text-[10px] items-center gap-1.5 text-zinc-600 hidden group-hover:flex">
-                             <Sparkles className="w-3 h-3 text-indigo-500" />
+                         <span className="text-[10px] items-center gap-1.5 text-muted-foreground hidden group-hover:flex">
+                             <Sparkles className="w-3 h-3 text-primary" />
                              {promptModels.find(m=>m.id===selectedPromptModelId)?.name}
                          </span>
                     )}
@@ -434,8 +663,8 @@ export default function StudioPage() {
                     <textarea
                         value={finalImagePrompt}
                         onChange={(e) => setFinalImagePrompt(e.target.value)}
-                        className="w-full h-full min-h-[220px] bg-black/40 border border-zinc-800 rounded-xl p-4 pb-14 text-sm focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none font-mono text-zinc-300 placeholder-zinc-700 leading-relaxed transition-all custom-scrollbar"
-                        placeholder={selectedPromptModelId ? "在此输入您的想法，点击一键优化..." : "在这里描述你想要的画面..."}
+                        className="w-full h-full min-h-[220px] bg-secondary/30 border border-border rounded-xl p-4 pb-14 text-sm focus:ring-2 focus:ring-primary/50 outline-none resize-none font-mono text-foreground placeholder-muted-foreground/50 leading-relaxed transition-all custom-scrollbar"
+                        placeholder={selectedPromptModelId ? tr('create.promptPlaceholderWithModel') : tr('create.promptPlaceholder')}
                     />
                     
                     {/* Inner Toolbar */}
@@ -445,11 +674,11 @@ export default function StudioPage() {
                              {previousPrompt !== null && (
                                 <button
                                     onClick={handleUndoPrompt}
-                                    className="p-2 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700 rounded-lg transition-colors flex items-center gap-1.5"
-                                    title="撤销优化"
+                                    className="p-2 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-lg transition-colors flex items-center gap-1.5"
+                                    title={tr('create.undoTooltip')}
                                 >
                                     <RefreshCw className="w-3.5 h-3.5" />
-                                    <span>撤销</span>
+                                    <span>{tr('create.undo')}</span>
                                 </button>
                              )}
                         </div>
@@ -460,14 +689,14 @@ export default function StudioPage() {
                                 <button
                                     onClick={handleGeneratePrompt}
                                     disabled={generatingPrompt || !finalImagePrompt.trim()}
-                                    className="py-2 px-4 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
+                                    className="py-2 px-4 bg-primary/90 hover:bg-primary text-primary-foreground rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
                                 >
                                     {generatingPrompt ? (
                                         <LoaderSpin />
                                     ) : (
                                         <Wand2 className="w-3.5 h-3.5" />
                                     )}
-                                    {generatingPrompt ? '优化中...' : '一键优化'}
+                                    {generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
                                 </button>
                             )}
                         </div>
@@ -477,24 +706,34 @@ export default function StudioPage() {
 
              {/* Reference Images */}
              <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">参考图</label>
+                <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.refImages.label')}</label>
+                    {maxRefImages > 0 && (
+                        <span className="text-[10px] text-muted-foreground">
+                            {refImages.length}/{maxRefImages}
+                        </span>
+                    )}
+                    {maxRefImages === 0 && (
+                        <span className="text-[10px] text-yellow-500">{tr('create.refImages.unsupported')}</span>
+                    )}
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                     {refImages.map((img, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-zinc-700 group">
-                        <img src={img.preview} alt={`参考图 ${index + 1}`} className="w-full h-full object-cover" />
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                        <img src={img.preview} alt={tr('create.refImages.alt', { index: index + 1 })} className="w-full h-full object-cover" />
                         <button
                         onClick={() => removeImage(index)}
-                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-red-500/80 transition-colors opacity-0 group-hover:opacity-100"
+                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-destructive/80 transition-colors opacity-0 group-hover:opacity-100"
                         >
                         <X className="w-3 h-3" />
                         </button>
                     </div>
                     ))}
-                    {refImages.length < 14 && (
-                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-zinc-700 text-zinc-500 cursor-pointer hover:border-indigo-500 hover:text-indigo-400 transition-colors bg-black/20 hover:bg-indigo-500/5">
+                    {refImages.length < maxRefImages && maxRefImages > 0 && (
+                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-border text-muted-foreground cursor-pointer hover:border-primary/50 hover:text-primary transition-colors bg-secondary/50 hover:bg-primary/5">
                         <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
                         <Upload className="w-4 h-4 mb-1" />
-                        <span className="text-[9px] font-medium">上传</span>
+                        <span className="text-[9px] font-medium">{tr('create.upload')}</span>
                     </label>
                     )}
                 </div>
@@ -503,13 +742,20 @@ export default function StudioPage() {
           </div>
 
           <div className="p-0 space-y-3">
-             {error && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex gap-2 items-center">
-                   <AlertCircle className="w-4 h-4 shrink-0" />
-                   {error}
+             {warning && (
+                <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs flex gap-2 items-start">
+                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                   <div className="whitespace-pre-line">{warning}</div>
                 </div>
              )}
-             
+
+             {error && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex gap-2 items-start">
+                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                   <div>{error}</div>
+                </div>
+             )}
+
              <button
                 onClick={handleGenerateImage}
                 disabled={generatingImage || !finalImagePrompt || !selectedImageModelId}
@@ -518,17 +764,17 @@ export default function StudioPage() {
                 {generatingImage ? (
                    <>
                      <LoaderSpin />
-                     生成中...
+                     {tr('create.generating')}
                    </>
                 ) : results.length > 0 ? (
                    <>
                      <RefreshCw className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                     重新生成
+                     {tr('create.regenerate')}
                    </>
                 ) : (
                    <>
                      <ImageIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                     生成图片
+                     {tr('create.generate')}
                    </>
                 )}
               </button>
@@ -537,7 +783,7 @@ export default function StudioPage() {
 
       {/* 3. Results Column */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="h-full p-5 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-md overflow-y-auto custom-scrollbar">
+        <div className="h-full p-5 rounded-2xl bg-card border border-border backdrop-blur-md overflow-y-auto custom-scrollbar">
             <div className="flex flex-col gap-4">
             <AnimatePresence mode='popLayout'>
                 {results.map((res) => (
@@ -546,7 +792,7 @@ export default function StudioPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="relative w-full rounded-2xl overflow-hidden bg-black/50 border border-white/5 group shadow-sm hover:shadow-md transition-shadow"
+                    className="relative w-full rounded-2xl overflow-hidden bg-card border border-border group shadow-sm hover:shadow-md transition-shadow"
                 >
                     <img
                         src={res.url}
@@ -560,21 +806,21 @@ export default function StudioPage() {
                             <button
                                 onClick={() => setPreviewImage({ url: res.url, prompt: res.prompt })}
                                 className="p-2 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm"
-                                title="查看大图"
+                                title={tr('create.preview.view')}
                             >
                                 <ZoomIn className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={() => handleCopyImage(res.url)}
                                 className="p-2 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm"
-                                title="复制图片"
+                                title={tr('create.preview.copy')}
                             >
                                 <Copy className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={() => handleDownloadImage(res.url, res.prompt)}
                                 className="p-2 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm"
-                                title="下载图片"
+                                title={tr('create.preview.download')}
                             >
                                 <Download className="w-4 h-4" />
                             </button>
@@ -585,19 +831,19 @@ export default function StudioPage() {
             </AnimatePresence>
 
             {results.length === 0 && !generatingImage && (
-                <div className="h-[500px] flex flex-col items-center justify-center text-zinc-600 border-2 border-dashed border-zinc-800/50 rounded-2xl">
-                    <div className="w-20 h-20 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
+                <div className="h-[500px] flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-border rounded-2xl">
+                    <div className="w-20 h-20 rounded-full bg-secondary flex items-center justify-center mb-4">
                         <ImageIcon className="w-8 h-8 opacity-40" />
                     </div>
-                    <p className="font-medium text-zinc-500">生成的图片会展示在这里</p>
-                    <p className="text-xs text-zinc-700 mt-1">先配置模型与提示词即可开始</p>
+                    <p className="font-medium text-muted-foreground">{tr('create.empty.title')}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">{tr('create.empty.desc')}</p>
                 </div>
             )}
 
             {generatingImage && (
-                <div className="w-full aspect-square max-h-[500px] rounded-2xl bg-zinc-900/50 animate-pulse border border-white/5 flex flex-col items-center justify-center gap-3">
+                <div className="w-full aspect-square max-h-[500px] rounded-2xl bg-card/50 animate-pulse border border-border flex flex-col items-center justify-center gap-3">
                     <LoaderSpin />
-                    <span className="text-xs text-zinc-500 animate-pulse">正在创作...</span>
+                    <span className="text-xs text-muted-foreground animate-pulse">{tr('create.generatingPlaceholder')}</span>
                 </div>
             )}
             </div>
@@ -625,7 +871,7 @@ export default function StudioPage() {
               <button
                 onClick={() => setPreviewImage(null)}
                 className="absolute -top-12 right-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm"
-                title="关闭"
+                title={tr('create.close')}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -643,19 +889,71 @@ export default function StudioPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleCopyImage(previewImage.url)}
-                    className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
+                    className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-primary text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <Copy className="w-4 h-4" />
-                    复制图片
+                    {tr('create.preview.copy')}
                   </button>
                   <button
                     onClick={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
                     className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <Download className="w-4 h-4" />
-                    下载图片
+                    {tr('create.preview.download')}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm Dialog */}
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 pb-4 border-b border-white/5">
+                <h3 className="text-lg font-bold text-white">{confirmDialog.title}</h3>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <p className="text-sm text-zinc-300 whitespace-pre-line leading-relaxed">
+                  {confirmDialog.message}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="p-6 pt-4 flex gap-3">
+                <button
+                  onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                  className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium transition-colors"
+                >
+                  {tr('create.cancel')}
+                </button>
+                <button
+                  onClick={() => {
+                    confirmDialog.onConfirm();
+                    setConfirmDialog({ ...confirmDialog, isOpen: false });
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold transition-all shadow-lg shadow-indigo-500/20"
+                >
+                  {tr('create.confirm')}
+                </button>
               </div>
             </motion.div>
           </motion.div>

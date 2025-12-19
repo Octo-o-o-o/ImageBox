@@ -75,6 +75,8 @@
 ### User Experience
 
 - **✨ Modern UI** - Beautiful dark glassmorphism design with smooth animations
+- **🌍 Multi-Language Support** - 13 languages: English, Chinese (Simplified & Traditional), Japanese, German, French, Russian, Portuguese, Spanish, Italian, Arabic (RTL), Norwegian, Swedish
+- **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
 - **🌐 Cross-Platform Access** - Use via localhost or LAN from any device
 - **⚡ Fast & Secure** - Next.js Server Actions for optimized API calls
 - **🆓 100% Free & Open Source** - No hidden fees, only your own API key costs
@@ -112,19 +114,19 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### First-Time Setup
 
-1. Navigate to **Settings** page
-2. Enter your Google Gemini API key
-3. Click **Save Settings**
-4. Go to **Studio** and start generating images!
+1. Navigate to **Models** page (`/models`)
+2. Add a new Provider and configure your API key
+3. Add a new Model and select the appropriate provider
+4. Go to **Create** (`/create`) and start generating images!
 
 ## Usage
 
 ### Creating Templates
 
-1. Go to **Templates** page
+1. Go to **Templates** page (`/templates`)
 2. Click **New Template**
 3. Add variables using `{{variableName}}` syntax (e.g., `{{subject}}`, `{{style}}`)
-4. Save and use in Studio
+4. Save and use in Create page
 
 **Example Template:**
 ```
@@ -133,11 +135,11 @@ A beautiful {{subject}} in {{style}} style, highly detailed, 4k
 
 ### Generating Images
 
-1. Go to **Studio** page
+1. Go to **Create** page (`/create`)
 2. Enter a prompt or select a template
 3. Fill in template variables if applicable
 4. Click **Generate**
-5. View results in **Gallery**
+5. View results in **Library** (`/library`)
 
 ## Tech Stack
 
@@ -152,16 +154,22 @@ A beautiful {{subject}} in {{style}} style, highly detailed, 4k
 ```
 imagebox/
 ├── app/
-│   ├── page.tsx              # Gallery (home page)
-│   ├── studio/page.tsx       # Image generation interface
+│   ├── page.tsx              # Home page (redirects to /library)
+│   ├── library/page.tsx      # Image gallery and management
+│   ├── create/page.tsx       # Image generation interface
 │   ├── templates/page.tsx    # Template management
-│   ├── settings/page.tsx     # Settings & API keys
+│   ├── models/page.tsx       # Model & provider configuration
+│   ├── run_log/page.tsx      # Generation history logs
 │   ├── actions.ts            # Server Actions (DB + API)
 │   └── layout.tsx            # Root layout with navigation
 ├── components/
-│   └── Sidebar.tsx           # Navigation sidebar
+│   ├── Sidebar.tsx           # Navigation sidebar
+│   ├── ThemeProvider.tsx     # Theme management
+│   └── LanguageProvider.tsx  # I18n support
 ├── lib/
-│   └── prisma.ts             # Prisma client singleton
+│   ├── prisma.ts             # Prisma client singleton
+│   ├── modelParameters.ts    # Parameter mapping system
+│   └── i18n/                 # Translation files
 ├── prisma/
 │   └── schema.prisma         # Database schema
 └── public/generated/         # Generated images (auto-created)
