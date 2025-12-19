@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder } from 'lucide-react';
 
 const ASPECT_RATIOS = [
   { value: "1:1", label: "1:1", title: "正方形" },

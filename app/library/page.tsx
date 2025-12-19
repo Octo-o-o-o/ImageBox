@@ -3,7 +3,7 @@
 import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage } from '@/app/actions';
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image as ImageIcon, Folder, FolderOpen, Plus, Edit2, Trash2, Check, X, Download, Copy, ZoomIn } from 'lucide-react';
+import { Image as ImageIcon, Folder, FolderOpen, Plus, Edit2, Trash2, Check, X, Download, Copy } from 'lucide-react';
 import clsx from 'clsx';
 
 type FolderType = {
@@ -144,10 +144,29 @@ export default function LibraryPage() {
   // Handle image load to get dimensions
   const handleImageLoad = (imgId: string, e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
-    setImageDimensions(prev => ({
-      ...prev,
-      [imgId]: { width: img.naturalWidth, height: img.naturalHeight }
-    }));
+    if (img.naturalWidth && img.naturalHeight) {
+      setImageDimensions(prev => ({
+        ...prev,
+        [imgId]: { width: img.naturalWidth, height: img.naturalHeight }
+      }));
+    }
+  };
+
+  // Also check if image is already loaded (for cached images)
+  const handleImageRef = (imgId: string, element: HTMLImageElement | null) => {
+    if (element && element.complete && element.naturalWidth && element.naturalHeight) {
+      // Only update if we don't have dimensions for this image yet
+      if (!imageDimensions[imgId]) {
+        setImageDimensions(prev => {
+          // Double check to avoid race conditions
+          if (prev[imgId]) return prev;
+          return {
+            ...prev,
+            [imgId]: { width: element.naturalWidth, height: element.naturalHeight }
+          };
+        });
+      }
+    }
   };
 
   const selectedFolder = folders.find(f => f.id === selectedFolderId);
@@ -374,6 +393,7 @@ export default function LibraryPage() {
                       alt={img.finalPrompt}
                       loading="lazy"
                       onLoad={(e) => handleImageLoad(img.id, e)}
+                      ref={(el) => handleImageRef(img.id, el)}
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                     />
 
@@ -406,21 +426,6 @@ export default function LibraryPage() {
 
                       {/* Bottom Right - Action Buttons */}
                       <div className="absolute bottom-3 right-3 flex gap-2 pointer-events-auto">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewImage({
-                              id: img.id,
-                              url: img.path,
-                              prompt: img.finalPrompt,
-                              createdAt: img.createdAt
-                            });
-                          }}
-                          className="p-2 rounded-lg bg-black/40 hover:bg-indigo-500 text-white transition-all backdrop-blur-sm"
-                          title="查看大图"
-                        >
-                          <ZoomIn className="w-4 h-4" />
-                        </button>
                         <button
                           onClick={(e) => handleCopyImage(img.path, e)}
                           className="p-2 rounded-lg bg-black/40 hover:bg-indigo-500 text-white transition-all backdrop-blur-sm"
