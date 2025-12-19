@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Provider {
+  id          String   @id @default(uuid())
+  name        String   // e.g. "OpenAI Official", "DeepSeek", "Localhost"
+  type        String   // "GEMINI" | "OPENAI"
+  baseUrl     String?  // Optional for official, required for custom
+  apiKey      String?  // The key used for this provider
+  createdAt   DateTime @default(now())
+  
+  models      AIModel[]
+}
+
+model AIModel {
+  id              String   @id @default(uuid())
+  name            String   // Display Name e.g. "GPT-4o"
+  modelIdentifier String   // API ID e.g. "gpt-4o"
+  type            String   // "TEXT" | "IMAGE"
+  
+  provider        Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId      String?
+  
+  createdAt       DateTime @default(now())
+  
+  templatesAsPrompter Template[] @relation("PromptGen")
+  templatesAsImager   Template[] @relation("ImageGen")
+}
+
+model Template {
+  id                String   @id @default(uuid())
+  name              String
+  icon              String?
+  description       String?
+  
+  // Prompt Generation Configuration
+  promptTemplate    String   // The prompt sent to the LLM (with {{slots}})
+  systemPrompt      String?  // System instructions for the LLM
+  promptGenerator   AIModel?   @relation("PromptGen", fields: [promptGeneratorId], references: [id])
+  promptGeneratorId String?
+
+  // Image Generation Configuration
+  imageGenerator    AIModel?   @relation("ImageGen", fields: [imageGeneratorId], references: [id])
+  imageGeneratorId  String?
+  defaultParams     String   // JSON string of params (aspectRatio, etc.) for image gen
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  images            Image[]
+}
+
+model Folder {
+  id          String   @id @default(uuid())
+  name        String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  images      Image[]
+}
+
+model Image {
+  id          String   @id @default(uuid())
+  path        String   // Relative URL/path to the image file
+  finalPrompt String
+  modelName   String
+  params      String   // JSON of generation params
+  isFavorite  Boolean  @default(false)
+
+  template    Template? @relation(fields: [templateId], references: [id])
+  templateId  String?
+
+  folder      Folder?   @relation(fields: [folderId], references: [id])
+  folderId    String?
+
+  createdAt   DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model RunLog {
+  id              String   @id @default(uuid())
+  requestTime     DateTime @default(now())
+  completionTime  DateTime?
+  duration        Int?             // In milliseconds
+  type            String           // "PROMPT_GEN" | "IMAGE_GEN"
+  status          String           // "SUCCESS" | "FAILURE" | "RUNNING"
+  modelUsed       String?
+  actualInput     String?
+  output          String?          // Image path/URL or Text Output or Error Info
+  parentTaskId    String?
+  configParams    String?          // JSON of config
+}
