@@ -122,6 +122,11 @@
 git clone https://github.com/Octo-o-o-o/ImageBox.git
 cd ImageBox
 
+# Configure environment variables (REQUIRED for Windows users)
+# Linux/Mac users can skip this step (.env file is included in the repository)
+copy .env.example .env    # Windows
+# cp .env.example .env    # Linux/Mac
+
 # Install dependencies
 npm install
 

@@ -122,6 +122,11 @@
 git clone https://github.com/Octo-o-o-o/ImageBox.git
 cd ImageBox
 
+# 配置环境变量（Windows 用户必须执行此步骤）
+# Linux/Mac 用户可跳过此步骤（.env 文件已包含在仓库中）
+copy .env.example .env    # Windows
+# cp .env.example .env    # Linux/Mac
+
 # 安装依赖
 npm install
 

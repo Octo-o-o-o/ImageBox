@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 启用独立构建模式，用于 Docker 部署
+  output: 'standalone',
   experimental: {
     serverActions: {
       bodySizeLimit: '30mb',

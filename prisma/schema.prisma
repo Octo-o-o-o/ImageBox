@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+  // Prisma 7+: URL 配置已移至 prisma.config.ts
 }
 
 model Provider {
