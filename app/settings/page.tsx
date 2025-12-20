@@ -268,39 +268,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Demo: Try to use system folder picker (to show browser limitation)
-  const handleSystemFolderPicker = async () => {
-    try {
-      // Check if the API is available
-      if (!('showDirectoryPicker' in window)) {
-        alert('此浏览器不支持 showDirectoryPicker API（Firefox 等不支持）');
-        return;
-      }
-      
-      // @ts-ignore - TypeScript may not recognize this API
-      const dirHandle = await window.showDirectoryPicker();
-      
-      // Show what we can get from the handle
-      const info = `
-系统文件夹选择器返回的信息：
-
-✅ 文件夹名称: "${dirHandle.name}"
-❌ 绝对路径: 无法获取（浏览器安全限制）
-
-这就是为什么我们需要使用服务端文件夹浏览器。
-浏览器故意隐藏了绝对路径，以保护用户隐私。
-      `.trim();
-      
-      alert(info);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        // User cancelled
-        return;
-      }
-      alert(`错误: ${error.message}`);
-    }
-  };
-
   const handleSaveStoragePath = async () => {
     // If path is different from current, show migrate modal
     const currentPath = storageConfig?.path || '';
@@ -740,16 +707,8 @@ export default function SettingsPage() {
                 </button>
               </div>
               
-              {/* Browser limitation demo link */}
               <p className="text-xs text-muted-foreground">
-                {t('settings.storage.pathHint')}{' '}
-                <button
-                  type="button"
-                  onClick={handleSystemFolderPicker}
-                  className="text-primary hover:underline"
-                >
-                  （点击测试系统选择器的限制）
-                </button>
+                {t('settings.storage.pathHint')}
               </p>
               
               {/* Path validation result */}
