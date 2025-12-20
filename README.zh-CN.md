@@ -232,6 +232,8 @@ npm install
 
 如果您已经安装了 ImageBox 并想更新到最新版本：
 
+#### 方式一：常规更新（保留本地修改）
+
 ```bash
 # 进入您的 ImageBox 目录
 cd ImageBox
@@ -240,6 +242,35 @@ cd ImageBox
 
 # 从 GitHub 拉取最新更改
 git pull origin main
+
+# 安装可能的新依赖
+npm install
+
+# 更新数据库架构（如有变化）
+npm run db:setup
+
+# 重启服务器
+npm run dev
+```
+
+#### 方式二：强制更新（放弃所有本地修改）
+
+**⚠️ 警告：** 此操作将完全用远程版本覆盖您的本地代码。您的数据（数据库和生成的图片）将会保留，但您对代码所做的任何修改都将丢失。
+
+```bash
+# 进入您的 ImageBox 目录
+cd ImageBox
+
+# 停止正在运行的服务器（如果正在运行，按 Ctrl+C）
+
+# 从 GitHub 获取最新更改
+git fetch origin
+
+# 强制重置到远程仓库的确切状态
+git reset --hard origin/main
+
+# 清理未跟踪的文件（可选，请谨慎使用！）
+# git clean -fd
 
 # 安装可能的新依赖
 npm install
