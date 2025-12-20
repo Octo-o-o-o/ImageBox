@@ -140,15 +140,69 @@ After installation:
 
 #### Installation
 
+##### For Windows Users
+
+**Important:** This repository includes a `.npmrc` file that automatically configures npm to use Chinese mirror sources (Taobao/npmmirror) for faster and more reliable package downloads, especially for Electron binaries. This solves common network issues when installing dependencies in mainland China.
+
 ```bash
 # Clone the repository
 git clone https://github.com/Octo-o-o-o/ImageBox.git
 cd ImageBox
 
-# Configure environment variables (REQUIRED for Windows users)
-# Linux/Mac users can skip this step (.env file is included in the repository)
-copy .env.example .env    # Windows
-# cp .env.example .env    # Linux/Mac
+# Clean npm cache (recommended for first-time installation)
+npm cache clean --force
+
+# Install dependencies
+# The .npmrc file will automatically use mirror sources for npm packages and Electron
+npm install
+
+# Initialize database
+npm run db:setup
+
+# Start development server
+npm run dev
+```
+
+**Troubleshooting Windows Installation:**
+
+If you encounter network errors during `npm install` (e.g., `RequestError: Client network socket disconnected`), try the following:
+
+1. **Verify .npmrc exists**: The repository includes a `.npmrc` file. Make sure it wasn't deleted.
+
+2. **Use environment variables** (if .npmrc doesn't work):
+   ```bash
+   # In Command Prompt (CMD):
+   set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+   npm install
+
+   # Or in PowerShell:
+   $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+   npm install
+   ```
+
+3. **Skip Electron download temporarily** (if still failing):
+   ```bash
+   set ELECTRON_SKIP_BINARY_DOWNLOAD=1
+   npm install
+   ```
+   Note: This will skip Electron binary download. You can download it manually later or use the web version only.
+
+4. **Check proxy settings** (if using VPN/proxy):
+   ```bash
+   npm config get proxy
+   npm config get https-proxy
+
+   # Clear proxy if not needed:
+   npm config delete proxy
+   npm config delete https-proxy
+   ```
+
+##### For Linux/macOS Users
+
+```bash
+# Clone the repository
+git clone https://github.com/Octo-o-o-o/ImageBox.git
+cd ImageBox
 
 # Install dependencies
 npm install
@@ -158,6 +212,16 @@ npm run db:setup
 
 # Start development server
 npm run dev
+```
+
+**Note for international users:** If you experience slow download speeds outside China, you can delete or rename the `.npmrc` file to use default npm registry:
+
+```bash
+# Backup .npmrc (optional)
+mv .npmrc .npmrc.backup
+
+# Then run npm install
+npm install
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.

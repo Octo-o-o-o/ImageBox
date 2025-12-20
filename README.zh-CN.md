@@ -140,15 +140,69 @@
 
 #### 安装步骤
 
+##### Windows 用户
+
+**重要提示：** 本仓库包含 `.npmrc` 文件，会自动配置 npm 使用国内镜像源（淘宝/npmmirror）以获得更快、更稳定的包下载速度，特别是 Electron 二进制文件。这解决了在中国大陆安装依赖时常见的网络问题。
+
 ```bash
 # 克隆仓库
 git clone https://github.com/Octo-o-o-o/ImageBox.git
 cd ImageBox
 
-# 配置环境变量（Windows 用户必须执行此步骤）
-# Linux/Mac 用户可跳过此步骤（.env 文件已包含在仓库中）
-copy .env.example .env    # Windows
-# cp .env.example .env    # Linux/Mac
+# 清理 npm 缓存（首次安装推荐执行）
+npm cache clean --force
+
+# 安装依赖
+# .npmrc 文件会自动为 npm 包和 Electron 使用镜像源
+npm install
+
+# 初始化数据库
+npm run db:setup
+
+# 启动开发服务器
+npm run dev
+```
+
+**Windows 安装故障排除：**
+
+如果在 `npm install` 过程中遇到网络错误（例如：`RequestError: Client network socket disconnected`），请尝试以下方法：
+
+1. **验证 .npmrc 文件存在**：仓库中已包含 `.npmrc` 文件，请确保它未被删除。
+
+2. **使用环境变量**（如果 .npmrc 不起作用）：
+   ```bash
+   # 在命令提示符（CMD）中：
+   set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+   npm install
+
+   # 或在 PowerShell 中：
+   $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+   npm install
+   ```
+
+3. **临时跳过 Electron 下载**（如果仍然失败）：
+   ```bash
+   set ELECTRON_SKIP_BINARY_DOWNLOAD=1
+   npm install
+   ```
+   注意：这将跳过 Electron 二进制文件下载。您可以稍后手动下载或仅使用 Web 版本。
+
+4. **检查代理设置**（如果使用 VPN/代理）：
+   ```bash
+   npm config get proxy
+   npm config get https-proxy
+
+   # 如果不需要代理，清除代理设置：
+   npm config delete proxy
+   npm config delete https-proxy
+   ```
+
+##### Linux/macOS 用户
+
+```bash
+# 克隆仓库
+git clone https://github.com/Octo-o-o-o/ImageBox.git
+cd ImageBox
 
 # 安装依赖
 npm install
@@ -158,6 +212,16 @@ npm run db:setup
 
 # 启动开发服务器
 npm run dev
+```
+
+**国外用户注意：** 如果您在中国大陆以外地区遇到下载速度慢的问题，可以删除或重命名 `.npmrc` 文件以使用默认 npm 镜像源：
+
+```bash
+# 备份 .npmrc（可选）
+mv .npmrc .npmrc.backup
+
+# 然后运行 npm install
+npm install
 ```
 
 在浏览器中打开 [http://localhost:3000](http://localhost:3000)。
