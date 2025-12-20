@@ -135,6 +135,32 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Updating to Latest Version
+
+If you already have ImageBox installed and want to update to the latest version:
+
+```bash
+# Navigate to your ImageBox directory
+cd ImageBox
+
+# Stop the running server (Ctrl+C if running)
+
+# Pull the latest changes from GitHub
+git pull origin main
+
+# Install any new dependencies
+npm install
+
+# Update database schema (if changed)
+npx prisma generate
+npx prisma db push
+
+# Restart the server
+npm run dev
+```
+
+**Note:** Your existing data (images, templates, models, settings) will be preserved during updates. The `prisma db push` command safely applies schema changes without losing data.
+
 ### First-Time Setup
 
 1. Navigate to **Models** page (`/models`)
