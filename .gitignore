@@ -49,7 +49,7 @@ dev.db-journal
 /public/generated/
 
 # internal development documentation
-CLAUDE.md
+# CLAUDE.md is now tracked (documentation for AI assistants)
 PRODUCT_DESIGN.md
 /docs/
 
