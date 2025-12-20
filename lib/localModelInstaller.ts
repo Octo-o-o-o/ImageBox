@@ -145,6 +145,9 @@ export function getInstallCommands(config: InstallConfig): string[] {
   commands.push(`git clone --depth 1 ${SDCPP_REPO}`);
   commands.push(`cd stable-diffusion.cpp`);
   
+  // Initialize git submodules (required for ggml)
+  commands.push(`git submodule update --init --recursive`);
+  
   // Build commands based on platform
   commands.push(`mkdir -p build && cd build`);
   
@@ -255,7 +258,7 @@ export function getOneLinerScript(config: InstallConfig): string {
   const cmakeFlag = platform === 'darwin' ? '-DSD_METAL=ON' : '-DSD_CUDA=ON';
   const modelName = modelVariant === 'full' ? 'Z-Image-Turbo' : `Z-Image-Turbo-${modelVariant.toUpperCase()}`;
   
-  return `mkdir -p "${installDir}" && cd "${installDir}" && git clone --depth 1 ${SDCPP_REPO} && cd stable-diffusion.cpp && mkdir build && cd build && cmake .. ${cmakeFlag} && cmake --build . --config Release -j && cd "${installDir}" && mkdir -p models && python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Tongyi-MAI/${modelName}', local_dir='models/${modelName}')"`;
+  return `mkdir -p "${installDir}" && cd "${installDir}" && git clone --depth 1 ${SDCPP_REPO} && cd stable-diffusion.cpp && git submodule update --init --recursive && mkdir build && cd build && cmake .. ${cmakeFlag} && cmake --build . --config Release -j && cd "${installDir}" && mkdir -p models && python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Tongyi-MAI/${modelName}', local_dir='models/${modelName}')"`;
 
 }
 

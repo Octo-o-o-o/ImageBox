@@ -1878,12 +1878,18 @@ export async function runAutoInstallStepAction(
         const sdcppDir = path.join(installDir, 'stable-diffusion.cpp');
         const buildDir = path.join(sdcppDir, 'build');
         
+        // Initialize git submodules (required for ggml)
+        let result = await runCommand('git submodule update --init --recursive', sdcppDir);
+        if (!result.success) {
+          return { success: false, message: '初始化子模块失败', error: result.error };
+        }
+        
         // Create build directory
         await fs.mkdir(buildDir, { recursive: true });
         
         // Configure cmake
         const cmakeFlag = platform === 'darwin' ? '-DSD_METAL=ON' : '-DSD_CUDA=ON';
-        let result = await runCommand(`cmake .. ${cmakeFlag} -DCMAKE_BUILD_TYPE=Release`, buildDir);
+        result = await runCommand(`cmake .. ${cmakeFlag} -DCMAKE_BUILD_TYPE=Release`, buildDir);
         if (!result.success) {
           return { success: false, message: 'CMake 配置失败', error: result.error };
         }

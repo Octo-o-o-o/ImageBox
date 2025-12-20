@@ -515,10 +515,11 @@ export default function ModelsPage() {
                  <details className="text-xs">
                    <summary className="cursor-pointer text-primary hover:underline">查看安装命令</summary>
                    <div className="mt-3 bg-secondary/50 p-3 rounded-lg font-mono text-foreground overflow-x-auto">
-                     <p className="text-muted-foreground mb-1"># 1. 克隆项目</p>
+                     <p className="text-muted-foreground mb-1"># 1. 克隆项目并初始化子模块</p>
                      <p>git clone https://github.com/leejet/stable-diffusion.cpp</p>
+                     <p>cd stable-diffusion.cpp && git submodule update --init --recursive</p>
                      <p className="text-muted-foreground mt-2 mb-1"># 2. 编译 (macOS)</p>
-                     <p>cd stable-diffusion.cpp && mkdir build && cd build</p>
+                     <p>mkdir build && cd build</p>
                      <p>cmake .. -DSD_METAL=ON && cmake --build . --config Release</p>
                     <p className="text-muted-foreground mt-2 mb-1"># 3. 下载 Z-Image 模型</p>
                     <p>python3 -c &quot;from huggingface_hub import snapshot_download; snapshot_download(&apos;Tongyi-MAI/Z-Image-Turbo&apos;, local_dir=&apos;models/Z-Image-Turbo&apos;)&quot;</p>
