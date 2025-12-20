@@ -197,6 +197,8 @@ If you encounter network errors during `npm install` (e.g., `RequestError: Clien
    npm config delete https-proxy
    ```
 
+For more Windows-specific troubleshooting, see [WINDOWS_TROUBLESHOOTING.md](./WINDOWS_TROUBLESHOOTING.md).
+
 ##### For Linux/macOS Users
 
 ```bash
@@ -371,6 +373,11 @@ imagebox/
 - [x] **Thumbnail Generation** - Optimized image thumbnails for faster gallery loading
 
 ### High Priority
+- [ ] **Local Model Support (In Development)** - Run AI models completely offline on your own hardware
+  - Hardware detection (NVIDIA GPU, Apple Silicon)
+  - Automatic service discovery for local inference servers
+  - Support for stable-diffusion.cpp, ComfyUI, and other backends
+  - Model installer and version management
 - [ ] **Advanced Search & Filtering** - Search images by prompt, date, model, tags
 - [ ] **Batch Generation** - Generate multiple images from one prompt
 - [ ] **Image Tagging System** - Custom tags for better organization

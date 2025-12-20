@@ -2,6 +2,7 @@
 
 const { spawn } = require('child_process');
 const os = require('os');
+const path = require('path');
 
 // Get local network IP address
 function getLocalIP() {
@@ -33,10 +34,22 @@ if (localIP) {
   console.log('   Network:  Unable to detect IP address');
 }
 
+// Determine the correct next binary path for Windows
+const isWindows = process.platform === 'win32';
+const nextBin = isWindows
+  ? path.join(__dirname, '..', 'node_modules', '.bin', 'next.cmd')
+  : 'next';
+
 // Start Next.js dev server
-const nextDev = spawn('next', ['dev', '-H', '0.0.0.0'], {
+const nextDev = spawn(nextBin, ['dev', '-H', '0.0.0.0'], {
   stdio: 'inherit',
-  shell: true
+  shell: isWindows // Only use shell on Windows
+});
+
+nextDev.on('error', (err) => {
+  console.error('\n❌ Failed to start Next.js dev server:', err.message);
+  console.error('\nTry running: npm install\n');
+  process.exit(1);
 });
 
 nextDev.on('close', (code) => {

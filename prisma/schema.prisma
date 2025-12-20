@@ -10,10 +10,14 @@ datasource db {
 model Provider {
   id          String   @id @default(uuid())
   name        String   // e.g. "OpenAI Official", "DeepSeek", "Localhost"
-  type        String   // "GEMINI" | "OPENAI"
-  baseUrl     String?  // Optional for official, required for custom
-  apiKey      String?  // The key used for this provider
+  type        String   // "GEMINI" | "OPENAI" | "LOCAL"
+  baseUrl     String?  // Optional for official, required for custom/local
+  apiKey      String?  // The key used for this provider (not needed for LOCAL)
   createdAt   DateTime @default(now())
+  
+  // Local model specific fields (only used when type = "LOCAL")
+  localBackend    String?  // "SD_CPP" | "COMFYUI" | "DIFFSYNTH" | "CUSTOM"
+  localModelPath  String?  // Path to model file (for auto-deploy reference)
   
   models      AIModel[]
 }

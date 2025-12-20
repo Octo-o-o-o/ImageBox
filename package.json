@@ -14,7 +14,7 @@
     "db:setup": "prisma generate && prisma db push",
     "db:template": "DATABASE_URL=file:./prisma/template.db prisma db push",
     "electron:compile": "tsc -p tsconfig.electron.json",
-    "electron:dev": "npm run electron:compile && concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 -t 30000 && electron .\"",
+    "electron:dev": "npm run electron:compile && concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 -t 60000 && electron .\"",
     "electron:build": "npm run electron:compile && npm run build && electron-builder",
     "electron:build:mac": "npm run electron:compile && npm run build && electron-builder --mac",
     "electron:build:win": "npm run electron:compile && npm run build && electron-builder --win",

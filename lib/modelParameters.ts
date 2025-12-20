@@ -34,6 +34,7 @@ export const PARAMETER_DEFINITIONS: Record<string, ParameterDefinition> = {
     type: 'select',
     default: '1:1',
     options: [
+      { value: 'auto', label: '自动', description: '自动选择比例' },
       { value: '1:1', label: '1:1', description: '正方形' },
       { value: '2:3', label: '2:3', description: '竖版' },
       { value: '3:2', label: '3:2', description: '横版' },
@@ -104,6 +105,66 @@ export const PARAMETER_DEFINITIONS: Record<string, ParameterDefinition> = {
     default: true,
     description: '是否支持上传参考图片'
   },
+
+  // === Local Model Specific Parameters ===
+  steps: {
+    key: 'steps',
+    label: '采样步数',
+    type: 'slider',
+    default: 8,
+    min: 1,
+    max: 50,
+    step: 1,
+    description: '生成步数（Z-Image Turbo 推荐 8）'
+  },
+
+  cfgScale: {
+    key: 'cfgScale',
+    label: 'CFG Scale',
+    type: 'slider',
+    default: 0,
+    min: 0,
+    max: 10,
+    step: 0.5,
+    description: '提示词引导强度（0=自动，Z-Image Turbo 推荐 0）'
+  },
+
+  seed: {
+    key: 'seed',
+    label: '随机种子',
+    type: 'slider',
+    default: -1,
+    min: -1,
+    max: 999999999,
+    step: 1,
+    description: '-1 表示随机，固定值可复现结果'
+  },
+
+  sampler: {
+    key: 'sampler',
+    label: '采样器',
+    type: 'select',
+    default: 'euler',
+    options: [
+      { value: 'euler', label: 'Euler', description: '快速，适合低步数' },
+      { value: 'euler_a', label: 'Euler A', description: '随机性更强' },
+      { value: 'dpm++_2m', label: 'DPM++ 2M', description: '高质量' },
+      { value: 'dpm++_2m_karras', label: 'DPM++ 2M Karras', description: '高质量+平滑' },
+      { value: 'lcm', label: 'LCM', description: '极速，配合低步数' },
+    ],
+    description: '采样算法'
+  },
+
+  numberOfImages: {
+    key: 'numberOfImages',
+    label: '生成数量',
+    type: 'slider',
+    default: 1,
+    min: 1,
+    max: 4,
+    step: 1,
+    description: '一次生成多少张图片'
+  },
 };
 
 // Preset configurations for common model types
@@ -169,6 +230,64 @@ export const MODEL_PRESETS = {
     maxRefImages: 10,  // 通用默认10张
     description: '通用OpenAI兼容接口'
   },
+
+  // Grsai Nano Banana (uses custom API endpoint)
+  GRSAI_NANO_BANANA: {
+    supportedParams: ['aspectRatio', 'imageSize', 'refImagesEnabled'],
+    defaults: {
+      aspectRatio: 'auto',
+      imageSize: '1K',
+      refImagesEnabled: true,
+    },
+    maxRefImages: 10,  // 根据文档支持 urls 数组
+    description: 'Grsai Nano Banana (支持比例和分辨率，使用自定义API格式)'
+  },
+
+  // === Local Models ===
+
+  // Z-Image via stable-diffusion.cpp
+  LOCAL_ZIMAGE_SDCPP: {
+    supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages', 'steps', 'cfgScale', 'seed'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      numberOfImages: 1,
+      steps: 8,        // Z-Image Turbo 推荐 8 步
+      cfgScale: 0,     // Turbo 版本不需要 CFG
+      seed: -1,        // -1 表示随机
+    },
+    maxRefImages: 0,   // sd.cpp 暂不支持参考图
+    description: 'Z-Image 本地模型 (stable-diffusion.cpp)'
+  },
+
+  // Z-Image via ComfyUI
+  LOCAL_ZIMAGE_COMFYUI: {
+    supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages', 'steps', 'cfgScale', 'seed', 'sampler', 'refImagesEnabled'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      numberOfImages: 1,
+      steps: 8,
+      cfgScale: 0,
+      seed: -1,
+      sampler: 'euler',
+      refImagesEnabled: true,
+    },
+    maxRefImages: 4,   // ComfyUI 可通过工作流支持
+    description: 'Z-Image 本地模型 (ComfyUI)'
+  },
+
+  // Custom local model (minimal params)
+  LOCAL_CUSTOM: {
+    supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      numberOfImages: 1,
+    },
+    maxRefImages: 0,
+    description: '自定义本地模型（OpenAI 兼容接口）'
+  },
 };
 
 /**
@@ -231,6 +350,7 @@ export function mapParametersForAPI(
     baseUrl.includes('generativelanguage.googleapis.com')
   );
 
+  const isGrsai = baseUrl && (baseUrl.includes('grsai') || baseUrl.includes('dakka.com.cn'));
   const isOpenRouter = baseUrl && baseUrl.includes('openrouter.ai');
   const isOfficialOpenAI = providerType === 'OPENAI' && !baseUrl;
 
@@ -264,6 +384,20 @@ export function mapParametersForAPI(
     }
 
     // Reference images
+    if (params.refImages) {
+      mappedParams.refImages = params.refImages;
+    }
+  } else if (isGrsai) {
+    // Grsai Nano Banana - uses custom /v1/draw/nano-banana API
+    // Parameters are top-level (not nested in imageConfig)
+    mappedParams._useGrsaiAPI = true; // Special flag for custom API handling
+
+    if (params.aspectRatio) {
+      mappedParams.aspectRatio = params.aspectRatio;
+    }
+    if (params.imageSize) {
+      mappedParams.imageSize = params.imageSize;
+    }
     if (params.refImages) {
       mappedParams.refImages = params.refImages;
     }

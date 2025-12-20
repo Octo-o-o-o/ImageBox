@@ -197,6 +197,8 @@ npm run dev
    npm config delete https-proxy
    ```
 
+有关更多 Windows 特定故障排除，请参阅 [WINDOWS_TROUBLESHOOTING.md](./WINDOWS_TROUBLESHOOTING.md)。
+
 ##### Linux/macOS 用户
 
 ```bash
@@ -371,6 +373,11 @@ imagebox/
 - [x] **缩略图生成** - 优化的图片缩略图，加快图库加载
 
 ### 高优先级
+- [ ] **本地模型支持（开发中）** - 在您自己的硬件上完全离线运行 AI 模型
+  - 硬件检测（NVIDIA GPU、Apple Silicon）
+  - 自动发现本地推理服务器
+  - 支持 stable-diffusion.cpp、ComfyUI 等后端
+  - 模型安装器和版本管理
 - [ ] **高级搜索与筛选** - 按提示词、日期、模型、标签搜索图片
 - [ ] **批量生成** - 从单个提示词生成多张图片
 - [ ] **图片标签系统** - 自定义标签，更好地组织管理
