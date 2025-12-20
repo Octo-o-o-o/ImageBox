@@ -1,6 +1,7 @@
 'use client';
 
-import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder } from '@/app/actions';
+import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder, getStorageConfig } from '@/app/actions';
+import { getImageUrl } from '@/lib/imageUrl';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
@@ -42,7 +43,7 @@ type ImageType = {
   path: string;
   thumbnailPath?: string | null;
   finalPrompt: string;
-  createdAt: string;
+  createdAt: Date | string;
   isFavorite: boolean;
   modelName: string;
   params: string;
@@ -85,7 +86,7 @@ export default function LibraryPage() {
     id: string, 
     url: string, 
     prompt: string, 
-    createdAt: string, 
+    createdAt: Date | string, 
     isFavorite: boolean,
     modelName: string,
     params: string,
@@ -100,9 +101,22 @@ export default function LibraryPage() {
   // Delete confirmation state
   const [deleteImageId, setDeleteImageId] = useState<string | null>(null);
 
+  // Storage config state
+  const [isCustomStoragePath, setIsCustomStoragePath] = useState(false);
+
   useEffect(() => {
     loadFolders();
+    loadStorageConfig();
   }, []);
+
+  const loadStorageConfig = async () => {
+    try {
+      const config = await getStorageConfig();
+      setIsCustomStoragePath(!!config.path);
+    } catch (e) {
+      console.error('Failed to load storage config:', e);
+    }
+  };
 
   useEffect(() => {
     if (selectedFolderId !== null) {
@@ -354,7 +368,7 @@ export default function LibraryPage() {
     selectedImageIds.forEach(id => {
       const img = images.find(i => i.id === id);
       if (img) {
-        handleDownloadImage(img.path, img.finalPrompt);
+        handleDownloadImage(getImageUrl(img.path, isCustomStoragePath), img.finalPrompt);
       }
     });
   };
@@ -362,7 +376,7 @@ export default function LibraryPage() {
   const openPreview = useCallback((img: ImageType) => {
     setPreviewImage({
       id: img.id,
-      url: img.path,
+      url: getImageUrl(img.path, isCustomStoragePath),
       prompt: img.finalPrompt,
       createdAt: img.createdAt,
       isFavorite: img.isFavorite,
@@ -371,7 +385,7 @@ export default function LibraryPage() {
       templateName: img.template?.name,
       folderName: img.folder?.name
     });
-  }, []);
+  }, [isCustomStoragePath]);
 
   return (
     <div className="flex h-[calc(100vh-2rem)] -m-8 bg-background text-foreground overflow-hidden">
@@ -727,8 +741,8 @@ export default function LibraryPage() {
                     onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
                     onDelete={(e) => handleDeleteImage(img.id, e)}
                     onMove={(e) => openMoveDialog(img.id, e)}
-                    onCopy={(e) => handleCopyImage(img.path, e)}
-                    onDownload={(e) => handleDownloadImage(img.path, img.finalPrompt, e)}
+                    onCopy={(e) => handleCopyImage(getImageUrl(img.path, isCustomStoragePath), e)}
+                    onDownload={(e) => handleDownloadImage(getImageUrl(img.path, isCustomStoragePath), img.finalPrompt, e)}
                     tr={tr}
                   />
                 ))}
@@ -776,8 +790,8 @@ export default function LibraryPage() {
                       onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
                       onDelete={(e) => handleDeleteImage(img.id, e)}
                       onMove={(e) => openMoveDialog(img.id, e)}
-                      onCopy={(e) => handleCopyImage(img.path, e)}
-                      onDownload={(e) => handleDownloadImage(img.path, img.finalPrompt, e)}
+                      onCopy={(e) => handleCopyImage(getImageUrl(img.path, isCustomStoragePath), e)}
+                      onDownload={(e) => handleDownloadImage(getImageUrl(img.path, isCustomStoragePath), img.finalPrompt, e)}
                       tr={tr}
                     />
                   ))}
@@ -859,6 +873,7 @@ export default function LibraryPage() {
             onDownload={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
             onCopy={() => handleCopyImage(previewImage.url)}
             tr={tr}
+            isCustomStoragePath={isCustomStoragePath}
           />
         )}
       </AnimatePresence>
@@ -1220,7 +1235,7 @@ interface PreviewModalProps {
     id: string;
     url: string;
     prompt: string;
-    createdAt: string;
+    createdAt: Date | string;
     isFavorite: boolean;
     modelName: string;
     params: string;
@@ -1233,6 +1248,7 @@ interface PreviewModalProps {
   onDownload: () => void;
   onCopy: () => void;
   tr: (key: string, vars?: Record<string, string | number>) => string;
+  isCustomStoragePath?: boolean;
 }
 
 function PreviewModal({ 
@@ -1242,7 +1258,9 @@ function PreviewModal({
   onDelete, 
   onDownload, 
   onCopy,
-  tr 
+  tr,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isCustomStoragePath
 }: PreviewModalProps) {
   return (
     <motion.div

@@ -549,15 +549,18 @@ export async function saveGeneratedImage(base64Data: string, finalPrompt: string
   const thumbnailFilename = `thumb_${filename.replace('.png', '.jpg')}`; // Use JPEG for smaller size
   const relativePath = `/generated/${filename}`;
   const thumbnailPath = `/generated/thumbnails/${thumbnailFilename}`;
-  const outputDir = path.join(process.cwd(), 'public', 'generated');
-  const thumbnailDir = path.join(outputDir, 'thumbnails');
+  
+  // Get storage path from config (for full-size images)
+  const storagePath = await getActualStoragePath();
+  // Thumbnails always go to project's public directory
+  const thumbnailDir = path.join(process.cwd(), 'public', 'generated', 'thumbnails');
 
   // Ensure directories exist
-  try { await fs.access(outputDir); } catch { await fs.mkdir(outputDir, { recursive: true }); }
+  try { await fs.access(storagePath); } catch { await fs.mkdir(storagePath, { recursive: true }); }
   try { await fs.access(thumbnailDir); } catch { await fs.mkdir(thumbnailDir, { recursive: true }); }
 
-  // Save original image
-  await fs.writeFile(path.join(outputDir, filename), buffer);
+  // Save original image to configured storage path
+  await fs.writeFile(path.join(storagePath, filename), buffer);
 
   // Generate and save thumbnail
   try {
@@ -690,18 +693,20 @@ export async function deleteImage(id: string) {
   const image = await prisma.image.findUnique({ where: { id } });
   if (!image) throw new Error('图片不存在');
 
-  // Delete original file from disk
+  // Get storage path from config
+  const storagePath = await getActualStoragePath();
+  const filename = path.basename(image.path);
+
+  // Delete original file from configured storage path
   try {
-    // Remove leading slash from path to avoid path.join truncation issue
-    const cleanPath = image.path.replace(/^\//, '');
-    const filePath = path.join(process.cwd(), 'public', cleanPath);
+    const filePath = path.join(storagePath, filename);
     await fs.unlink(filePath);
   } catch (e) {
     console.error('删除文件失败:', e);
     // Continue to delete DB record even if file deletion fails
   }
 
-  // Delete thumbnail from disk
+  // Delete thumbnail from disk (always in default location)
   if (image.thumbnailPath) {
     try {
       const cleanThumbPath = image.thumbnailPath.replace(/^\//, '');
@@ -738,6 +743,150 @@ export async function moveImageToFolder(imageId: string, folderId: string) {
     where: { id: imageId },
     data: { folderId }
   });
+}
+
+// --- Storage Configuration ---
+
+/**
+ * 获取默认存储路径
+ */
+function getDefaultStoragePath() {
+  return path.join(process.cwd(), 'public', 'generated');
+}
+
+/**
+ * 获取存储配置
+ */
+export async function getStorageConfig() {
+  const type = await prisma.setting.findUnique({ where: { key: 'imageStorageType' } });
+  const storagePath = await prisma.setting.findUnique({ where: { key: 'imageStoragePath' } });
+  
+  return {
+    type: (type?.value || 'local') as 'local' | 'r2',
+    path: storagePath?.value || '', // 空表示默认路径
+    defaultPath: getDefaultStoragePath()
+  };
+}
+
+/**
+ * 获取实际存储路径
+ */
+export async function getActualStoragePath() {
+  const config = await getStorageConfig();
+  if (!config.path) {
+    return getDefaultStoragePath();
+  }
+  return config.path;
+}
+
+/**
+ * 验证存储路径是否有效
+ */
+export async function validateStoragePath(targetPath: string): Promise<{ valid: boolean; error?: string }> {
+  // 空路径表示使用默认路径，总是有效
+  if (!targetPath) {
+    return { valid: true };
+  }
+  
+  // 必须是绝对路径
+  if (!path.isAbsolute(targetPath)) {
+    return { valid: false, error: '路径必须是绝对路径' };
+  }
+  
+  // 尝试创建目录以验证权限
+  try {
+    await fs.mkdir(targetPath, { recursive: true });
+    // 尝试写入测试文件
+    const testFile = path.join(targetPath, '.imagebox_test');
+    await fs.writeFile(testFile, 'test');
+    await fs.unlink(testFile);
+    return { valid: true };
+  } catch (e: any) {
+    return { valid: false, error: `无法写入该路径: ${e.message}` };
+  }
+}
+
+/**
+ * 获取存储统计信息
+ */
+export async function getStorageStats() {
+  const imageCount = await prisma.image.count();
+  const config = await getStorageConfig();
+  
+  return {
+    imageCount,
+    storagePath: config.path || config.defaultPath,
+    isCustomPath: !!config.path
+  };
+}
+
+/**
+ * 更新存储配置并可选地迁移图片
+ */
+export async function updateStoragePath(
+  newPath: string, 
+  options: { migrate: boolean }
+): Promise<{ success: boolean; error?: string; migratedCount?: number; failedCount?: number }> {
+  const oldPath = await getActualStoragePath();
+  const actualNewPath = newPath || getDefaultStoragePath();
+  
+  // 如果路径相同，直接返回
+  if (oldPath === actualNewPath) {
+    return { success: true, migratedCount: 0, failedCount: 0 };
+  }
+  
+  // 验证新路径
+  if (newPath) {
+    const validation = await validateStoragePath(newPath);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+  }
+  
+  let migratedCount = 0;
+  let failedCount = 0;
+  
+  if (options.migrate) {
+    // 获取所有图片
+    const images = await prisma.image.findMany();
+    
+    // 确保新路径存在
+    await fs.mkdir(actualNewPath, { recursive: true });
+    
+    for (const image of images) {
+      // 从 path 中提取文件名
+      const filename = path.basename(image.path);
+      const oldFile = path.join(oldPath, filename);
+      const newFile = path.join(actualNewPath, filename);
+      
+      try {
+        // 检查源文件是否存在
+        await fs.access(oldFile);
+        // 复制到新位置
+        await fs.copyFile(oldFile, newFile);
+        // 删除旧文件
+        await fs.unlink(oldFile);
+        migratedCount++;
+      } catch (e) {
+        console.error(`迁移文件失败: ${filename}`, e);
+        failedCount++;
+      }
+    }
+  }
+  
+  // 更新配置
+  await prisma.setting.upsert({
+    where: { key: 'imageStorageType' },
+    update: { value: 'local' },
+    create: { key: 'imageStorageType', value: 'local' }
+  });
+  await prisma.setting.upsert({
+    where: { key: 'imageStoragePath' },
+    update: { value: newPath },
+    create: { key: 'imageStoragePath', value: newPath }
+  });
+  
+  return { success: true, migratedCount, failedCount };
 }
 
 // --- Remote Access ---

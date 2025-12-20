@@ -72,12 +72,35 @@
   - No cloud dependencies (except AI model APIs)
   - Works offline for management and viewing
 
+### Remote Access & Security
+
+- **🔐 Token-Based Authentication** - Secure remote access with access tokens:
+  - Create multiple access tokens with custom names and descriptions
+  - Flexible expiration options (1 hour, 24 hours, 7 days, 30 days, or permanent)
+  - Revoke tokens instantly for security
+  - Track last usage time for each token
+  - Cookie and header-based authentication support
+
+- **🌐 Smart Access Control** - Intelligent middleware protection:
+  - Local access (localhost) requires no authentication
+  - Remote access requires valid token and enabled remote access setting
+  - First-time setup wizard guides initial configuration
+  - Public paths and static resources automatically allowed
+  - Real-time token validation with automatic expiration
+
+- **📂 Custom Storage Paths** - Flexible storage configuration:
+  - Configure custom image storage directory
+  - Path validation before saving
+  - Storage statistics and monitoring
+  - Visual folder browser for easy path selection
+  - Automatic fallback to default path if custom path fails
+
 ### User Experience
 
 - **✨ Modern UI** - Beautiful dark glassmorphism design with smooth animations
 - **🌍 Multi-Language Support** - 13 languages: English, Chinese (Simplified & Traditional), Japanese, German, French, Russian, Portuguese, Spanish, Italian, Arabic (RTL), Norwegian, Swedish
 - **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
-- **🌐 Cross-Platform Access** - Use via localhost or LAN from any device
+- **🌐 Cross-Platform Access** - Use via localhost or LAN from any device with secure remote access
 - **⚡ Fast & Secure** - Next.js Server Actions for optimized API calls
 - **🆓 100% Free & Open Source** - No hidden fees, only your own API key costs
 
@@ -119,6 +142,24 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 3. Add a new Model and select the appropriate provider
 4. Go to **Create** (`/create`) and start generating images!
 
+### Remote Access Setup (Optional)
+
+If you want to access ImageBox from other devices on your network:
+
+1. Navigate to **Settings** page (`/settings`)
+2. Enable **Remote Access** toggle
+3. Click **Create Access Token**
+4. Choose an expiration time and add a description (optional)
+5. Copy the generated token and access link
+6. On your remote device, visit the access link and enter the token
+7. You're now securely connected!
+
+**Security Tips:**
+- Use shorter expiration times for better security
+- Create separate tokens for different devices
+- Revoke tokens when no longer needed
+- Keep your tokens private - they grant full access to your ImageBox instance
+
 ## Usage
 
 ### Creating Templates
@@ -159,40 +200,59 @@ imagebox/
 │   ├── create/page.tsx       # Image generation interface
 │   ├── templates/page.tsx    # Template management
 │   ├── models/page.tsx       # Model & provider configuration
+│   ├── settings/page.tsx     # Settings (remote access, storage)
 │   ├── run_log/page.tsx      # Generation history logs
+│   ├── auth/login/page.tsx   # Remote access login page
+│   ├── api/
+│   │   ├── auth/             # Authentication endpoints
+│   │   ├── images/           # Image serving API
+│   │   └── browse-folders/   # Folder browser API
 │   ├── actions.ts            # Server Actions (DB + API)
 │   └── layout.tsx            # Root layout with navigation
 ├── components/
 │   ├── Sidebar.tsx           # Navigation sidebar
 │   ├── ThemeProvider.tsx     # Theme management
-│   └── LanguageProvider.tsx  # I18n support
+│   ├── LanguageProvider.tsx  # I18n support
+│   └── FolderBrowser.tsx     # Storage path browser
 ├── lib/
 │   ├── prisma.ts             # Prisma client singleton
 │   ├── modelParameters.ts    # Parameter mapping system
+│   ├── imageUrl.ts           # Image URL utilities
 │   └── i18n/                 # Translation files
 ├── prisma/
 │   └── schema.prisma         # Database schema
+├── middleware.ts             # Auth & access control
 └── public/generated/         # Generated images (auto-created)
 ```
 
 ## Roadmap
 
+### ✅ Completed Features
+- [x] **Internationalization (i18n)** - 13 languages with RTL support for Arabic
+- [x] **Dark/Light Theme** - User-selectable theme with smooth transitions and system detection
+- [x] **Multi-Model Support** - Google Gemini 2.5/3 Pro, OpenAI DALL-E 3, and OpenAI-compatible endpoints
+- [x] **Remote Access System** - Token-based authentication with flexible access control
+- [x] **Custom Storage Paths** - Configurable image storage directory with validation
+- [x] **Folder Organization** - Folder-based image management system
+- [x] **Image Favorites** - Star/favorite functionality for quick access
+
 ### High Priority
-- [ ] **Internationalization (i18n)** - English & Chinese language support
-- [ ] **Dark/Light Theme** - User-selectable theme with smooth transitions
-- [ ] **Multi-Model Support** - OpenAI DALL-E 3, Stable Diffusion, and more
+- [ ] **Advanced Search & Filtering** - Search images by prompt, date, model, tags
+- [ ] **Batch Generation** - Generate multiple images from one prompt
+- [ ] **Image Tagging System** - Custom tags for better organization
 
 ### Medium Priority
-- [ ] Batch image generation
-- [ ] Advanced image organization (tags, folders, favorites)
-- [ ] Enhanced generation controls (size, negative prompts, seeds)
-- [ ] Export & sharing features
+- [ ] Enhanced generation controls (negative prompts, seeds, advanced parameters)
+- [ ] Export & sharing features (ZIP export, shareable links)
+- [ ] Stable Diffusion integration
+- [ ] Image editing and variations
 
 ### Future Enhancements
-- [ ] Performance optimizations (virtual scrolling, lazy loading)
-- [ ] Database backup/restore
-- [ ] Docker deployment
+- [ ] Performance optimizations (virtual scrolling, lazy loading, thumbnails)
+- [ ] Database backup/restore functionality
+- [ ] Docker/Docker Compose deployment
 - [ ] Electron desktop wrapper
+- [ ] Mobile-responsive interface improvements
 
 ## Contributing
 

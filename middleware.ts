@@ -6,6 +6,8 @@ const PUBLIC_PATHS = [
   '/auth/login',
   '/api/auth/login',
   '/api/auth/logout',
+  '/api/auth/status',
+  '/api/auth/validate',
   '/_next',
   '/favicon.ico',
   '/file.svg',
@@ -13,12 +15,6 @@ const PUBLIC_PATHS = [
   '/next.svg',
   '/vercel.svg',
   '/window.svg',
-];
-
-// 仅限本地访问的路径
-const LOCAL_ONLY_PATHS = [
-  '/settings',
-  '/api/settings',
 ];
 
 /**
@@ -59,13 +55,6 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(p => pathname.startsWith(p));
 }
 
-/**
- * 判断路径是否仅限本地访问
- */
-function isLocalOnlyPath(pathname: string): boolean {
-  return LOCAL_ONLY_PATHS.some(p => pathname.startsWith(p));
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLocal = isLocalRequest(request);
@@ -80,19 +69,48 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // 远程请求访问仅限本地的路径 -> 403
-  if (isLocalOnlyPath(pathname)) {
-    return new NextResponse('Forbidden: This page is only accessible locally', {
+  // === 远程请求处理 ===
+  
+  // 获取系统配置状态
+  let isConfigured = false;
+  let remoteAccessEnabled = false;
+  
+  try {
+    const statusUrl = new URL('/api/auth/status', request.url);
+    const statusResponse = await fetch(statusUrl.toString());
+    if (statusResponse.ok) {
+      const status = await statusResponse.json();
+      isConfigured = status.isConfigured;
+      remoteAccessEnabled = status.remoteAccessEnabled;
+    }
+  } catch (error) {
+    console.error('Failed to get auth status:', error);
+    // 出错时采用保守策略：假设已配置
+    isConfigured = true;
+  }
+  
+  // 情况1: 系统未配置（无任何授权码）-> 允许访问，但强制跳转到设置页
+  if (!isConfigured) {
+    // 如果已经在设置页或设置相关API，直接放行
+    if (pathname.startsWith('/settings') || pathname.startsWith('/api/')) {
+      return NextResponse.next();
+    }
+    
+    // 其他页面重定向到设置页进行初始配置
+    const setupUrl = new URL('/settings', request.url);
+    setupUrl.searchParams.set('setup', 'true');
+    return NextResponse.redirect(setupUrl);
+  }
+  
+  // 情况2: 系统已配置，但远程访问开关关闭 -> 拒绝
+  if (!remoteAccessEnabled) {
+    return new NextResponse('Remote access is disabled. Please enable it from the local machine first.', {
       status: 403,
       headers: { 'Content-Type': 'text/plain' }
     });
   }
   
-  // 远程请求需要验证
-  // 1. 检查远程访问开关（通过 API 获取，因为中间件不能直接访问数据库）
-  // 2. 检查授权码
-  
-  // 获取授权码（从 Cookie 或 Header）
+  // 情况3: 系统已配置且远程访问开启 -> 验证授权码
   const tokenFromCookie = request.cookies.get('access_token')?.value;
   const tokenFromHeader = request.headers.get('x-access-token');
   const token = tokenFromCookie || tokenFromHeader;
@@ -104,7 +122,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
   
-  // 验证 token（通过内部 API）
+  // 验证 token
   try {
     const validateUrl = new URL('/api/auth/validate', request.url);
     const validateResponse = await fetch(validateUrl.toString(), {
@@ -150,4 +168,3 @@ export const config = {
     '/((?!_next/static|_next/image|generated/).*)',
   ],
 };
-
