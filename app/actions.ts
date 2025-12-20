@@ -1750,14 +1750,59 @@ export async function installPrerequisiteAction(
       }
       
       case 'huggingface': {
-        // Use pip to install huggingface_hub
-        let result = await runCommand('pip3 install -U huggingface_hub');
-        if (!result.success) {
-          result = await runCommand('pip install -U huggingface_hub');
+        // Use python3 -m pip to install huggingface_hub[cli]
+        // This is more reliable than calling pip3 directly
+        const platform = process.platform;
+        
+        // Try different installation approaches
+        const installCommands = platform === 'darwin' 
+          ? [
+              // macOS: Try with --break-system-packages for system Python
+              'python3 -m pip install -U "huggingface_hub[cli]" --break-system-packages',
+              // Fallback: user install
+              'python3 -m pip install -U "huggingface_hub[cli]" --user',
+              // Fallback: plain pip3
+              'pip3 install -U "huggingface_hub[cli]"',
+            ]
+          : [
+              'python3 -m pip install -U "huggingface_hub[cli]"',
+              'pip3 install -U "huggingface_hub[cli]"',
+              'pip install -U "huggingface_hub[cli]"',
+            ];
+        
+        let result = { success: false, output: '', error: '' };
+        for (const cmd of installCommands) {
+          result = await runCommand(cmd);
+          if (result.success) break;
         }
-        return result.success 
-          ? { success: true, message: 'HuggingFace CLI 安装成功' }
-          : { success: false, message: 'HuggingFace CLI 安装失败', error: result.error };
+        
+        if (!result.success) {
+          return { success: false, message: 'HuggingFace CLI 安装失败', error: result.error };
+        }
+        
+        // Verify installation by checking if we can import the module
+        const verifyResult = await runCommand('python3 -c "import huggingface_hub; print(huggingface_hub.__version__)"');
+        if (!verifyResult.success) {
+          return { success: false, message: '安装完成但验证失败', error: verifyResult.error };
+        }
+        
+        // Get the path where huggingface-cli is installed
+        const whichResult = await runCommand('python3 -c "import shutil; print(shutil.which(\'huggingface-cli\') or \'\')"');
+        const cliPath = whichResult.output?.trim();
+        
+        if (!cliPath) {
+          // CLI not in PATH, try to find it
+          const siteResult = await runCommand('python3 -c "import site; print(site.USER_BASE)"');
+          const userBase = siteResult.output?.trim();
+          const binPath = platform === 'darwin' ? `${userBase}/bin` : `${userBase}/bin`;
+          
+          return { 
+            success: true, 
+            message: `HuggingFace CLI 已安装，但可能需要将 ${binPath} 添加到 PATH。\n请运行: export PATH="${binPath}:$PATH" 或重启终端。`
+          };
+        }
+        
+        return { success: true, message: 'HuggingFace CLI 安装成功' };
       }
       
       default:
@@ -1857,10 +1902,9 @@ export async function runAutoInstallStepAction(
         await fs.mkdir(modelsDir, { recursive: true });
         
         const modelName = modelVariant === 'full' ? 'Z-Image-Turbo' : `Z-Image-Turbo-${modelVariant.toUpperCase()}`;
-        const result = await runCommand(
-          `huggingface-cli download Tongyi-MAI/${modelName} --local-dir ${modelName}`,
-          modelsDir
-        );
+        // Use Python API directly (more reliable than CLI which may not be in PATH)
+        const downloadScript = `python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Tongyi-MAI/${modelName}', local_dir='${modelName}')"`;
+        const result = await runCommand(downloadScript, modelsDir);
         
         if (!result.success) {
           return { success: false, message: '模型下载失败', error: result.error };

@@ -520,8 +520,8 @@ export default function ModelsPage() {
                      <p className="text-muted-foreground mt-2 mb-1"># 2. 编译 (macOS)</p>
                      <p>cd stable-diffusion.cpp && mkdir build && cd build</p>
                      <p>cmake .. -DSD_METAL=ON && cmake --build . --config Release</p>
-                     <p className="text-muted-foreground mt-2 mb-1"># 3. 下载 Z-Image 模型</p>
-                     <p>huggingface-cli download Tongyi-MAI/Z-Image-Turbo --local-dir models/</p>
+                    <p className="text-muted-foreground mt-2 mb-1"># 3. 下载 Z-Image 模型</p>
+                    <p>python3 -c &quot;from huggingface_hub import snapshot_download; snapshot_download(&apos;Tongyi-MAI/Z-Image-Turbo&apos;, local_dir=&apos;models/Z-Image-Turbo&apos;)&quot;</p>
                      <p className="text-muted-foreground mt-2 mb-1"># 4. 启动服务</p>
                      <p>./bin/sd --mode server --model models/z-image-turbo.gguf --port 8080</p>
                    </div>

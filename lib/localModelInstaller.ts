@@ -100,9 +100,9 @@ export async function checkPrerequisites(): Promise<{
     } catch {}
   }
   
-  // Check huggingface-cli
+  // Check huggingface_hub Python module (we use Python API, not CLI)
   try {
-    await execAsync('huggingface-cli --version');
+    await execAsync('python3 -c "import huggingface_hub; print(huggingface_hub.__version__)"');
     results.huggingface = true;
   } catch {}
   
@@ -165,9 +165,10 @@ export function getInstallCommands(config: InstallConfig): string[] {
   commands.push(`cd "${installDir}"`);
   commands.push(`mkdir -p models`);
   
-  // Use huggingface-cli to download
+  // Use Python API to download model (more reliable than CLI)
   const modelName = modelVariant === 'full' ? 'Z-Image-Turbo' : `Z-Image-Turbo-${modelVariant.toUpperCase()}`;
-  commands.push(`huggingface-cli download Tongyi-MAI/${modelName} --local-dir models/${modelName}`);
+  commands.push(`python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Tongyi-MAI/${modelName}', local_dir='models/${modelName}')"`);
+
   
   return commands;
 }
@@ -254,7 +255,8 @@ export function getOneLinerScript(config: InstallConfig): string {
   const cmakeFlag = platform === 'darwin' ? '-DSD_METAL=ON' : '-DSD_CUDA=ON';
   const modelName = modelVariant === 'full' ? 'Z-Image-Turbo' : `Z-Image-Turbo-${modelVariant.toUpperCase()}`;
   
-  return `mkdir -p "${installDir}" && cd "${installDir}" && git clone --depth 1 ${SDCPP_REPO} && cd stable-diffusion.cpp && mkdir build && cd build && cmake .. ${cmakeFlag} && cmake --build . --config Release -j && cd "${installDir}" && huggingface-cli download Tongyi-MAI/${modelName} --local-dir models/`;
+  return `mkdir -p "${installDir}" && cd "${installDir}" && git clone --depth 1 ${SDCPP_REPO} && cd stable-diffusion.cpp && mkdir build && cd build && cmake .. ${cmakeFlag} && cmake --build . --config Release -j && cd "${installDir}" && mkdir -p models && python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Tongyi-MAI/${modelName}', local_dir='models/${modelName}')"`;
+
 }
 
 /**
