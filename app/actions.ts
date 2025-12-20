@@ -500,6 +500,13 @@ export async function generateImageAction(modelId: string, prompt: string, param
         throw new Error('当前服务商类型暂未实现图像生成');
     }
 
+    // Limit to requested number of images (some APIs return more than requested)
+    const requestedCount = params.numberOfImages || 1;
+    if (base64Images.length > requestedCount) {
+        console.log(`API returned ${base64Images.length} images, but only ${requestedCount} requested. Trimming.`);
+        base64Images = base64Images.slice(0, requestedCount);
+    }
+
     // 2. Save Images & Collect Paths
     const imageResults: { id: string, url: string, prompt: string }[] = [];
     const savedPaths: string[] = [];
