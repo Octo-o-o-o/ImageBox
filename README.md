@@ -119,8 +119,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/imagebox.git
-cd imagebox
+git clone https://github.com/Octo-o-o-o/ImageBox.git
+cd ImageBox
 
 # Install dependencies
 npm install
@@ -302,7 +302,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 If you find this project helpful, please consider:
 - Starring the repository ⭐
 - Sharing it with others
-- [Opening an issue](https://github.com/yourusername/imagebox/issues) for bugs or feature requests
+- [Opening an issue](https://github.com/Octo-o-o-o/ImageBox/issues) for bugs or feature requests
 
 ---
 

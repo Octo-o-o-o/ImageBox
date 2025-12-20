@@ -119,8 +119,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/imagebox.git
-cd imagebox
+git clone https://github.com/Octo-o-o-o/ImageBox.git
+cd ImageBox
 
 # 安装依赖
 npm install
@@ -302,7 +302,7 @@ npm run lint
 如果您觉得这个项目有帮助，请考虑：
 - 为仓库加星标 ⭐
 - 分享给他人
-- [提交 Issue](https://github.com/yourusername/imagebox/issues) 报告 Bug 或请求新功能
+- [提交 Issue](https://github.com/Octo-o-o-o/ImageBox/issues) 报告 Bug 或请求新功能
 
 ---
 
