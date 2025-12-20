@@ -1,6 +1,6 @@
 'use client';
 
-import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder, getStorageConfig } from '@/app/actions';
+import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder, getStorageConfig, openLocalFolder } from '@/app/actions';
 import { getImageUrl } from '@/lib/imageUrl';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,11 +21,12 @@ import {
   Search,
   Maximize2,
   Star,
+  Square,
+  AlertCircle,
   FolderInput,
   AlertTriangle,
   Wand2,
-  CheckSquare,
-  Square
+  CheckSquare
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useLanguage } from '@/components/LanguageProvider';
@@ -49,6 +50,7 @@ type ImageType = {
   params: string;
   template?: { name: string } | null;
   folder?: { name: string } | null;
+  fileMissing?: boolean;
 };
 
 type ViewMode = 'grid' | 'list';
@@ -100,6 +102,7 @@ export default function LibraryPage() {
 
   // Delete confirmation state
   const [deleteImageId, setDeleteImageId] = useState<string | null>(null);
+  const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
 
   // Storage config state
   const [isCustomStoragePath, setIsCustomStoragePath] = useState(false);
@@ -183,13 +186,14 @@ export default function LibraryPage() {
     await loadFolders();
   };
 
-  const handleDeleteFolder = async (id: string) => {
-    if (!confirm(tr('library.deleteFolderConfirm'))) return;
+  const confirmDeleteFolder = async () => {
+    if (!deleteFolderId) return;
     try {
-      await deleteFolder(id);
-      if (selectedFolderId === id) {
+      await deleteFolder(deleteFolderId);
+      if (selectedFolderId === deleteFolderId) {
         setSelectedFolderId('all');
       }
+      setDeleteFolderId(null);
       await loadFolders();
     } catch (e: any) {
       alert(e.message);
@@ -198,12 +202,39 @@ export default function LibraryPage() {
 
   const handleDeleteImage = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    const headers = images.find(img => img.id === id);
+    if (!headers) return;
+
+    // If file is missing, delete immediately without confirmation (as per requirements)
+    if (headers.fileMissing) {
+       // Optimistic delete immediately
+       setDeleteImageId(id); // Set state correctly for the confirm function to pick up if we were to call it, but we call equivalent logic
+       // Actually simpler to just set ID then call confirm immediately? 
+       // confirmDeleteImage relies on state, but state update is async.
+       // So we replicate logic or use a useEffect? 
+       // Replicating logic is safer.
+       
+       // TRIGGER IMMEDIATE DELETE
+        const previousImages = images;
+        setImages(prev => prev.filter(img => img.id !== id));
+        if (previewImage?.id === id) setPreviewImage(null);
+        
+        deleteImage(id).then(() => loadFolders()).catch(err => {
+             setImages(previousImages);
+             alert(err.message);
+        });
+       return;
+    }
+
     setDeleteImageId(id);
   };
 
   const confirmDeleteImage = async () => {
     if (!deleteImageId) return;
 
+    // Check if we skipping confirmation (logic moved to handleDeleteImage, but safety here)
+    // If file is missing, we still proceed with delete
+    
     // 乐观更新：立即移除图片
     const previousImages = images;
     const previousFolders = folders;
@@ -225,6 +256,15 @@ export default function LibraryPage() {
       setImages(previousImages);
       setFolders(previousFolders);
       alert(e.message);
+    }
+  };
+
+  const handleOpenLocalFolder = async (folderId?: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await openLocalFolder(folderId);
+    } catch (e: any) {
+      alert('Failed to open folder: ' + e.message);
     }
   };
 
@@ -455,6 +495,15 @@ export default function LibraryPage() {
           >
             <LayoutGrid className="w-4 h-4 opacity-70" />
             <span className="flex-1 text-left truncate">{tr('library.allImages')}</span>
+            
+            <button
+                onClick={(e) => handleOpenLocalFolder(undefined, e)}
+                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-background/20 rounded transition-all"
+                title={tr('library.openFolder')}
+            >
+                <FolderOpen className="w-3.5 h-3.5" />
+            </button>
+            
             <span className={clsx(
               "text-xs px-2 py-0.5 rounded-full bg-background/20",
               selectedFolderId === 'all' && !showFavoritesOnly ? "text-primary-foreground/90" : "text-muted-foreground group-hover:bg-background/50"
@@ -515,43 +564,58 @@ export default function LibraryPage() {
               }
 
               return (
-                <div key={folder.id} className="group relative flex items-center">
+                <div key={folder.id} className="group flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-secondary/50">
                   <button
                     onClick={() => {
                       setSelectedFolderId(folder.id);
                       setShowFavoritesOnly(false);
                     }}
                     className={clsx(
-                      'flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                      'flex-1 flex items-center gap-3 min-w-0 text-sm font-medium',
                       selectedFolderId === folder.id && !showFavoritesOnly
-                        ? 'bg-secondary text-foreground font-semibold'
-                        : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                        ? 'text-foreground font-semibold'
+                        : 'text-muted-foreground group-hover:text-foreground'
                     )}
                   >
                     {selectedFolderId === folder.id ? 
-                      <FolderOpen className="w-4 h-4 text-primary" /> : 
-                      <Folder className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <FolderOpen className={clsx("w-4 h-4 text-primary shrink-0")} /> : 
+                      <Folder className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                     }
-                    <span className="flex-1 text-left truncate">{folder.name}</span>
-                    <span className="text-xs text-muted-foreground opacity-70">{folder._count.images}</span>
+                    <span className="truncate">
+                      {folder.isDefault ? tr('library.folderDefaultName') : folder.name}
+                    </span>
                   </button>
-                  
-                  {!folder.isDefault && (
-                    <div className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center bg-secondary/80 backdrop-blur-sm rounded-md shadow-sm">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingName(folder.name); }}
-                        className="p-1.5 hover:text-primary transition-colors"
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
-                        className="p-1.5 hover:text-destructive transition-colors"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
+
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!folder.isDefault && (
+                        <>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingName(folder.name); }}
+                            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-background/80 rounded transition-colors"
+                            title={tr('common.edit')}
+                        >
+                            <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setDeleteFolderId(folder.id); }}
+                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-background/80 rounded transition-colors"
+                            title={tr('common.delete')}
+                        >
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        </>
+                    )}
+                    
+                    <button
+                        onClick={(e) => handleOpenLocalFolder(folder.id, e)}
+                        className="p-1.5 text-muted-foreground hover:text-primary hover:bg-background/80 rounded transition-colors"
+                        title={tr('library.openFolder')}
+                    >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                   <span className="text-xs text-muted-foreground opacity-70 ml-2 w-8 text-right flex-shrink-0">{folder._count.images}</span>
                 </div>
               );
             })}
@@ -878,6 +942,45 @@ export default function LibraryPage() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {deleteFolderId && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-popover border border-border rounded-2xl p-6 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center gap-4">
+                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground mb-1">{tr('library.delete')}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {tr('library.deleteFolderConfirm')}
+                  </p>
+                </div>
+                <div className="flex gap-3 w-full mt-2">
+                  <button
+                    onClick={() => setDeleteFolderId(null)}
+                    className="flex-1 px-4 py-2 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg font-medium transition-colors"
+                  >
+                    {tr('library.cancel')}
+                  </button>
+                  <button
+                    onClick={confirmDeleteFolder}
+                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
+                  >
+                    {tr('library.delete')}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
       {/* Delete Image Confirmation Modal */}
       <AnimatePresence>
         {deleteImageId && (
@@ -894,7 +997,9 @@ export default function LibraryPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-foreground mb-1">{tr('library.deleteImageConfirmTitle')}</h3>
-                  <p className="text-sm text-muted-foreground">{tr('library.deleteImageConfirmDesc')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {tr('library.deleteImageConfirmDescLocal')}
+                  </p>
                 </div>
                 <div className="flex gap-3 w-full mt-2">
                   <button
@@ -1028,29 +1133,37 @@ function ImageGridItem({
           </button>
         </div>
         
-        <div className="flex items-center gap-2 justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-          <button
-            onClick={onMove}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-            title={tr('library.actions.move')}
-          >
-            <FolderInput className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onCopy}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-            title={tr('library.actions.copy')}
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onDownload}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-            title={tr('library.actions.download')}
-          >
-            <Download className="w-4 h-4" />
-          </button>
-        </div>
+        {img.fileMissing ? (
+             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center">
+                 <div className="bg-destructive/80 text-white text-xs py-1 px-2 rounded-full mx-4 font-semibold backdrop-blur-md border border-white/20">
+                     {tr('library.fileDeleted')}
+                 </div>
+             </div>
+        ) : (
+            <div className="flex items-center gap-1 justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+            <button
+                onClick={onMove}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+                title={tr('library.actions.move')}
+            >
+                <FolderInput className="w-4 h-4" />
+            </button>
+            <button
+                onClick={onCopy}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+                title={tr('library.actions.copy')}
+            >
+                <Copy className="w-4 h-4" />
+            </button>
+            <button
+                onClick={onDownload}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+                title={tr('library.actions.download')}
+            >
+                <Download className="w-4 h-4" />
+            </button>
+            </div>
+        )}
       </div>
     </motion.div>
   );
@@ -1144,6 +1257,11 @@ function ImageListItem({
             loading="lazy"
             quality={50}
           />
+          {img.fileMissing && (
+             <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center">
+                 <AlertTriangle className="w-4 h-4 text-destructive" />
+             </div>
+          )}
         </div>
         <p className="text-sm text-foreground truncate">{img.finalPrompt}</p>
       </div>
@@ -1183,27 +1301,36 @@ function ImageListItem({
           >
             <Star className={clsx("w-3.5 h-3.5", img.isFavorite && "fill-yellow-500")} />
           </button>
-          <button
-            onClick={onMove}
-            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-            title={tr('library.actions.move')}
-          >
-            <FolderInput className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onCopy}
-            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-            title={tr('library.actions.copy')}
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onDownload}
-            className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
-            title={tr('library.actions.download')}
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
+          
+          {img.fileMissing ? (
+             <div className="flex items-center px-4 py-1.5 rounded-md bg-destructive/10 text-destructive text-xs font-semibold mr-auto">
+                 {tr('library.fileDeleted')}
+             </div>
+          ) : (
+             <>
+                <button
+                onClick={onMove}
+                className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+                title={tr('library.actions.move')}
+                >
+                <FolderInput className="w-3.5 h-3.5" />
+                </button>
+                <button
+                onClick={onCopy}
+                className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+                title={tr('library.actions.copy')}
+                >
+                <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button
+                onClick={onDownload}
+                className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
+                title={tr('library.actions.download')}
+                >
+                <Download className="w-3.5 h-3.5" />
+                </button>
+            </>
+          )}
           
           <button
             onClick={(e) => {

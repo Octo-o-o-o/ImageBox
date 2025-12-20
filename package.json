@@ -1,7 +1,8 @@
 {
-  "name": "web",
+  "name": "imagebox",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "next build",
@@ -10,7 +11,18 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:setup": "prisma generate && prisma db push"
+    "db:setup": "prisma generate && prisma db push",
+    "db:template": "DATABASE_URL=file:./prisma/template.db prisma db push",
+    "electron:compile": "tsc -p tsconfig.electron.json",
+    "electron:dev": "npm run electron:compile && concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 -t 30000 && electron .\"",
+    "electron:build": "npm run electron:compile && npm run build && electron-builder",
+    "electron:build:mac": "npm run electron:compile && npm run build && electron-builder --mac",
+    "electron:build:win": "npm run electron:compile && npm run build && electron-builder --win",
+    "electron:build:linux": "npm run electron:compile && npm run build && electron-builder --linux",
+    "electron:build:all": "npm run electron:compile && npm run build && electron-builder --mac --win --linux",
+    "electron:publish": "npm run electron:compile && npm run build && electron-builder --publish always",
+    "rebuild": "electron-rebuild -f -w better-sqlite3,sharp",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -19,6 +31,8 @@
     "better-sqlite3": "^12.5.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2",
     "framer-motion": "^12.23.26",
     "lucide-react": "^0.562.0",
     "next": "16.1.0",
@@ -31,15 +45,20 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.2",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
     "eslint": "^9",
     "eslint-config-next": "16.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.3"
   }
 }

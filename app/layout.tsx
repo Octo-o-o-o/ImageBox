@@ -15,6 +15,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "ImageBox",
   description: "A local-first AI image generation tool",
+  icons: {
+    icon: '/favicon.png',
+  },
 };
 
 export default function RootLayout({

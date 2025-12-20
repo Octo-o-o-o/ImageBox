@@ -1,3 +1,5 @@
+import { isDesktopApp } from './env';
+
 /**
  * 根据存储配置获取图片的访问 URL
  * 
@@ -13,7 +15,12 @@ export function getImageUrl(imagePath: string, isCustomStoragePath: boolean): st
     return imagePath;
   }
   
-  // 如果是默认配置，直接返回原路径（静态文件访问）
+  // 桌面应用模式：始终使用 API 路由（因为图片存储在用户数据目录）
+  if (isDesktopApp()) {
+    return `/api/images/${filename}`;
+  }
+  
+  // Web 模式：如果是默认配置，直接返回原路径（静态文件访问）
   if (!isCustomStoragePath) {
     return imagePath;
   }
@@ -23,12 +30,27 @@ export function getImageUrl(imagePath: string, isCustomStoragePath: boolean): st
 }
 
 /**
- * 缩略图始终从默认路径访问（不受存储配置影响）
+ * 获取缩略图 URL
  * 
  * @param thumbnailPath - 数据库中存储的缩略图路径
+ * @param isCustomStoragePath - 是否使用了自定义存储路径
  * @returns 缩略图 URL
  */
-export function getThumbnailUrl(thumbnailPath: string | null | undefined): string | null {
-  return thumbnailPath || null;
+export function getThumbnailUrl(thumbnailPath: string | null | undefined, isCustomStoragePath: boolean = false): string | null {
+  if (!thumbnailPath) return null;
+  
+  const filename = thumbnailPath.split('/').pop();
+  if (!filename) return thumbnailPath;
+  
+  // 桌面应用模式：通过 API 访问
+  if (isDesktopApp()) {
+    return `/api/images/thumbnails/${filename}`;
+  }
+  
+  // Web 模式：自定义存储路径时也通过 API
+  if (isCustomStoragePath) {
+    return `/api/images/thumbnails/${filename}`;
+  }
+  
+  return thumbnailPath;
 }
-

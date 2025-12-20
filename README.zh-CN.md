@@ -18,7 +18,7 @@
 
 ## 项目简介
 
-**ImageBox** 是一个完全免费、本地优先的 AI 图像生成工具，基于 Next.js 16 构建。使用 Google Gemini 3 Pro 生成惊艳的 AI 图像，管理可复用的提示词模板，并在本地组织您的所有创作。无需云存储、无需订阅、不收集数据——只需在您的机器上尽情创作。
+**ImageBox** 是一个完全免费、本地优先的 AI 图像生成工具，基于 Next.js 16 构建。使用 Google Gemini 3 Pro 生成惊艳的 AI 图像，管理可复用的提示词模板，并在本地组织您的所有创作。提供 Web 应用和原生桌面应用（macOS、Windows、Linux）两种使用方式。无需云存储、无需订阅、不收集数据——只需在您的机器上尽情创作。
 
 ## 特性
 
@@ -100,6 +100,11 @@
 - **✨ 现代化界面** - 精美的暗色玻璃拟态设计，流畅动画效果
 - **🌍 多语言支持** - 13 种语言：英语、简体中文、繁体中文、日语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语、阿拉伯语（RTL）、挪威语、瑞典语
 - **🎨 主题系统** - 深色/浅色/跟随系统主题模式，无缝切换
+- **💻 原生桌面应用** - 基于 Electron 构建的跨平台桌面应用：
+  - macOS（Intel 和 Apple Silicon）、Windows（x64）、Linux（AppImage 和 deb）
+  - 原生系统托盘集成和全局快捷键
+  - 自动更新和离线支持
+  - 独立构建，无需外部依赖
 - **🌐 跨平台访问** - 通过 localhost 或局域网从任何设备安全访问
 - **⚡ 快速安全** - Next.js Server Actions 优化的 API 调用
 - **🆓 100% 免费开源** - 无隐藏费用，仅需您自己的 API 密钥
@@ -110,12 +115,30 @@
 
 ## 快速开始
 
-### 前置要求
+### 方式一：桌面应用（推荐）
+
+下载适合您平台的预构建桌面应用：
+
+**📦 [从 GitHub Releases 下载](https://github.com/Octo-o-o-o/ImageBox/releases/latest)**
+
+- **macOS**：`ImageBox-{版本号}-mac-{架构}.dmg`（Intel: x64，Apple Silicon: arm64）
+- **Windows**：`ImageBox-{版本号}-win-x64.exe`（NSIS 安装程序）
+- **Linux**：`ImageBox-{版本号}-linux-x64.AppImage` 或 `.deb`
+
+安装后：
+1. 启动 ImageBox 应用
+2. 按照设置向导配置存储位置
+3. 在设置 → 模型中添加 AI 服务商 API 密钥
+4. 开始创作！
+
+### 方式二：Web 应用（开发/自托管）
+
+#### 前置要求
 
 - 已安装 Node.js 18+
 - Google Gemini API 密钥（可在 [Google AI Studio](https://makersuite.google.com/app/apikey) 免费获取）
 
-### 安装步骤
+#### 安装步骤
 
 ```bash
 # 克隆仓库
@@ -214,6 +237,7 @@ npm run dev
 ## 技术栈
 
 - **框架**: Next.js 16（App Router、React Server Components）
+- **桌面应用**: Electron 39（原生跨平台封装）
 - **数据库**: SQLite（通过 Prisma ORM）
 - **样式**: Tailwind CSS v4 + Framer Motion
 - **AI 模型**: Google Gemini 3 Pro (`gemini-3-pro-image-preview`)
@@ -231,10 +255,11 @@ imagebox/
 │   ├── models/page.tsx       # 模型与服务商配置
 │   ├── settings/page.tsx     # 设置（远程访问、存储）
 │   ├── run_log/page.tsx      # 生成历史日志
+│   ├── wizard/page.tsx       # 首次设置向导
 │   ├── auth/login/page.tsx   # 远程访问登录页
 │   ├── api/
 │   │   ├── auth/             # 认证端点
-│   │   ├── images/           # 图片服务 API
+│   │   ├── images/           # 图片服务 API 和缩略图
 │   │   └── browse-folders/   # 文件夹浏览 API
 │   ├── actions.ts            # Server Actions（数据库 + API）
 │   └── layout.tsx            # 根布局和导航
@@ -243,13 +268,26 @@ imagebox/
 │   ├── ThemeProvider.tsx     # 主题管理
 │   ├── LanguageProvider.tsx  # 国际化支持
 │   └── FolderBrowser.tsx     # 存储路径浏览器
+├── electron-src/             # Electron 主进程（TypeScript）
+│   ├── main.ts               # 主进程入口
+│   ├── preload.ts            # 预加载脚本
+│   ├── database.ts           # 数据库初始化
+│   ├── tray.ts               # 系统托盘集成
+│   ├── shortcuts.ts          # 全局快捷键
+│   └── updater.ts            # 自动更新处理
 ├── lib/
 │   ├── prisma.ts             # Prisma 客户端单例
 │   ├── modelParameters.ts    # 参数映射系统
 │   ├── imageUrl.ts           # 图片 URL 工具
+│   ├── env.ts                # 环境配置
+│   ├── paths.ts              # 路径工具
 │   └── i18n/                 # 翻译文件
 ├── prisma/
 │   └── schema.prisma         # 数据库模式
+├── assets/                   # 桌面应用资源
+│   ├── icon.png              # 应用图标
+│   └── splash.html           # 启动画面
+├── electron-builder.yml      # 桌面应用构建配置
 ├── middleware.ts             # 认证与访问控制
 └── public/generated/         # 生成的图像（自动创建）
 ```
@@ -264,6 +302,9 @@ imagebox/
 - [x] **自定义存储路径** - 可配置图片存储目录，支持验证
 - [x] **文件夹组织** - 基于文件夹的图片管理系统
 - [x] **图片收藏** - 星标/收藏功能，快速访问
+- [x] **原生桌面应用** - 跨平台 Electron 封装，系统托盘、快捷键和自动更新
+- [x] **设置向导** - 首次配置引导，无缝入门体验
+- [x] **缩略图生成** - 优化的图片缩略图，加快图库加载
 
 ### 高优先级
 - [ ] **高级搜索与筛选** - 按提示词、日期、模型、标签搜索图片
@@ -277,10 +318,9 @@ imagebox/
 - [ ] 图片编辑和变体生成
 
 ### 未来增强
-- [ ] 性能优化（虚拟滚动、懒加载、缩略图）
+- [ ] 性能优化（虚拟滚动、懒加载）
 - [ ] 数据库备份/恢复功能
 - [ ] Docker/Docker Compose 部署
-- [ ] Electron 桌面应用封装
 - [ ] 移动端响应式界面改进
 
 ## 贡献
@@ -294,6 +334,8 @@ imagebox/
 5. 开启 Pull Request
 
 ## 开发
+
+### Web 应用
 
 ```bash
 # 安装依赖
@@ -313,6 +355,27 @@ npm run db:studio
 
 # 代码检查
 npm run lint
+```
+
+### 桌面应用
+
+```bash
+# 开发模式（配合 Next.js 开发服务器）
+npm run electron:dev
+
+# 为当前平台构建桌面应用
+npm run electron:build
+
+# 为特定平台构建
+npm run electron:build:mac     # macOS（Intel 和 Apple Silicon）
+npm run electron:build:win     # Windows x64
+npm run electron:build:linux   # Linux（AppImage 和 deb）
+
+# 为所有平台构建
+npm run electron:build:all
+
+# 发布到 GitHub Releases
+npm run electron:publish
 ```
 
 ## 许可证

@@ -129,4 +129,12 @@
     background-color: var(--color-muted-foreground);
     opacity: 0.5;
   }
+
+  .titlebar-drag-region {
+    -webkit-app-region: drag;
+  }
+  
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
 }

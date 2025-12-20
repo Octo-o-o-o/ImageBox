@@ -18,7 +18,7 @@
 
 ## Overview
 
-**ImageBox** is a completely free, local-first AI image generation tool built with Next.js 16. Generate stunning AI images using Google Gemini 3 Pro, manage reusable templates, and organize all your creations locally. No cloud storage, no subscriptions, no data collection—just pure creative freedom on your machine.
+**ImageBox** is a completely free, local-first AI image generation tool built with Next.js 16. Generate stunning AI images using Google Gemini 3 Pro, manage reusable templates, and organize all your creations locally. Available as both a web application and a native desktop app (macOS, Windows, Linux). No cloud storage, no subscriptions, no data collection—just pure creative freedom on your machine.
 
 ## Features
 
@@ -100,6 +100,11 @@
 - **✨ Modern UI** - Beautiful dark glassmorphism design with smooth animations
 - **🌍 Multi-Language Support** - 13 languages: English, Chinese (Simplified & Traditional), Japanese, German, French, Russian, Portuguese, Spanish, Italian, Arabic (RTL), Norwegian, Swedish
 - **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
+- **💻 Native Desktop App** - Cross-platform desktop application built with Electron:
+  - macOS (Intel & Apple Silicon), Windows (x64), Linux (AppImage & deb)
+  - Native system tray integration and global shortcuts
+  - Automatic updates and offline support
+  - Standalone builds with no external dependencies
 - **🌐 Cross-Platform Access** - Use via localhost or LAN from any device with secure remote access
 - **⚡ Fast & Secure** - Next.js Server Actions for optimized API calls
 - **🆓 100% Free & Open Source** - No hidden fees, only your own API key costs
@@ -110,12 +115,30 @@
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Desktop Application (Recommended)
+
+Download the latest pre-built desktop application for your platform:
+
+**📦 [Download from GitHub Releases](https://github.com/Octo-o-o-o/ImageBox/releases/latest)**
+
+- **macOS**: `ImageBox-{version}-mac-{arch}.dmg` (Intel: x64, Apple Silicon: arm64)
+- **Windows**: `ImageBox-{version}-win-x64.exe` (NSIS installer)
+- **Linux**: `ImageBox-{version}-linux-x64.AppImage` or `.deb`
+
+After installation:
+1. Launch the ImageBox app
+2. Follow the setup wizard to configure your storage location
+3. Add your AI provider API key in Settings → Models
+4. Start creating!
+
+### Option 2: Web Application (Development/Self-Hosted)
+
+#### Prerequisites
 
 - Node.js 18+ installed
 - Google Gemini API key (free tier available at [Google AI Studio](https://makersuite.google.com/app/apikey))
 
-### Installation
+#### Installation
 
 ```bash
 # Clone the repository
@@ -214,6 +237,7 @@ A beautiful {{subject}} in {{style}} style, highly detailed, 4k
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router, React Server Components)
+- **Desktop**: Electron 39 (Native cross-platform wrapper)
 - **Database**: SQLite via Prisma ORM
 - **Styling**: Tailwind CSS v4 + Framer Motion
 - **AI Model**: Google Gemini 3 Pro (`gemini-3-pro-image-preview`)
@@ -231,10 +255,11 @@ imagebox/
 │   ├── models/page.tsx       # Model & provider configuration
 │   ├── settings/page.tsx     # Settings (remote access, storage)
 │   ├── run_log/page.tsx      # Generation history logs
+│   ├── wizard/page.tsx       # First-time setup wizard
 │   ├── auth/login/page.tsx   # Remote access login page
 │   ├── api/
 │   │   ├── auth/             # Authentication endpoints
-│   │   ├── images/           # Image serving API
+│   │   ├── images/           # Image serving API & thumbnails
 │   │   └── browse-folders/   # Folder browser API
 │   ├── actions.ts            # Server Actions (DB + API)
 │   └── layout.tsx            # Root layout with navigation
@@ -243,13 +268,26 @@ imagebox/
 │   ├── ThemeProvider.tsx     # Theme management
 │   ├── LanguageProvider.tsx  # I18n support
 │   └── FolderBrowser.tsx     # Storage path browser
+├── electron-src/             # Electron main process (TypeScript)
+│   ├── main.ts               # Main process entry
+│   ├── preload.ts            # Preload scripts
+│   ├── database.ts           # Database initialization
+│   ├── tray.ts               # System tray integration
+│   ├── shortcuts.ts          # Global shortcuts
+│   └── updater.ts            # Auto-update handling
 ├── lib/
 │   ├── prisma.ts             # Prisma client singleton
 │   ├── modelParameters.ts    # Parameter mapping system
 │   ├── imageUrl.ts           # Image URL utilities
+│   ├── env.ts                # Environment configuration
+│   ├── paths.ts              # Path utilities
 │   └── i18n/                 # Translation files
 ├── prisma/
 │   └── schema.prisma         # Database schema
+├── assets/                   # Desktop app assets
+│   ├── icon.png              # App icon
+│   └── splash.html           # Splash screen
+├── electron-builder.yml      # Desktop app build config
 ├── middleware.ts             # Auth & access control
 └── public/generated/         # Generated images (auto-created)
 ```
@@ -264,6 +302,9 @@ imagebox/
 - [x] **Custom Storage Paths** - Configurable image storage directory with validation
 - [x] **Folder Organization** - Folder-based image management system
 - [x] **Image Favorites** - Star/favorite functionality for quick access
+- [x] **Native Desktop App** - Cross-platform Electron wrapper with system tray, shortcuts, and auto-updates
+- [x] **Setup Wizard** - First-time configuration guide for seamless onboarding
+- [x] **Thumbnail Generation** - Optimized image thumbnails for faster gallery loading
 
 ### High Priority
 - [ ] **Advanced Search & Filtering** - Search images by prompt, date, model, tags
@@ -277,10 +318,9 @@ imagebox/
 - [ ] Image editing and variations
 
 ### Future Enhancements
-- [ ] Performance optimizations (virtual scrolling, lazy loading, thumbnails)
+- [ ] Performance optimizations (virtual scrolling, lazy loading)
 - [ ] Database backup/restore functionality
 - [ ] Docker/Docker Compose deployment
-- [ ] Electron desktop wrapper
 - [ ] Mobile-responsive interface improvements
 
 ## Contributing
@@ -294,6 +334,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 5. Open a Pull Request
 
 ## Development
+
+### Web Application
 
 ```bash
 # Install dependencies
@@ -313,6 +355,27 @@ npm run db:studio
 
 # Lint code
 npm run lint
+```
+
+### Desktop Application
+
+```bash
+# Development mode (with Next.js dev server)
+npm run electron:dev
+
+# Build desktop app for current platform
+npm run electron:build
+
+# Build for specific platforms
+npm run electron:build:mac     # macOS (Intel & Apple Silicon)
+npm run electron:build:win     # Windows x64
+npm run electron:build:linux   # Linux (AppImage & deb)
+
+# Build for all platforms
+npm run electron:build:all
+
+# Publish to GitHub Releases
+npm run electron:publish
 ```
 
 ## License

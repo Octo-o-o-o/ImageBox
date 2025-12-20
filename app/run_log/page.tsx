@@ -300,8 +300,21 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                          ) : isImage ? (
                              <div className="space-y-4">
                                 {(log.output?.split(', ') || []).map((path, idx) => (
-                                    <div key={idx} className="relative aspect-video bg-black/50 rounded-lg overflow-hidden border border-white/10">
-                                        <img src={path} alt={t('runLog.imageAlt')} className="w-full h-full object-contain" />
+                                    <div key={idx} className="relative aspect-video bg-black/50 rounded-lg overflow-hidden border border-white/10 group">
+                                        <img 
+                                            src={path} 
+                                            alt={t('runLog.imageAlt')} 
+                                            className="w-full h-full object-contain"
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                target.style.display = 'none';
+                                                target.parentElement?.classList.add('flex', 'items-center', 'justify-center', 'bg-destructive/10');
+                                                const span = document.createElement('span');
+                                                span.className = 'text-destructive text-xs font-semibold';
+                                                span.innerText = t('runLog.imageDeleted');
+                                                target.parentElement?.appendChild(span);
+                                            }}
+                                        />
                                         <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white text-[10px] rounded font-mono">
                                             {path}
                                         </div>

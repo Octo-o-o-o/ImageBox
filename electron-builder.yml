@@ -1,0 +1,110 @@
+# ImageBox Electron Builder 配置
+appId: com.imagebox.app
+productName: ImageBox
+copyright: Copyright © 2024
+
+# 目录配置
+directories:
+  output: dist-electron
+  buildResources: assets
+
+# 文件打包规则
+files:
+  - .next/standalone/**/*
+  - .next/static/**/*
+  - public/**/*
+  - electron/**/*
+  - prisma/**/*
+  - assets/**/*
+  - node_modules/.prisma/**/*
+  - node_modules/@prisma/**/*
+  - node_modules/better-sqlite3/**/*
+  - "!**/*.map"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md}"
+  - "!**/node_modules/*/{test,tests,__tests__}/**"
+  - "!**/node_modules/**/*.d.ts"
+
+# 额外资源（不打包进 asar）
+extraResources:
+  - from: prisma/
+    to: prisma/
+    filter:
+      - "**/*"
+      - "!dev.db"
+      - "!*.db-journal"
+
+# macOS 配置
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.png
+  category: public.app-category.graphics-design
+  # 未签名时不需要这些配置
+  # hardenedRuntime: true
+  # entitlements: build/entitlements.mac.plist
+  # entitlementsInherit: build/entitlements.mac.plist
+
+# DMG 配置
+dmg:
+  title: ImageBox
+  icon: assets/icon.png
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Windows 配置
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.png
+
+# Linux 配置
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: assets/icon.png
+  category: Graphics
+  desktop:
+    Name: ImageBox
+    Comment: AI Image Generation Tool
+    Categories: Graphics;Photography;
+
+# NSIS 安装程序配置
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ImageBox
+  installerIcon: assets/icon.png
+  uninstallerIcon: assets/icon.png
+
+# asar 配置
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
+  - node_modules/sharp/**/*
+  - "**/*.node"
+
+# 发布配置（GitHub Releases）
+publish:
+  provider: github
+  releaseType: release
+
+# 构建钩子
+afterSign: null
+afterPack: null

@@ -66,13 +66,18 @@ function StudioPageContent() {
   const [resolution, setResolution] = useState('1K');
   const [numberOfImages, setNumberOfImages] = useState(1); // Number of images to generate (1-4)
   const [returnType, setReturnType] = useState('IMAGE'); // IMAGE or TEXT_IMAGE
-  const [refImages, setRefImages] = useState<{file: File, preview: string, base64: string}[]>([]);
+  const [refImages, setRefImages] = useState<{file: File, preview: string, base64: string, width: number, height: number}[]>([]);
   const [maxRefImages, setMaxRefImages] = useState<number>(14); // Dynamically adjusted based on model config
   const [supportedParams, setSupportedParams] = useState<string[]>(['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled']); // Params supported by current model
+  const [toast, setToast] = useState<{ message: string } | null>(null);
 
-  // Folder State
+  const ASPECT_RATIO_ORIGINAL = "ORIGINAL";
+
   const [folders, setFolders] = useState<any[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+
+  // Drag State
+  const [isDragging, setIsDragging] = useState(false);
 
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<{ url: string, prompt: string } | null>(null);
@@ -90,82 +95,191 @@ function StudioPageContent() {
     onConfirm: () => {},
   });
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) {
-          const newFiles = Array.from(e.target.files);
-          if (refImages.length + newFiles.length > maxRefImages) {
-              setError(tr('create.error.maxRefImages', { count: maxRefImages }));
-              return;
+  const showToast = (message: string) => {
+      setToast({ message });
+      setTimeout(() => setToast(null), 3000);
+  };
+
+  const processFiles = async (files: File[]) => {
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) return;
+
+      const currentCount = refImages.length;
+      const availableSlots = maxRefImages - currentCount;
+
+      if (availableSlots <= 0) {
+          showToast(tr('create.toast.limitExceeded', { count: imageFiles.length }));
+          return;
+      }
+
+      let filesToProcess = imageFiles;
+      if (imageFiles.length > availableSlots) {
+          filesToProcess = imageFiles.slice(0, availableSlots);
+          showToast(tr('create.toast.limitExceeded', { count: imageFiles.length - availableSlots }));
+      }
+
+      // Reset error
+      setError('');
+      setWarning('');
+
+      const newImages: {file: File, preview: string, base64: string, width: number, height: number}[] = [];
+
+      for (const file of filesToProcess) {
+          // Check file size
+          const MAX_SIZE = 30 * 1024 * 1024; 
+          if (file.size > MAX_SIZE) {
+               setError(tr('create.error.fileTooLarge', { name: file.name, size: (file.size / 1024 / 1024).toFixed(2) }));
+               continue;
           }
 
-          // Reset error and warning
-          setError('');
-          setWarning('');
+          try {
+              const base64 = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(file);
+              });
 
-          // Process each file
-          for (const file of newFiles) {
-              // Check file size (30MB limit - hard block)
-              const MAX_SIZE = 30 * 1024 * 1024; // 30MB in bytes
-              if (file.size > MAX_SIZE) {
-                  setError(tr('create.error.fileTooLarge', { name: file.name, size: (file.size / 1024 / 1024).toFixed(2) }));
-                  continue; // Skip this file
+              const { width, height } = await new Promise<{width: number, height: number}>((resolve, reject) => {
+                  const img = new Image();
+                  img.onload = () => resolve({ width: img.width, height: img.height });
+                  img.onerror = reject;
+                  img.src = base64;
+              });
+
+              // Check resolution warning
+              const MIN_RESOLUTION = 512;
+              if (width < MIN_RESOLUTION || height < MIN_RESOLUTION) {
+                  // We can still accumulate warnings if needed, or just let it slide as user removed the yellow warning request
+                  // Keeping it minimal as requested
               }
 
-              // Read file as data URL
-              const reader = new FileReader();
-              reader.onloadend = async () => {
-                  const base64 = reader.result as string;
-                  const preview = URL.createObjectURL(file);
+              newImages.push({
+                  file,
+                  preview: URL.createObjectURL(file),
+                  base64,
+                  width,
+                  height
+              });
 
-                  // Load image to check dimensions
-                  const img = new Image();
-                  img.onload = () => {
-                      const warnings: string[] = [];
-
-                      // Check resolution (512x512 minimum - warning only)
-                      const MIN_RESOLUTION = 512;
-                      if (img.width < MIN_RESOLUTION || img.height < MIN_RESOLUTION) {
-                          warnings.push(tr('create.warning.lowResolution', { width: img.width, height: img.height }));
-                      }
-
-                      // Check aspect ratio match (warning only)
-                      const imageAspect = img.width / img.height;
-                      const [targetW, targetH] = aspectRatio.split(':').map(Number);
-                      const targetAspect = targetW / targetH;
-                      const aspectDiff = Math.abs(imageAspect - targetAspect);
-
-                      // Allow 10% tolerance for aspect ratio matching
-                      if (aspectDiff > targetAspect * 0.1) {
-                          warnings.push(tr('create.warning.aspectMismatchSingle', { ratio: imageAspect.toFixed(2), aspect: aspectRatio, target: targetAspect.toFixed(2) }));
-                      }
-
-                      // Display warnings if any
-                      if (warnings.length > 0) {
-                          setWarning(warnings.join('\n\n'));
-                      }
-
-                      // Add image to state
-                      setRefImages(prev => [...prev, {
-                          file,
-                          preview,
-                          base64
-                      }]);
-                  };
-
-                  img.onerror = () => {
-                      setError(tr('create.error.imageLoad', { name: file.name }));
-                  };
-
-                  img.src = base64;
-              };
-
-              reader.onerror = () => {
-                  setError(tr('create.error.fileRead', { name: file.name }));
-              };
-
-              reader.readAsDataURL(file);
+          } catch (e) {
+              console.error("Error processing file", file.name, e);
+              setError(tr('create.error.fileRead', { name: file.name }));
           }
       }
+      
+      if (newImages.length > 0) {
+          setRefImages(prev => [...prev, ...newImages]);
+      }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files) {
+          processFiles(Array.from(e.target.files));
+      }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          processFiles(Array.from(e.dataTransfer.files));
+      }
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isDragging) setIsDragging(true);
+  };
+
+  const onDragEnter = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Only set to false if we are leaving the main container
+      // (checking relatedTarget is one way, but simpler here is to rely on the overlay)
+      
+      // If the related target is outside the current target (the container), then we left.
+      if (e.currentTarget.contains(e.relatedTarget as Node)) {
+          return;
+      }
+      setIsDragging(false);
+  };
+
+  useEffect(() => {
+      const handlePaste = (e: ClipboardEvent) => {
+           if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+               processFiles(Array.from(e.clipboardData.files));
+           }
+      };
+      window.addEventListener('paste', handlePaste);
+      return () => window.removeEventListener('paste', handlePaste);
+  }, [refImages, maxRefImages]); // Re-bind when state changes to capture correct closure limits OR use functional updates (but processFiles uses limit)
+  // Actually processFiles uses refImages.length. To avoid stale closures, processFiles should be in dependency, or use ref inside.
+  // Better: use functional upgrade in processFiles logic? 
+  // Wait, `processFiles` reads `refImages.length`. If I don't put it in dependencies, `handlePaste` which calls `processFiles` will see old `refImages`.
+  // So [refImages, maxRefImages] is correct, but frequent re-binding. It's fine for this page.
+
+  const getEffectiveAspectRatio = (): string => {
+      if (refImages.length === 0) return "1:1";
+
+      // 1. Calculate stats for each image against candidates
+      const counts: Record<string, { count: number, maxRes: number }> = {};
+      
+      // Initialize counts
+      ASPECT_RATIOS.forEach(r => counts[r.value] = { count: 0, maxRes: 0 });
+
+      refImages.forEach(img => {
+          const imgRatio = img.width / img.height;
+          
+          // Find closest candidate
+          let bestRatio = "1:1";
+          let minDiff = Number.MAX_VALUE;
+
+          ASPECT_RATIOS.forEach(r => {
+              const [w, h] = r.value.split(':').map(Number);
+              const targetRatio = w / h;
+              const diff = Math.abs(imgRatio - targetRatio);
+              if (diff < minDiff) {
+                  minDiff = diff;
+                  bestRatio = r.value;
+              }
+          });
+
+          // Update stats
+          if (counts[bestRatio]) {
+              counts[bestRatio].count++;
+              counts[bestRatio].maxRes = Math.max(counts[bestRatio].maxRes, Math.max(img.width, img.height)); // "Resolution big" - simply using max dimension or area? User said "resolution big". I'll use area.
+              // Actually let's use area
+          }
+      });
+      
+      // Find winner
+      let winner = "1:1";
+      let maxCount = -1;
+      let winnerMaxRes = -1;
+
+      Object.entries(counts).forEach(([ratio, stats]) => {
+          if (stats.count > maxCount) {
+              maxCount = stats.count;
+              winner = ratio;
+              winnerMaxRes = stats.maxRes;
+          } else if (stats.count === maxCount) {
+              if (stats.maxRes > winnerMaxRes) {
+                  winner = ratio;
+                  winnerMaxRes = stats.maxRes;
+              }
+          }
+      });
+
+      return winner;
   };
 
   const removeImage = (index: number) => {
@@ -251,41 +365,7 @@ function StudioPageContent() {
   }, [selectedImageModelId, models]);
 
   // Check aspect ratio mismatch when aspect ratio changes
-  useEffect(() => {
-    if (refImages.length > 0) {
-      const [targetW, targetH] = aspectRatio.split(':').map(Number);
-      const targetAspect = targetW / targetH;
 
-      // Check if any uploaded images don't match the aspect ratio
-      const mismatchedImages: string[] = [];
-
-      refImages.forEach((refImg, index) => {
-        const img = new Image();
-        img.onload = () => {
-          const imageAspect = img.width / img.height;
-          const aspectDiff = Math.abs(imageAspect - targetAspect);
-
-          // Allow 10% tolerance for aspect ratio matching
-          if (aspectDiff > targetAspect * 0.1) {
-            mismatchedImages.push(tr('create.warning.aspectMismatchItem', { index: index + 1, width: img.width, height: img.height, ratio: imageAspect.toFixed(2) }));
-
-            // Update warning after checking all images
-            if (mismatchedImages.length > 0) {
-              setWarning(tr('create.warning.aspectMismatchList', { aspect: aspectRatio, target: targetAspect.toFixed(2), list: mismatchedImages.join('\n') }));
-            }
-          }
-        };
-        img.src = refImg.base64;
-      });
-
-      // Clear warning if no mismatches found after a delay
-      setTimeout(() => {
-        if (mismatchedImages.length === 0) {
-          setWarning('');
-        }
-      }, 500);
-    }
-  }, [aspectRatio, refImages]);
 
   useEffect(() => {
     if (selectedTemplateId) {
@@ -412,8 +492,9 @@ function StudioPageContent() {
     setError('');
 
     try {
+      const effectiveRatio = aspectRatio === ASPECT_RATIO_ORIGINAL ? getEffectiveAspectRatio() : aspectRatio;
       const params = {
-          aspectRatio,
+          aspectRatio: effectiveRatio,
           imageSize: resolution,
           numberOfImages,
           responseModalities: returnType === 'TEXT_IMAGE' ? ['TEXT', 'IMAGE'] : ['IMAGE'],
@@ -465,7 +546,13 @@ function StudioPageContent() {
   const imageModels = models.filter(m => m.type === 'IMAGE');
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex gap-4">
+    <div 
+      className="h-[calc(100vh-6rem)] flex gap-4 relative"
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={handleDrop}
+    >
       
       {/* 1. Parameters Column */}
       <div className="w-[320px] flex-none flex flex-col gap-4 overflow-y-auto">
@@ -481,18 +568,23 @@ function StudioPageContent() {
             </div>
 
             {/* Template */}
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.templateLabel')}</label>
-                <select 
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none text-foreground"
-                >
-                    <option value="">{tr('create.template.customOption')}</option>
-                    {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                </select>
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.templateLabel')}</label>
+                <div className="relative">
+                    <select 
+                        value={selectedTemplateId}
+                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    >
+                        <option value="">{tr('create.template.customOption')}</option>
+                        {templates.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
             </div>
 
              {/* Input Variables */}
@@ -516,49 +608,76 @@ function StudioPageContent() {
             )}
 
             {/* Image Model */}
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.imageModelLabel')}</label>
-                <select 
-                    value={selectedImageModelId}
-                    onChange={(e) => setSelectedImageModelId(e.target.value)}
-                    className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
-                >
-                    <option value="">{tr('create.imageModelPlaceholder')}</option>
-                    {imageModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.imageModelLabel')}</label>
+                <div className="relative">
+                    <select 
+                        value={selectedImageModelId}
+                        onChange={(e) => setSelectedImageModelId(e.target.value)}
+                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    >
+                        <option value="">{tr('create.imageModelPlaceholder')}</option>
+                        {imageModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
             </div>
 
             {/* Aspect Ratio - Only show if model supports aspectRatio */}
             {supportedParams.includes('aspectRatio') && (
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.aspectRatioLabel')}</label>
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.aspectRatioLabel')}</label>
+                
+                {/* Follow Original Button - Full Width */}
+                <button
+                    onClick={() => setAspectRatio(ASPECT_RATIO_ORIGINAL)}
+                    className={`w-full relative py-2.5 px-3 rounded-xl text-xs font-medium transition-all duration-200 border flex items-center justify-center gap-2 ${
+                        aspectRatio === ASPECT_RATIO_ORIGINAL
+                        ? 'bg-primary/5 border-primary/20 text-primary shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]'
+                        : 'bg-secondary/30 border-transparent hover:bg-secondary/50 text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                    <span className="truncate">{tr('create.aspectRatio.original')}</span>
+                    {aspectRatio === ASPECT_RATIO_ORIGINAL && refImages.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-bold">
+                            {getEffectiveAspectRatio()}
+                        </span>
+                    )}
+                </button>
+
                 <div className="grid grid-cols-3 gap-2">
                     {ASPECT_RATIOS.map(ratio => {
                         const [w, h] = ratio.value.split(':').map(Number);
                         const aspect = w / h;
                         const isWide = aspect >= 1;
-                        const width = isWide ? 32 : 32 * aspect;
-                        const height = isWide ? 32 / aspect : 32;
+                        const width = isWide ? 24 : 24 * aspect;
+                        const height = isWide ? 24 / aspect : 24;
 
                         return (
                         <button
                         key={ratio.value}
                         onClick={() => setAspectRatio(ratio.value)}
-                        className={`group relative py-2 px-1 rounded-lg text-xs font-medium transition-colors flex flex-col items-center gap-1 ${
+                        className={`group relative py-2 px-1 rounded-xl text-xs font-medium transition-all duration-200 border ${
                             aspectRatio === ratio.value
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground'
+                            ? 'bg-primary/5 border-primary/20 text-primary shadow-sm'
+                            : 'bg-secondary/30 border-transparent hover:bg-secondary/50 text-muted-foreground hover:text-foreground'
                         }`}
-                        >
-                            <span className="truncate w-full text-center">{ratio.label}</span>
-                             {/* Visual Tooltip (Simplified) */}
-                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-popover border border-border p-2 rounded-lg shadow-xl z-[100] pointer-events-none">
-                                <div className="w-8 h-8 flex items-center justify-center bg-secondary/50 rounded mb-1">
+                        >   
+                            <div className="flex flex-col items-center gap-1.5">
+                                <span className="truncate w-full text-center">{ratio.label}</span>
+                            </div>
+
+                             {/* Visual Tooltip */}
+                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-popover text-popover-foreground border border-border/50 p-2 rounded-xl shadow-xl z-[100] pointer-events-none scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all origin-bottom duration-200">
+                                <div className="w-8 h-8 flex items-center justify-center bg-secondary/50 rounded-lg mb-1">
                                     <div 
-                                        className="bg-primary rounded-[1px]"
+                                        className="bg-primary rounded-[2px]"
                                         style={{ width: `${width}px`, height: `${height}px` }}
                                     />
                                 </div>
+                                <span className="text-[10px] whitespace-nowrap opacity-70">{ratio.title}</span>
                             </div>
                         </button>
                         );
@@ -569,10 +688,10 @@ function StudioPageContent() {
 
             {/* Number of Images - Only show if model supports numberOfImages */}
             {supportedParams.includes('numberOfImages') && (
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest flex items-center justify-between">
                   <span>{tr('create.numberOfImagesLabel')}</span>
-                  <span className="text-primary font-bold">{numberOfImages}</span>
+                  <span className="text-primary font-bold bg-primary/10 px-2 py-0.5 rounded text-[10px]">{numberOfImages}</span>
                 </label>
                 <input
                   type="range"
@@ -581,9 +700,9 @@ function StudioPageContent() {
                   step="1"
                   value={numberOfImages}
                   onChange={(e) => setNumberOfImages(parseInt(e.target.value))}
-                  className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer"
+                  className="w-full h-1.5 bg-secondary/50 rounded-lg appearance-none cursor-pointer accent-primary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
                 />
-                <div className="flex justify-between text-[10px] text-muted-foreground px-0.5">
+                <div className="flex justify-between text-[10px] font-medium text-muted-foreground/50 px-1">
                   <span>1</span>
                   <span>2</span>
                   <span>3</span>
@@ -594,50 +713,65 @@ function StudioPageContent() {
 
             {/* Resolution - Only show if model supports imageSize */}
             {supportedParams.includes('imageSize') && (
-              <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.resolutionLabel')}</label>
-                  <select
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value)}
-                  className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
-                  >
-                  <option value="1K">1024x1024 (1K)</option>
-                  <option value="2K">2048x2048 (2K)</option>
-                  <option value="4K">4096x4096 (4K)</option>
-                  </select>
+              <div className="space-y-3">
+                  <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.resolutionLabel')}</label>
+                  <div className="relative">
+                    <select
+                        value={resolution}
+                        onChange={(e) => setResolution(e.target.value)}
+                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    >
+                    <option value="1K">1024x1024 (1K)</option>
+                    <option value="2K">2048x2048 (2K)</option>
+                    <option value="4K">4096x4096 (4K)</option>
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                  </div>
               </div>
             )}
 
             {/* Return Type */}
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.returnTypeLabel')}</label>
-                <select
-                value={returnType}
-                onChange={(e) => setReturnType(e.target.value as 'IMAGE' | 'TEXT_IMAGE')}
-                className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
-                >
-                <option value="IMAGE">{tr('create.returnType.imageOnly')}</option>
-                <option value="TEXT_IMAGE">{tr('create.returnType.imageText')}</option>
-                </select>
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.returnTypeLabel')}</label>
+                <div className="relative">
+                    <select
+                        value={returnType}
+                        onChange={(e) => setReturnType(e.target.value as 'IMAGE' | 'TEXT_IMAGE')}
+                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    >
+                    <option value="IMAGE">{tr('create.returnType.imageOnly')}</option>
+                    <option value="TEXT_IMAGE">{tr('create.returnType.imageText')}</option>
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
             </div>
 
             {/* Folder Selection */}
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest flex items-center gap-2">
                   <Folder className="w-3 h-3" />
                   {tr('create.folderLabel')}
                 </label>
-                <select
-                value={selectedFolderId}
-                onChange={(e) => setSelectedFolderId(e.target.value)}
-                className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
-                >
-                {folders.map(folder => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name} {folder.isDefault ? `(${tr('create.folderDefault')})` : ''}
-                  </option>
-                ))}
-                </select>
+                <div className="relative">
+                    <select
+                        value={selectedFolderId}
+                        onChange={(e) => setSelectedFolderId(e.target.value)}
+                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    >
+                    {folders.map(folder => (
+                        <option key={folder.id} value={folder.id}>
+                        {folder.name} {folder.isDefault ? `(${tr('create.folderDefault')})` : ''}
+                        </option>
+                    ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
             </div>
         </div>
       </div>
@@ -663,7 +797,7 @@ function StudioPageContent() {
                     <textarea
                         value={finalImagePrompt}
                         onChange={(e) => setFinalImagePrompt(e.target.value)}
-                        className="w-full h-full min-h-[220px] bg-secondary/30 border border-border rounded-xl p-4 pb-14 text-sm focus:ring-2 focus:ring-primary/50 outline-none resize-none font-mono text-foreground placeholder-muted-foreground/50 leading-relaxed transition-all custom-scrollbar"
+                        className="w-full h-full min-h-[220px] bg-secondary/30 hover:bg-secondary/40 transition-colors rounded-xl p-4 pb-14 text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none font-mono text-foreground placeholder-muted-foreground/50 leading-relaxed custom-scrollbar"
                         placeholder={selectedPromptModelId ? tr('create.promptPlaceholderWithModel') : tr('create.promptPlaceholder')}
                     />
                     
@@ -707,33 +841,36 @@ function StudioPageContent() {
              {/* Reference Images */}
              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.refImages.label')}</label>
+                    <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.refImages.label')}</label>
                     {maxRefImages > 0 && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded-md">
                             {refImages.length}/{maxRefImages}
                         </span>
                     )}
                     {maxRefImages === 0 && (
-                        <span className="text-[10px] text-yellow-500">{tr('create.refImages.unsupported')}</span>
+                        <span className="text-[10px] text-yellow-500 font-medium">{tr('create.refImages.unsupported')}</span>
                     )}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                {/* Drop Zone (Visual only now, logic handled by parent) */}
+                <div 
+                  className={`grid grid-cols-4 gap-2 min-h-[80px] rounded-xl transition-all duration-300 ${maxRefImages > 0 ? 'border-2 border-dashed border-border/20 hover:border-primary/20 hover:bg-primary/5' : ''}`}
+                >
                     {refImages.map((img, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-secondary/20 group">
                         <img src={img.preview} alt={tr('create.refImages.alt', { index: index + 1 })} className="w-full h-full object-cover" />
                         <button
                         onClick={() => removeImage(index)}
-                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-destructive/80 transition-colors opacity-0 group-hover:opacity-100"
+                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-destructive/80 transition-all opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100"
                         >
                         <X className="w-3 h-3" />
                         </button>
                     </div>
                     ))}
                     {refImages.length < maxRefImages && maxRefImages > 0 && (
-                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-border text-muted-foreground cursor-pointer hover:border-primary/50 hover:text-primary transition-colors bg-secondary/50 hover:bg-primary/5">
+                    <label className="flex flex-col items-center justify-center aspect-square rounded-lg border border-dashed border-border/40 text-muted-foreground/50 cursor-pointer hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all">
                         <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
-                        <Upload className="w-4 h-4 mb-1" />
-                        <span className="text-[9px] font-medium">{tr('create.upload')}</span>
+                        <Upload className="w-5 h-5 mb-1 opacity-70" />
+                        <span className="text-[9px] font-medium opacity-70">{tr('create.upload')}</span>
                     </label>
                     )}
                 </div>

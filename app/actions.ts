@@ -5,6 +5,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
 import { mapParametersForAPI } from '@/lib/modelParameters';
 import sharp from 'sharp';
@@ -71,6 +74,13 @@ export async function saveModel(data: { id?: string; name: string; modelIdentifi
 
 export async function deleteModel(id: string) {
   return await prisma.aIModel.delete({ where: { id } });
+}
+
+export async function hasImageGenerationModel() {
+  const count = await prisma.aIModel.count({
+    where: { type: 'IMAGE' }
+  });
+  return count > 0;
 }
 
 // --- Templates ---
@@ -552,22 +562,49 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
 export async function saveGeneratedImage(base64Data: string, finalPrompt: string, modelName: string, params: string, templateId?: string, folderId?: string) {
   const buffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+  // Determine target directory
+  let targetFolderId = folderId;
+  let subDir = '';
+  
+  if (targetFolderId) {
+    const folder = await prisma.folder.findUnique({ where: { id: targetFolderId } });
+    if (folder && !folder.isDefault) {
+       subDir = folder.name; // Use folder name as subdirectory
+    } else if (!folder) {
+        // If provided folder ID is invalid, fallback to default
+        targetFolderId = undefined;
+    }
+  }
+
+  if (!targetFolderId) {
+    const defaultFolder = await ensureDefaultFolder();
+    targetFolderId = defaultFolder.id;
+    // Default folder uses root directory (subDir = '')
+  }
+
   const filename = `${Date.now()}-${uuidv4()}.png`;
   const thumbnailFilename = `thumb_${filename.replace('.png', '.jpg')}`; // Use JPEG for smaller size
-  const relativePath = `/generated/${filename}`;
+  
+  // Construct paths
+  // If subDir is present, path is /generated/subDir/filename
+  const relativePath = subDir 
+      ? `/generated/${subDir}/${filename}`
+      : `/generated/${filename}`;
   const thumbnailPath = `/generated/thumbnails/${thumbnailFilename}`;
   
   // Get storage path from config (for full-size images)
   const storagePath = await getActualStoragePath();
+  const targetDir = subDir ? path.join(storagePath, subDir) : storagePath;
+  
   // Thumbnails always go to project's public directory
   const thumbnailDir = path.join(process.cwd(), 'public', 'generated', 'thumbnails');
 
   // Ensure directories exist
-  try { await fs.access(storagePath); } catch { await fs.mkdir(storagePath, { recursive: true }); }
+  try { await fs.access(targetDir); } catch { await fs.mkdir(targetDir, { recursive: true }); }
   try { await fs.access(thumbnailDir); } catch { await fs.mkdir(thumbnailDir, { recursive: true }); }
 
   // Save original image to configured storage path
-  await fs.writeFile(path.join(storagePath, filename), buffer);
+  await fs.writeFile(path.join(targetDir, filename), buffer);
 
   // Generate and save thumbnail
   try {
@@ -581,13 +618,6 @@ export async function saveGeneratedImage(base64Data: string, finalPrompt: string
   } catch (e) {
     console.error('Failed to generate thumbnail:', e);
     // Continue without thumbnail if it fails
-  }
-
-  // If no folder specified, use default folder
-  let targetFolderId = folderId;
-  if (!targetFolderId) {
-    const defaultFolder = await ensureDefaultFolder();
-    targetFolderId = defaultFolder.id;
   }
 
   const image = await prisma.image.create({
@@ -633,7 +663,7 @@ export async function ensureDefaultFolder() {
   if (!existing) {
     return await prisma.folder.create({
       data: {
-        name: '默认文件夹',
+        name: 'default',
         isDefault: true
       }
     });
@@ -660,12 +690,58 @@ export async function getFolders() {
 }
 
 export async function createFolder(name: string) {
+  // Create physical folder
+  const storagePath = await getActualStoragePath();
+  const folderPath = path.join(storagePath, name);
+  
+  try {
+    await fs.mkdir(folderPath, { recursive: true });
+  } catch (e) {
+    console.error('Failed to create local folder:', e);
+    // Proceed - maybe it exists or permission issue, but DB record can still be created?
+    // User requested "also create same-name folder". If fails, we probably should warn but not block logic if safely ignoring.
+  }
+
   return await prisma.folder.create({
     data: { name }
   });
 }
 
 export async function updateFolder(id: string, name: string) {
+  const folder = await prisma.folder.findUnique({ where: { id } });
+  if (!folder) throw new Error('Folder not found');
+  
+  if (folder.name !== name) {
+      // Try to rename physical folder
+      const storagePath = await getActualStoragePath();
+      const oldPath = path.join(storagePath, folder.name);
+      const newPath = path.join(storagePath, name);
+      
+      try {
+          // Only rename if old path exists
+          await fs.access(oldPath);
+          await fs.rename(oldPath, newPath);
+          
+          // Should we update paths of images in DB?
+          // Since image.path includes folder name (e.g. /generated/oldName/img.png), we MUST update them.
+          const images = await prisma.image.findMany({ where: { folderId: id } });
+          for (const img of images) {
+              const filename = path.basename(img.path);
+              // Old path in DB: /generated/oldName/filename OR /generated/filename (if migrated)
+              // We construct new relative path
+              const newRelativePath = `/generated/${name}/${filename}`;
+              await prisma.image.update({
+                  where: { id: img.id },
+                  data: { path: newRelativePath }
+              });
+          }
+      } catch (e) {
+          console.error('Failed to rename local folder or update images:', e);
+          // If old folder didn't exist, we might just be creating the new one?
+          // If it failed, we proceed with DB update but warn?
+      }
+  }
+
   return await prisma.folder.update({
     where: { id },
     data: { name }
@@ -678,22 +754,156 @@ export async function deleteFolder(id: string) {
   if (!folder) throw new Error('文件夹不存在');
   if (folder.isDefault) throw new Error('无法删除默认文件夹');
 
-  // Move images to default folder before deletion
+  // Move images to default folder
   const defaultFolder = await ensureDefaultFolder();
-  await prisma.image.updateMany({
-    where: { folderId: id },
-    data: { folderId: defaultFolder.id }
-  });
+  const storagePath = await getActualStoragePath();
+  
+  // Find images in this folder
+  const images = await prisma.image.findMany({ where: { folderId: id } });
+  
+  // Move physical files to root (default folder location)
+  for (const img of images) {
+      try {
+          const filename = path.basename(img.path);
+          // Current physical location: storagePath/folderName/filename
+          const currentPath = path.join(storagePath, folder.name, filename);
+          const newPath = path.join(storagePath, filename);
+          
+          // Check if file exists before moving
+          await fs.access(currentPath);
+          await fs.rename(currentPath, newPath);
+          
+          // Update DB path
+          await prisma.image.update({
+              where: { id: img.id },
+              data: { 
+                  folderId: defaultFolder.id,
+                  path: `/generated/${filename}`
+              }
+          });
+      } catch (e) {
+          console.error(`Failed to move image ${img.id} during folder delete:`, e);
+          // Fallback: just update DB folder ID, path remains broken or points to non-existent location?
+          // If we update folderId but not path, image will be "lost" physically.
+          // We still update folderId so they appear in default folder (albeit broken).
+          await prisma.image.update({
+              where: { id: img.id },
+              data: { folderId: defaultFolder.id }
+          });
+      }
+  }
+
+  // Try to remove the empty directory
+  try {
+      const folderPath = path.join(storagePath, folder.name);
+      await fs.rmdir(folderPath); // rmdir only works if empty
+  } catch (e) {
+      console.error('Failed to remove folder directory:', e);
+  }
 
   return await prisma.folder.delete({ where: { id } });
 }
 
 export async function getImagesByFolder(folderId?: string) {
-  return await prisma.image.findMany({
+  const images = await prisma.image.findMany({
     where: folderId ? { folderId } : {},
     orderBy: { createdAt: 'desc' },
     include: { template: true, folder: true }
   });
+
+  // Check if local files exist
+  const storagePath = await getActualStoragePath();
+  
+  return await Promise.all(images.map(async (img) => {
+    let fileExists = true;
+    try {
+      // Logic mirrors saveGeneratedImage: original is in storagePath/filename
+      const filename = path.basename(img.path);
+      // Resolve path properly based on img.path structure
+      let relativePart = img.path;
+      if (relativePart.startsWith('/generated/')) {
+        relativePart = relativePart.replace(/^\/generated\//, '');
+      }
+      const absolutePath = path.join(storagePath, relativePart);
+      await fs.access(absolutePath);
+    } catch {
+      fileExists = false;
+    }
+    return { ...img, fileMissing: !fileExists };
+  }));
+}
+
+export async function openLocalFolder(folderId?: string) {
+    const storagePath = await getActualStoragePath();
+    let targetPath = storagePath;
+
+    if (folderId) {
+        const folder = await prisma.folder.findUnique({ where: { id: folderId } });
+        if (folder && !folder.isDefault) {
+            targetPath = path.join(storagePath, folder.name);
+        }
+    }
+    
+    // Create if not exists (for safer UX)
+    try { await fs.access(targetPath); } catch { await fs.mkdir(targetPath, { recursive: true }); }
+    
+    const execPromise = promisify(exec);
+    try {
+        if (os.platform() === 'darwin') {
+           await execPromise(`open "${targetPath}"`);
+        } else if (os.platform() === 'win32') {
+           await execPromise(`explorer "${targetPath}"`);
+        } else {
+           await execPromise(`xdg-open "${targetPath}"`);
+        }
+        return { success: true };
+    } catch (e: any) {
+         console.error('Failed to open folder:', e);
+         throw new Error('Failed to open folder: ' + e.message);
+    }
+}
+
+export async function openImageFolder(imageId: string) {
+  const image = await prisma.image.findUnique({ where: { id: imageId } });
+  if (!image) throw new Error('Image not found');
+
+  const storagePath = await getActualStoragePath();
+  const filename = path.basename(image.path);
+  
+  // Need to resolve subdir based on image path structure or DB lookup?
+  // We can trust image.path serves as source of truth for relative structure.
+  // image.path = /generated/SubFolder/file.png OR /generated/file.png
+  
+  // However, image.path might be just /generated/file.png if we are using custom storage path logic?
+  // getImageUrl logic: if starts with /generated, it's relative.
+  
+  // Let's rely on file finding.
+  // Actually, we can just use the logic: path.join(storagePath + relativePath_without_prefix)
+  
+  let relativePath = image.path;
+  if (relativePath.startsWith('/generated/')) {
+      relativePath = relativePath.replace(/^\/generated\//, '');
+  }
+  
+  const absolutePath = path.join(storagePath, relativePath);
+
+  const execPromise = promisify(exec);
+  
+  try {
+    if (os.platform() === 'darwin') {
+      await execPromise(`open -R "${absolutePath}"`);
+    } else if (os.platform() === 'win32') {
+       await execPromise(`explorer /select,"${absolutePath}"`);
+    } else {
+       // Linux/Other: try xdg-open on directory
+       const dir = path.dirname(absolutePath);
+       await execPromise(`xdg-open "${dir}"`);
+    }
+    return { success: true };
+  } catch (e: any) {
+    console.error('Failed to open folder:', e);
+    throw new Error('Failed to open folder: ' + e.message);
+  }
 }
 
 export async function deleteImage(id: string) {
@@ -702,11 +912,20 @@ export async function deleteImage(id: string) {
 
   // Get storage path from config
   const storagePath = await getActualStoragePath();
-  const filename = path.basename(image.path);
+
+  // Resolve absolute path from DB path
+  // image.path is e.g. /generated/SubDir/img.png OR /generated/img.png
+  let relativePart = image.path;
+  if (relativePart.startsWith('/generated/')) {
+      relativePart = relativePart.replace(/^\/generated\//, '');
+  }
+  const filename = path.basename(image.path); // keep just for fallback logic if needed?
+  // Actually we should use the resolved relative path to find the file
+  
 
   // Delete original file from configured storage path
   try {
-    const filePath = path.join(storagePath, filename);
+    const filePath = path.join(storagePath, relativePart);
     await fs.unlink(filePath);
   } catch (e) {
     console.error('删除文件失败:', e);
@@ -746,9 +965,48 @@ export async function moveImageToFolder(imageId: string, folderId: string) {
   const folder = await prisma.folder.findUnique({ where: { id: folderId } });
   if (!folder) throw new Error('目标文件夹不存在');
   
+  // Calculate paths
+  const storagePath = await getActualStoragePath();
+  const filename = path.basename(image.path);
+  
+  // Resolve current physical path
+  // Relies on image.path structure.
+  let currentRelative = image.path.replace(/^\/generated\//, '');
+  const currentPath = path.join(storagePath, currentRelative);
+  
+  // Resolve new physical path
+  let newRelative = '';
+  if (folder.isDefault) {
+      newRelative = filename; // Root
+  } else {
+      newRelative = path.join(folder.name, filename);
+  }
+  const newPath = path.join(storagePath, newRelative);
+  
+  // New DB Path
+  const newDbPath = `/generated/${newRelative}`;
+  
+  // Move file
+  try {
+      // Ensure specific subdir exists if not default
+      if (!folder.isDefault) {
+          await fs.mkdir(path.join(storagePath, folder.name), { recursive: true });
+      }
+      
+      await fs.rename(currentPath, newPath);
+  } catch (e) {
+      console.error('Failed to move physical file:', e);
+      // Fail gracefully? Or throw?
+      // Since strict consistency is asked, we should probably throw.
+      throw new Error('移动文件失败，请检查文件系统权限或文件是否存在');
+  }
+
   return await prisma.image.update({
     where: { id: imageId },
-    data: { folderId }
+    data: { 
+        folderId,
+        path: newDbPath
+    }
   });
 }
 
@@ -1037,4 +1295,20 @@ export async function validateAccessToken(token: string) {
     id: accessToken.id,
     name: accessToken.name
   };
+}
+
+/**
+ * 获取本机局域网IP地址
+ */
+export async function getLocalIpAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]!) {
+      // Skip internal and non-IPv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
 }

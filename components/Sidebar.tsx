@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, PlusSquare, Settings, Library, Box, Activity, Sun, Moon, Monitor, Languages, ChevronDown, Github, Cog } from 'lucide-react';
+import { LayoutGrid, PlusSquare, Settings, Library, Box, Activity, Sun, Moon, Monitor, Languages, ChevronDown, Github, Cog, Sparkles } from 'lucide-react';
+import { hasImageGenerationModel } from '@/app/actions';
 import { useTheme } from './ThemeProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
@@ -17,6 +18,13 @@ export function Sidebar() {
   const { language, setLanguage, t } = useLanguage();
   const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [isLangOpen, setIsLangOpen] = useState(false);
+  const [platform, setPlatform] = useState<string>('');
+
+  useEffect(() => {
+    if (window.electronAPI?.platform) {
+      setPlatform(window.electronAPI.platform);
+    }
+  }, []);
 
   const themeDropdownRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
@@ -24,6 +32,7 @@ export function Sidebar() {
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // ... existing code ...
       if (themeDropdownRef.current && !themeDropdownRef.current.contains(event.target as Node)) {
         setIsThemeOpen(false);
       }
@@ -40,9 +49,16 @@ export function Sidebar() {
     }
   }, [isThemeOpen, isLangOpen]);
 
+  const [hasModel, setHasModel] = useState<boolean>(true);
+
+  useEffect(() => {
+    hasImageGenerationModel().then(setHasModel);
+  }, []);
+
   const navItems = [
-    { name: t('sidebar.library'), icon: LayoutGrid, href: '/library' },
+    ...(!hasModel ? [{ name: (language as any) === 'zh-CN' ? '快速向导' : 'Setup Wizard', icon: Sparkles, href: '/wizard' }] : []),
     { name: t('sidebar.create'), icon: PlusSquare, href: '/create' },
+    { name: t('sidebar.library'), icon: LayoutGrid, href: '/library' },
     { name: t('sidebar.templates'), icon: Library, href: '/templates' },
     { name: t('sidebar.logs'), icon: Activity, href: '/run_log' },
     { name: t('sidebar.models'), icon: Settings, href: '/models' },
@@ -65,11 +81,18 @@ export function Sidebar() {
   const currentLang = langOptions.find(l => l.value === language) || langOptions[0];
 
   return (
-    <div className="w-64 h-screen fixed left-0 top-0 border-r border-border bg-background/50 backdrop-blur-xl flex flex-col p-4 z-50">
-      <div className="flex items-center gap-2 px-2 mb-8">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+    <div className={clsx(
+      "w-64 h-screen fixed left-0 top-0 border-r border-border bg-background/50 backdrop-blur-xl flex flex-col z-50 transition-all",
+      platform === 'darwin' ? "pt-12 pb-4 px-4" : "p-4"
+    )}>
+      {/* Drag Region */}
+      <div className="absolute top-0 left-0 w-full h-10 titlebar-drag-region z-0" />
+      
+      <div className="flex items-center gap-2 px-2 mb-8 relative z-10 titlebar-no-drag">
+        {/* <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
           <Box className="text-white w-5 h-5" />
-        </div>
+        </div> */}
+        <img src="/logo.png" alt="ImageBox" className="w-10 h-10 rounded-lg shadow-lg" />
         <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-white dark:to-white/70">
           ImageBox
         </span>

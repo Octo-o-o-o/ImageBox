@@ -111,6 +111,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLocal = isLocalRequest(request);
   
+  // 桌面应用模式：通过自定义 header 识别 Electron 请求，跳过所有认证
+  if (request.headers.get('x-electron-app') === 'true') {
+    return NextResponse.next();
+  }
+  
   // 静态资源和公开路径直接放行
   if (isPublicPath(pathname)) {
     return NextResponse.next();

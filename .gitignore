@@ -52,3 +52,11 @@ dev.db-journal
 CLAUDE.md
 PRODUCT_DESIGN.md
 /docs/
+
+# Electron
+/electron/
+/dist-electron/
+*.dmg
+*.exe
+*.AppImage
+*.deb

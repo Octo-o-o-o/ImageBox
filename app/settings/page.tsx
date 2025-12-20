@@ -36,7 +36,8 @@ import {
   getStorageConfig,
   getStorageStats,
   validateStoragePath,
-  updateStoragePath
+  updateStoragePath,
+  getLocalIpAddress
 } from '@/app/actions';
 import { replaceTemplate } from '@/lib/i18n';
 import { FolderBrowser } from '@/components/FolderBrowser';
@@ -70,6 +71,7 @@ function SettingsContent() {
   const [loading, setLoading] = useState(true);
   const [remoteEnabled, setRemoteEnabled] = useState(false);
   const [tokens, setTokens] = useState<AccessTokenDisplay[]>([]);
+  const [localIp, setLocalIp] = useState('localhost');
   
   // Setup mode states
   const [setupStep, setSetupStep] = useState<'welcome' | 'create' | 'done'>('welcome');
@@ -110,16 +112,18 @@ function SettingsContent() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [enabled, tokenList, config, stats] = await Promise.all([
+      const [enabled, tokenList, config, stats, ip] = await Promise.all([
         getRemoteAccessEnabled(),
         getAccessTokens(),
         getStorageConfig(),
-        getStorageStats()
+        getStorageStats(),
+        getLocalIpAddress()
       ]);
       setRemoteEnabled(enabled);
       setTokens(tokenList as AccessTokenDisplay[]);
       setStorageConfig(config);
       setStorageStats(stats);
+      setLocalIp(ip);
       setStoragePathInput(config.path);
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -213,16 +217,18 @@ function SettingsContent() {
 
   const getLoginLink = (token: string) => {
     if (typeof window !== 'undefined') {
-      const host = window.location.host;
+      const port = window.location.port ? `:${window.location.port}` : '';
       const protocol = window.location.protocol;
-      return `${protocol}//${host}/auth/login?token=${token}`;
+      return `${protocol}//${localIp}${port}/auth/login?token=${token}`;
     }
     return '';
   };
 
   const getExternalUrl = () => {
     if (typeof window !== 'undefined') {
-      return window.location.origin;
+      const port = window.location.port ? `:${window.location.port}` : '';
+      const protocol = window.location.protocol;
+      return `${protocol}//${localIp}${port}`;
     }
     return '';
   };
