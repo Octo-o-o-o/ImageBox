@@ -10,8 +10,8 @@ export async function GET(
 ) {
   const { filename } = await params;
   
-  // Security: Only allow simple filenames (no path traversal)
-  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+  // Security: Allow subdirectories but prevent path traversal
+  if (filename.includes('..')) {
     return new NextResponse('Invalid filename', { status: 400 });
   }
   

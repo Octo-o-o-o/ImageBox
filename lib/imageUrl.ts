@@ -8,16 +8,17 @@ import { isDesktopApp } from './env';
  * @returns 可访问的图片 URL
  */
 export function getImageUrl(imagePath: string, isCustomStoragePath: boolean): string {
-  // 提取文件名
-  const filename = imagePath.split('/').pop();
-  
-  if (!filename) {
-    return imagePath;
+  // 提取相对路径（去掉 /generated/ 前缀）
+  let relativePath = imagePath;
+  if (relativePath.startsWith('/generated/')) {
+    relativePath = relativePath.substring(11); // remove '/generated/'
+  } else if (relativePath.startsWith('/')) {
+    relativePath = relativePath.substring(1);
   }
   
-  // 桌面应用模式：始终使用 API 路由（因为图片存储在用户数据目录）
+  // 桌面应用模式：始终使用 API 路由
   if (isDesktopApp()) {
-    return `/api/images/${filename}`;
+    return `/api/images/${encodeURIComponent(relativePath)}`;
   }
   
   // Web 模式：如果是默认配置，直接返回原路径（静态文件访问）
@@ -25,8 +26,8 @@ export function getImageUrl(imagePath: string, isCustomStoragePath: boolean): st
     return imagePath;
   }
   
-  // 通过 API 路由访问
-  return `/api/images/${filename}`;
+  // 通过 API 路由访问（需要编码以支持子目录中的文件）
+  return `/api/images/${encodeURIComponent(relativePath)}`;
 }
 
 /**

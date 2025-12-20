@@ -965,9 +965,22 @@ function StudioPageContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
             onClick={() => setPreviewImage(null)}
+            style={{ pointerEvents: 'auto' }}
           >
+            {/* Close Button - 放在最外层以确保可点击 */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewImage(null);
+              }}
+              className="absolute top-4 right-4 z-[10000] p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
+              title={tr('create.close')}
+            >
+              <X className="w-6 h-6" />
+            </button>
+
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -975,15 +988,6 @@ function StudioPageContent() {
               className="relative max-w-7xl max-h-[90vh] w-full"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close Button */}
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute -top-12 right-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm"
-                title={tr('create.close')}
-              >
-                <X className="w-6 h-6" />
-              </button>
-
               {/* Image */}
               <img
                 src={previewImage.url}
@@ -996,14 +1000,20 @@ function StudioPageContent() {
                 <p className="text-sm text-zinc-300 mb-3 line-clamp-2">{previewImage.prompt}</p>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleCopyImage(previewImage.url)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyImage(previewImage.url);
+                    }}
                     className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-primary text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <Copy className="w-4 h-4" />
                     {tr('create.preview.copy')}
                   </button>
                   <button
-                    onClick={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadImage(previewImage.url, previewImage.prompt);
+                    }}
                     className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <Download className="w-4 h-4" />

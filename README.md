@@ -232,6 +232,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 If you already have ImageBox installed and want to update to the latest version:
 
+#### Option 1: Normal Update (Preserves Local Changes)
+
 ```bash
 # Navigate to your ImageBox directory
 cd ImageBox
@@ -240,6 +242,35 @@ cd ImageBox
 
 # Pull the latest changes from GitHub
 git pull origin main
+
+# Install any new dependencies
+npm install
+
+# Update database schema (if changed)
+npm run db:setup
+
+# Restart the server
+npm run dev
+```
+
+#### Option 2: Force Update (Discard All Local Changes)
+
+**⚠️ Warning:** This will completely overwrite your local code with the remote version. Your data (database and generated images) will be preserved, but any code modifications you made will be lost.
+
+```bash
+# Navigate to your ImageBox directory
+cd ImageBox
+
+# Stop the running server (Ctrl+C if running)
+
+# Fetch the latest changes from GitHub
+git fetch origin
+
+# Force reset to match the remote repository exactly
+git reset --hard origin/main
+
+# Clean any untracked files (optional, be careful!)
+# git clean -fd
 
 # Install any new dependencies
 npm install
