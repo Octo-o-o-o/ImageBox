@@ -1,0 +1,51 @@
+# Dependencies
+node_modules
+
+# Next.js build output
+.next
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Development database
+dev.db
+prisma/dev.db
+
+# Generated images (will be mounted as volume)
+public/generated/*
+!public/generated/.gitkeep
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (if any)
+.env
+.env.local
+.env.*.local
+
+# Docker files (don't need to be in image)
+docker-compose*.yml
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Terminals folder (Cursor IDE specific)
+terminals/
+

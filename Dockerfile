@@ -1,0 +1,87 @@
+# ============================================
+# ImageBox Docker Image
+# Multi-stage build for Next.js with SQLite
+# Supports: linux/amd64, linux/arm64
+# ============================================
+
+# ============================================
+# Stage 1: 依赖安装 + 构建
+# ============================================
+FROM node:20-alpine AS builder
+
+# 安装构建原生模块所需的依赖 (better-sqlite3, sharp)
+RUN apk add --no-cache libc6-compat python3 make g++
+
+WORKDIR /app
+
+# 复制依赖文件
+COPY package.json package-lock.json ./
+COPY prisma ./prisma/
+COPY prisma.config.ts ./
+
+# 安装所有依赖（包括 devDependencies 用于构建）
+RUN npm ci
+
+# 生成 Prisma Client（Prisma 7+ 需要 prisma.config.ts）
+RUN npx prisma generate
+
+# 在构建阶段创建数据库模板（用于运行时初始化）
+ENV DATABASE_URL="file:/app/prisma/template.db"
+RUN npx prisma db push
+
+# 复制源代码
+COPY . .
+
+# 构建 Next.js (standalone 模式)
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# ============================================
+# Stage 2: 生产运行
+# ============================================
+FROM node:20-alpine AS runner
+
+# 安装运行时依赖（原生模块需要 libc6-compat）
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# 创建非 root 用户
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# 复制构建产物
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# 复制 Prisma 相关文件（数据库操作需要）
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder /app/node_modules/@prisma/adapter-better-sqlite3 ./node_modules/@prisma/adapter-better-sqlite3
+
+# 入口脚本
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# 创建数据目录并设置权限
+RUN mkdir -p /app/data /app/public/generated/thumbnails
+RUN chown -R nextjs:nodejs /app /app/data /app/public/generated
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+ENV DATABASE_URL="file:/app/data/imagebox.db"
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["node", "server.js"]
+

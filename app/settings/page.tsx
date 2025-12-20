@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Settings, 
@@ -61,7 +61,7 @@ const EXPIRY_OPTIONS = [
   { value: -1, label: 'settings.tokens.expiry.permanent' },
 ];
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -1063,5 +1063,18 @@ export default function SettingsPage() {
         initialPath={storagePathInput || undefined}
       />
     </div>
+  );
+}
+
+// 使用 Suspense 包裹以支持 useSearchParams
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 p-8 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }

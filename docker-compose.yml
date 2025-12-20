@@ -1,0 +1,30 @@
+# ImageBox Docker Compose 配置
+# 使用方法：docker compose up -d
+# 访问地址：http://localhost:3000
+
+services:
+  imagebox:
+    # 使用预构建镜像
+    image: octoooo/imagebox:latest
+    # 本地构建使用以下配置替代 image:
+    # build: .
+    container_name: imagebox
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # 数据库持久化
+      - ./data:/app/data
+      # 生成的图片持久化（包含缩略图）
+      - ./data/generated:/app/public/generated
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/imagebox.db
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
