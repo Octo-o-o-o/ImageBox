@@ -126,8 +126,7 @@ cd ImageBox
 npm install
 
 # Initialize database
-npx prisma generate
-npx prisma db push
+npm run db:setup
 
 # Start development server
 npm run dev
@@ -152,8 +151,7 @@ git pull origin main
 npm install
 
 # Update database schema (if changed)
-npx prisma generate
-npx prisma db push
+npm run db:setup
 
 # Restart the server
 npm run dev
@@ -306,7 +304,7 @@ npm run build
 npm start
 
 # View database with Prisma Studio
-npx prisma studio
+npm run db:studio
 
 # Lint code
 npm run lint

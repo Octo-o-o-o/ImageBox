@@ -126,8 +126,7 @@ cd ImageBox
 npm install
 
 # 初始化数据库
-npx prisma generate
-npx prisma db push
+npm run db:setup
 
 # 启动开发服务器
 npm run dev
@@ -152,8 +151,7 @@ git pull origin main
 npm install
 
 # 更新数据库架构（如有变化）
-npx prisma generate
-npx prisma db push
+npm run db:setup
 
 # 重启服务器
 npm run dev
@@ -306,7 +304,7 @@ npm run build
 npm start
 
 # 使用 Prisma Studio 查看数据库
-npx prisma studio
+npm run db:studio
 
 # 代码检查
 npm run lint
