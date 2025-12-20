@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// 指定使用 Node.js runtime 而非 Edge runtime
+// Prisma 需要 Node.js 的 fs 模块
+export const runtime = 'nodejs';
+
 // 公开路径（无需认证）
 const PUBLIC_PATHS = [
   '/auth/login',
