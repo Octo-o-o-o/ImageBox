@@ -64,11 +64,10 @@ function StudioPageContent() {
   // Config State
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1K');
-  const [numberOfImages, setNumberOfImages] = useState(1); // Number of images to generate (1-4)
   const [returnType, setReturnType] = useState('IMAGE'); // IMAGE or TEXT_IMAGE
   const [refImages, setRefImages] = useState<{file: File, preview: string, base64: string, width: number, height: number}[]>([]);
   const [maxRefImages, setMaxRefImages] = useState<number>(14); // Dynamically adjusted based on model config
-  const [supportedParams, setSupportedParams] = useState<string[]>(['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled']); // Params supported by current model
+  const [supportedParams, setSupportedParams] = useState<string[]>(['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled']); // Params supported by current model
   const [toast, setToast] = useState<{ message: string } | null>(null);
 
   const ASPECT_RATIO_ORIGINAL = "ORIGINAL";
@@ -326,7 +325,6 @@ function StudioPageContent() {
         const params = JSON.parse(paramsStr);
         if (params.aspectRatio) setAspectRatio(params.aspectRatio);
         if (params.imageSize) setResolution(params.imageSize);
-        if (params.numberOfImages) setNumberOfImages(params.numberOfImages);
         if (params.responseModalities) {
           const hasText = params.responseModalities.includes('TEXT');
           setReturnType(hasText ? 'TEXT_IMAGE' : 'IMAGE');
@@ -358,7 +356,7 @@ function StudioPageContent() {
         }
       } else {
         // Default to all params if no config
-        setSupportedParams(['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled']);
+        setSupportedParams(['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled']);
         setMaxRefImages(14);
       }
     }
@@ -380,7 +378,6 @@ function StudioPageContent() {
           const defaultParams = JSON.parse(tmpl.defaultParams || '{}');
           if (defaultParams.aspectRatio) setAspectRatio(defaultParams.aspectRatio);
           if (defaultParams.resolution) setResolution(defaultParams.resolution);
-          if (defaultParams.numberOfImages) setNumberOfImages(defaultParams.numberOfImages);
         } catch (e) {
           console.error('Failed to parse template defaultParams:', e);
         }
@@ -496,7 +493,6 @@ function StudioPageContent() {
       const params = {
           aspectRatio: effectiveRatio,
           imageSize: resolution,
-          numberOfImages,
           responseModalities: returnType === 'TEXT_IMAGE' ? ['TEXT', 'IMAGE'] : ['IMAGE'],
           refImages: refImages.map(img => img.base64) // Pass base64 strings
       };
@@ -682,31 +678,6 @@ function StudioPageContent() {
                         </button>
                         );
                     })}
-                </div>
-              </div>
-            )}
-
-            {/* Number of Images - Only show if model supports numberOfImages */}
-            {supportedParams.includes('numberOfImages') && (
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest flex items-center justify-between">
-                  <span>{tr('create.numberOfImagesLabel')}</span>
-                  <span className="text-primary font-bold bg-primary/10 px-2 py-0.5 rounded text-[10px]">{numberOfImages}</span>
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="4"
-                  step="1"
-                  value={numberOfImages}
-                  onChange={(e) => setNumberOfImages(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-secondary/50 rounded-lg appearance-none cursor-pointer accent-primary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
-                />
-                <div className="flex justify-between text-[10px] font-medium text-muted-foreground/50 px-1">
-                  <span>1</span>
-                  <span>2</span>
-                  <span>3</span>
-                  <span>4</span>
                 </div>
               </div>
             )}

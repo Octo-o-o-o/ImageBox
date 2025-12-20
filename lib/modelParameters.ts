@@ -61,17 +61,6 @@ export const PARAMETER_DEFINITIONS: Record<string, ParameterDefinition> = {
     description: '生成图片的分辨率'
   },
 
-  numberOfImages: {
-    key: 'numberOfImages',
-    label: '生成数量',
-    type: 'slider',
-    default: 1,
-    min: 1,
-    max: 4,
-    step: 1,
-    description: '一次生成的图片数量'
-  },
-
   responseModalities: {
     key: 'responseModalities',
     label: '返回类型',
@@ -121,10 +110,9 @@ export const PARAMETER_DEFINITIONS: Record<string, ParameterDefinition> = {
 export const MODEL_PRESETS = {
   // Google Gemini 2.5 Flash Image (仅支持aspectRatio)
   GEMINI_2_5_FLASH_IMAGE: {
-    supportedParams: ['aspectRatio', 'numberOfImages', 'responseModalities', 'refImagesEnabled'],
+    supportedParams: ['aspectRatio', 'responseModalities', 'refImagesEnabled'],
     defaults: {
       aspectRatio: '1:1',
-      numberOfImages: 1,
       responseModalities: ['IMAGE'],
       refImagesEnabled: true,
     },
@@ -134,11 +122,10 @@ export const MODEL_PRESETS = {
 
   // Google Gemini 3 Pro Image Preview (支持aspectRatio + imageSize)
   GEMINI_3_PRO_IMAGE: {
-    supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled'],
+    supportedParams: ['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled'],
     defaults: {
       aspectRatio: '1:1',
       imageSize: '1K',
-      numberOfImages: 1,
       responseModalities: ['IMAGE'],
       refImagesEnabled: true,
     },
@@ -148,11 +135,10 @@ export const MODEL_PRESETS = {
 
   // Google Gemini via OpenRouter (OpenAI-compatible)
   GEMINI_OPENROUTER: {
-    supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages', 'responseModalities', 'refImagesEnabled'],
+    supportedParams: ['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled'],
     defaults: {
       aspectRatio: '1:1',
       imageSize: '1K',
-      numberOfImages: 1,
       responseModalities: ['image'],
       refImagesEnabled: true,
     },
@@ -174,11 +160,10 @@ export const MODEL_PRESETS = {
 
   // Generic OpenAI-compatible
   OPENAI_COMPATIBLE: {
-    supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages', 'refImagesEnabled'],
+    supportedParams: ['aspectRatio', 'imageSize', 'refImagesEnabled'],
     defaults: {
       aspectRatio: '1:1',
       imageSize: '1K',
-      numberOfImages: 1,
       refImagesEnabled: true,
     },
     maxRefImages: 10,  // 通用默认10张
@@ -251,18 +236,13 @@ export function mapParametersForAPI(
 
   if (isGoogleOfficial) {
     // Google Gemini Official SDK
-    // Supports: responseModalities, numberOfImages, imageConfig (aspectRatio, imageSize)
+    // Supports: responseModalities, imageConfig (aspectRatio, imageSize)
 
     // responseModalities: must be uppercase for Google API
     if (params.responseModalities) {
       mappedParams.responseModalities = Array.isArray(params.responseModalities)
         ? params.responseModalities.map((m: string) => m.toUpperCase())
         : [params.responseModalities.toUpperCase()];
-    }
-
-    // numberOfImages
-    if (params.numberOfImages) {
-      mappedParams.numberOfImages = parseInt(params.numberOfImages) || 1;
     }
 
     // imageConfig: aspectRatio and imageSize
@@ -295,9 +275,6 @@ export function mapParametersForAPI(
     if (params.imageSize) {
       mappedParams.imageSize = params.imageSize;
     }
-    if (params.numberOfImages) {
-      mappedParams.numberOfImages = parseInt(params.numberOfImages) || 1;
-    }
     if (params.responseModalities) {
       mappedParams.responseModalities = Array.isArray(params.responseModalities)
         ? params.responseModalities
@@ -329,7 +306,6 @@ export function mapParametersForAPI(
     // Pass through most parameters
     if (params.aspectRatio) mappedParams.aspectRatio = params.aspectRatio;
     if (params.imageSize) mappedParams.imageSize = params.imageSize;
-    if (params.numberOfImages) mappedParams.numberOfImages = parseInt(params.numberOfImages) || 1;
     if (params.quality) mappedParams.quality = params.quality;
     if (params.style) mappedParams.style = params.style;
     if (params.refImages) mappedParams.refImages = params.refImages;

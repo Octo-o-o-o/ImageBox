@@ -282,10 +282,6 @@ export async function generateImageAction(modelId: string, prompt: string, param
         generationConfig.responseModalities = mappedParams.responseModalities;
       }
 
-      if (mappedParams.numberOfImages) {
-        generationConfig.numberOfImages = mappedParams.numberOfImages;
-      }
-
       // imageConfig (aspectRatio and/or imageSize)
       if (mappedParams.imageConfig) {
         generationConfig.imageConfig = mappedParams.imageConfig;
@@ -365,11 +361,10 @@ export async function generateImageAction(modelId: string, prompt: string, param
            }
 
            // Add image generation parameters (works for most providers)
-           if (mappedParams.aspectRatio || mappedParams.imageSize || mappedParams.numberOfImages) {
+           if (mappedParams.aspectRatio || mappedParams.imageSize) {
                if (!extraBody.image_config) extraBody.image_config = {};
                if (mappedParams.aspectRatio) extraBody.image_config.aspect_ratio = mappedParams.aspectRatio;
                if (mappedParams.imageSize) extraBody.image_config.image_size = mappedParams.imageSize;
-               if (mappedParams.numberOfImages) extraBody.image_config.number_of_images = mappedParams.numberOfImages;
            }
 
            // Call Chat Completions API
@@ -508,13 +503,6 @@ export async function generateImageAction(modelId: string, prompt: string, param
     }
     else {
         throw new Error('当前服务商类型暂未实现图像生成');
-    }
-
-    // Limit to requested number of images (some APIs return more than requested)
-    const requestedCount = params.numberOfImages || 1;
-    if (base64Images.length > requestedCount) {
-        console.log(`API returned ${base64Images.length} images, but only ${requestedCount} requested. Trimming.`);
-        base64Images = base64Images.slice(0, requestedCount);
     }
 
     // 2. Save Images & Collect Paths
