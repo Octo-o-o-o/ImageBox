@@ -31,6 +31,7 @@ import {
 import clsx from 'clsx';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
+import { ConfirmDialog } from '@/components/ui';
 
 type FolderType = {
   id: string;
@@ -942,84 +943,31 @@ export default function LibraryPage() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {deleteFolderId && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-popover border border-border rounded-2xl p-6 shadow-2xl"
-            >
-              <div className="flex flex-col items-center text-center gap-4">
-                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
-                  <AlertCircle className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground mb-1">{tr('library.delete')}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {tr('library.deleteFolderConfirm')}
-                  </p>
-                </div>
-                <div className="flex gap-3 w-full mt-2">
-                  <button
-                    onClick={() => setDeleteFolderId(null)}
-                    className="flex-1 px-4 py-2 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg font-medium transition-colors"
-                  >
-                    {tr('library.cancel')}
-                  </button>
-                  <button
-                    onClick={confirmDeleteFolder}
-                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {tr('library.delete')}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      
+      {/* Delete Folder Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={!!deleteFolderId}
+        onClose={() => setDeleteFolderId(null)}
+        onConfirm={confirmDeleteFolder}
+        title={tr('library.delete')}
+        message={tr('library.deleteFolderConfirm')}
+        confirmLabel={tr('library.delete')}
+        cancelLabel={tr('library.cancel')}
+        variant="danger"
+        icon={AlertCircle}
+      />
+
       {/* Delete Image Confirmation Modal */}
-      <AnimatePresence>
-        {deleteImageId && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-popover border border-border rounded-2xl p-6 shadow-2xl"
-            >
-              <div className="flex flex-col items-center text-center gap-4">
-                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
-                  <AlertTriangle className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground mb-1">{tr('library.deleteImageConfirmTitle')}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {tr('library.deleteImageConfirmDescLocal')}
-                  </p>
-                </div>
-                <div className="flex gap-3 w-full mt-2">
-                  <button
-                    onClick={() => setDeleteImageId(null)}
-                    className="flex-1 px-4 py-2 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg font-medium transition-colors"
-                  >
-                    {tr('library.cancel')}
-                  </button>
-                  <button
-                    onClick={confirmDeleteImage}
-                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {tr('library.delete')}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ConfirmDialog
+        isOpen={!!deleteImageId}
+        onClose={() => setDeleteImageId(null)}
+        onConfirm={confirmDeleteImage}
+        title={tr('library.deleteImageConfirmTitle')}
+        message={tr('library.deleteImageConfirmDescLocal')}
+        confirmLabel={tr('library.delete')}
+        cancelLabel={tr('library.cancel')}
+        variant="danger"
+        icon={AlertTriangle}
+      />
     </div>
   );
 }

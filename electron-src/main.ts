@@ -121,7 +121,7 @@ async function startNextServer(): Promise<void> {
     // 设置环境变量（供 Next.js 服务端使用）
     const env = {
       ...process.env,
-      NODE_ENV: 'production',
+      NODE_ENV: 'production' as const,
       PORT: String(PORT),
       USER_DATA_PATH: userDataPath,
       DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db')}`

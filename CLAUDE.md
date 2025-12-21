@@ -73,6 +73,7 @@ components/
 lib/
   ├── prisma.ts                # Prisma client singleton
   ├── modelParameters.ts       # Model parameter definitions and API mapping
+  ├── presetProviders.ts       # Built-in provider and model presets (Google Gemini, OpenRouter)
   ├── localModelInstaller.ts   # Local model (stable-diffusion.cpp) installation automation
   └── i18n/index.ts            # Translation definitions
 prisma/
@@ -82,7 +83,9 @@ public/generated/           # Generated images stored here (auto-created)
 
 ### Key Design Patterns
 
-**Server Actions Pattern**: All database and Gemini API calls are in `app/actions.ts` as Server Actions. Client components import and call these actions directly. This keeps the client bundle small and API keys secure.
+**Server Actions Pattern**: All database and AI API calls are in `app/actions.ts` as Server Actions. Client components import and call these actions directly. This keeps the client bundle small and API keys secure.
+
+**Preset Providers System**: On first app launch, `ensurePresetProvidersAndModels()` auto-creates preset providers (Google Gemini, OpenRouter) and their models in the database. This happens only once (tracked by `presetsInitialized` setting) and won't re-add user-deleted presets. Presets are defined in `lib/presetProviders.ts`.
 
 **Database Schema**:
 - `Provider`: AI service providers (Google Gemini, OpenAI, custom endpoints)
@@ -135,8 +138,8 @@ Framer Motion is used for:
 
 Keep animations subtle and performant.
 
-### Environment Variables
-The app stores API keys in the database (Provider table) rather than `.env` files. Users configure providers and models via the Models page UI (`/models`). Provider configurations include API keys, base URLs, and model-specific parameters.
+### Environment Variables & Provider Setup
+The app stores API keys in the database (Provider table) rather than `.env` files. Users configure providers and models via the Models page UI (`/models`). On first launch, preset providers (Google Gemini, OpenRouter) and models are auto-created by `ensurePresetProvidersAndModels()` with null API keys. Users must configure API keys before use.
 
 ### Image Generation Error Handling
 The Gemini API may return text instead of images if the prompt is refused or fails. Always check `response.candidates[0].content.parts` for `inlineData` with `mimeType` starting with `image/`. If no images are returned, display the error message to the user.

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, LayoutTemplate, X, Save, FileText, Image as ImageIcon, Pencil, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/components/LanguageProvider';
+import { ConfirmDialog } from '@/components/ui';
 
 export default function TemplatesPage() {
     const [templates, setTemplates] = useState<any[]>([]);
@@ -344,42 +345,17 @@ export default function TemplatesPage() {
             </AnimatePresence>
 
             {/* Delete Confirmation Modal */}
-            <AnimatePresence>
-                {deleteId && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="w-full max-w-sm bg-popover border border-border rounded-2xl p-6 shadow-2xl"
-                        >
-                            <div className="flex flex-col items-center text-center gap-4">
-                                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
-                                    <AlertTriangle className="w-8 h-8" />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-foreground mb-1">{t('templates.deleteConfirmTitle')}</h3>
-                                    <p className="text-sm text-muted-foreground">{t('templates.deleteConfirmDesc')}</p>
-                                </div>
-                                <div className="flex gap-3 w-full mt-2">
-                                    <button 
-                                        onClick={() => setDeleteId(null)}
-                                        className="flex-1 px-4 py-2 bg-secondary hover:bg-secondary/80 text-background-foreground rounded-lg font-medium transition-colors"
-                                    >
-                                        {t('templates.cancel')}
-                                    </button>
-                                    <button 
-                                        onClick={confirmDelete}
-                                        className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
-                                    >
-                                        {t('templates.delete')}
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            <ConfirmDialog
+                isOpen={!!deleteId}
+                onClose={() => setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title={t('templates.deleteConfirmTitle')}
+                message={t('templates.deleteConfirmDesc')}
+                confirmLabel={t('templates.delete')}
+                cancelLabel={t('templates.cancel')}
+                variant="danger"
+                icon={AlertTriangle}
+            />
         </div>
     );
 }

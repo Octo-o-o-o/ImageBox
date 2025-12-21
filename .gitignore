@@ -60,3 +60,7 @@ PRODUCT_DESIGN.md
 *.exe
 *.AppImage
 *.deb
+
+# Demo and temporary HTML files
+demo_*.html
+conversation-mode-demo.html

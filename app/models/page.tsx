@@ -4,7 +4,10 @@ import { getModels, saveModel, deleteModel, getProviders, saveProvider, deletePr
 import { Save, Loader2, Key, Plus, Trash2, Cpu, Server, Check, RefreshCw, AlertTriangle, HardDrive, Search, Wifi, WifiOff, Download, Terminal, Copy, CheckCircle, XCircle, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MODEL_PRESETS, PARAMETER_DEFINITIONS } from '@/lib/modelParameters';
+import { isPresetProvider, getApiKeyApplyUrl } from '@/lib/presetProviders';
+import { ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageProvider';
+import { ConfirmDialog } from '@/components/ui';
 
 export default function ModelsPage() {
   const [loading, setLoading] = useState(true);
@@ -369,12 +372,28 @@ export default function ModelsPage() {
          </div>
          
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {providers.map(p => (
-                <div key={p.id} className="p-5 rounded-2xl bg-card border border-border group hover:border-primary/30 transition-all hover:shadow-lg">
+            {providers.map(p => {
+                const needsApiKey = p.type !== 'LOCAL' && !p.apiKey;
+                const isPreset = isPresetProvider(p.id);
+                
+                return (
+                <div 
+                  key={p.id} 
+                  className={`p-5 rounded-2xl bg-card border group hover:shadow-lg transition-all ${
+                    needsApiKey 
+                      ? 'border-amber-500/50 hover:border-amber-500' 
+                      : 'border-border hover:border-primary/30'
+                  }`}
+                >
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-2">
                             {p.type === 'LOCAL' && <HardDrive className="w-4 h-4 text-emerald-500" />}
                             <span className="text-lg font-bold text-card-foreground">{p.name}</span>
+                            {isPreset && (
+                              <span className="px-1.5 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-500 rounded">
+                                {t('models.providers.preset') || '内置'}
+                              </span>
+                            )}
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             {p.type === 'LOCAL' && (
@@ -391,17 +410,26 @@ export default function ModelsPage() {
                         </div>
                     </div>
                     
+                    {/* API Key Warning Banner */}
+                    {needsApiKey && (
+                      <div className="mb-3 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
+                          <span className="text-xs font-medium">{t('models.providers.apiKeyRequired') || 'API Key 未配置'}</span>
+                        </div>
+                        <button 
+                          onClick={() => setEditingProvider(p)}
+                          className="mt-2 w-full px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Key className="w-3 h-3" />
+                          {t('models.providers.configureApiKey') || '配置 API Key'}
+                        </button>
+                      </div>
+                    )}
+                    
                     <div className="space-y-2 text-xs text-muted-foreground font-mono bg-secondary/50 p-3 rounded-lg border border-border">
                         <div className="flex justify-between">
-                            <span>{t('models.providers.typeLabel')}</span> 
-                            <span className="text-foreground">
-                              {p.type === 'OPENAI' ? t('models.providers.typeOpenAI') : 
-                               p.type === 'GEMINI' ? t('models.providers.typeGemini') : 
-                               t('models.providers.typeLocal')}
-                            </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span>{t('models.providers.baseUrlLabel')}</span> <span className="text-foreground truncate max-w-[150px]" title={p.baseUrl}>{p.baseUrl || t('models.providers.defaultLabel')}</span>
+                            <span>{t('models.providers.baseUrlLabel')}</span> <span className="text-foreground truncate max-w-[180px]" title={p.baseUrl}>{p.baseUrl || t('models.providers.defaultLabel')}</span>
                         </div>
                         {p.type === 'LOCAL' ? (
                           <div className="flex justify-between items-center">
@@ -417,13 +445,30 @@ export default function ModelsPage() {
                             </span>
                           </div>
                         ) : (
-                          <div className="flex justify-between">
-                            <span>{t('models.providers.apiKeyLabel')}</span> <span className="text-foreground">{p.apiKey ? '••••••••' : t('models.providers.apiKeyUnset')}</span>
+                          <div className="flex justify-between items-center">
+                            <span>{t('models.providers.apiKeyLabel')}</span> 
+                            <span className="flex items-center gap-2">
+                              <span className={p.apiKey ? 'text-foreground' : 'text-amber-500'}>
+                                {p.apiKey ? `${p.apiKey.slice(0, 4)}••••${p.apiKey.slice(-4)}` : t('models.providers.apiKeyUnset')}
+                              </span>
+                              {!p.apiKey && isPreset && getApiKeyApplyUrl(p.id) && (
+                                <a
+                                  href={getApiKeyApplyUrl(p.id)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {t('models.providers.applyApiKey')}
+                                </a>
+                              )}
+                            </span>
                           </div>
                         )}
                     </div>
                 </div>
-            ))}
+              );
+            })}
          </div>
          
          {/* Discovered Services */}
@@ -515,12 +560,29 @@ export default function ModelsPage() {
                  <details className="text-xs">
                    <summary className="cursor-pointer text-primary hover:underline">查看安装命令</summary>
                    <div className="mt-3 bg-secondary/50 p-3 rounded-lg font-mono text-foreground overflow-x-auto">
+                     {/* Platform hint */}
+                     <div className="text-amber-500 text-xs mb-3 p-2 bg-amber-500/10 rounded flex items-start gap-2 font-sans">
+                       <span>⚠️</span>
+                       <span>
+                         以下为 macOS (Apple Silicon) 示例。
+                         <a
+                           href="https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/build.md"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="underline ml-1 hover:text-amber-400"
+                         >
+                           Windows/Linux 请参考官方文档 →
+                         </a>
+                       </span>
+                     </div>
+
                      <p className="text-muted-foreground mb-1"># 1. 克隆项目并初始化子模块</p>
                      <p>git clone https://github.com/leejet/stable-diffusion.cpp</p>
                      <p>cd stable-diffusion.cpp && git submodule update --init --recursive</p>
-                     <p className="text-muted-foreground mt-2 mb-1"># 2. 编译 (macOS)</p>
+                     <p className="text-muted-foreground mt-2 mb-1"># 2. 编译 (macOS Metal)</p>
                      <p>mkdir build && cd build</p>
                      <p>cmake .. -DSD_METAL=ON && cmake --build . --config Release</p>
+                     <p className="text-muted-foreground/60 mt-1 mb-1 text-xs"># Windows/Linux (CUDA): cmake .. -DSD_CUDA=ON && cmake --build . --config Release</p>
                     <p className="text-muted-foreground mt-2 mb-1"># 3. 下载 Z-Image 模型</p>
                     <p>python3 -c &quot;from huggingface_hub import snapshot_download; snapshot_download(&apos;Tongyi-MAI/Z-Image-Turbo&apos;, local_dir=&apos;models/Z-Image-Turbo&apos;)&quot;</p>
                      <p className="text-muted-foreground mt-2 mb-1"># 4. 启动服务</p>
@@ -1102,80 +1164,30 @@ export default function ModelsPage() {
       </AnimatePresence>
 
       {/* Delete Provider Confirmation Modal */}
-      <AnimatePresence>
-        {deleteProviderId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-popover border border-border rounded-2xl p-6 shadow-2xl"
-            >
-              <div className="flex flex-col items-center text-center gap-4">
-                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
-                  <AlertTriangle className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground mb-1">{t('models.deleteProvider.title')}</h3>
-                  <p className="text-sm text-muted-foreground">{t('models.deleteProvider.desc')}</p>
-                </div>
-                <div className="flex gap-3 w-full mt-2">
-                  <button
-                    onClick={() => setDeleteProviderId(null)}
-                    className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {t('models.models.cancel')}
-                  </button>
-                  <button
-                    onClick={confirmDeleteProvider}
-                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {t('models.confirm')}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ConfirmDialog
+        isOpen={!!deleteProviderId}
+        onClose={() => setDeleteProviderId(null)}
+        onConfirm={confirmDeleteProvider}
+        title={t('models.deleteProvider.title')}
+        message={t('models.deleteProvider.desc')}
+        confirmLabel={t('models.confirm')}
+        cancelLabel={t('models.models.cancel')}
+        variant="danger"
+        icon={AlertTriangle}
+      />
 
       {/* Delete Model Confirmation Modal */}
-      <AnimatePresence>
-        {deleteModelId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-popover border border-border rounded-2xl p-6 shadow-2xl"
-            >
-              <div className="flex flex-col items-center text-center gap-4">
-                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
-                  <AlertTriangle className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground mb-1">{t('models.deleteModel.title')}</h3>
-                  <p className="text-sm text-muted-foreground">{t('models.deleteModel.desc')}</p>
-                </div>
-                <div className="flex gap-3 w-full mt-2">
-                  <button
-                    onClick={() => setDeleteModelId(null)}
-                    className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {t('models.models.cancel')}
-                  </button>
-                  <button
-                    onClick={confirmDeleteModel}
-                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {t('models.confirm')}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ConfirmDialog
+        isOpen={!!deleteModelId}
+        onClose={() => setDeleteModelId(null)}
+        onConfirm={confirmDeleteModel}
+        title={t('models.deleteModel.title')}
+        message={t('models.deleteModel.desc')}
+        confirmLabel={t('models.confirm')}
+        cancelLabel={t('models.models.cancel')}
+        variant="danger"
+        icon={AlertTriangle}
+      />
     </div>
   );
 }

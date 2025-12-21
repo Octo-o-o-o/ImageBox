@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder, AlertTriangle } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder, AlertTriangle, ChevronDown, ExternalLink } from 'lucide-react';
 import { getMaxRefImages, getModelParameters } from '@/lib/modelParameters';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
+import Link from 'next/link';
 
 const ASPECT_RATIOS = [
   { value: "1:1", label: "1:1", title: "Square" },
@@ -21,6 +22,124 @@ const ASPECT_RATIOS = [
   { value: "16:9", label: "16:9", title: "Wide" },
   { value: "21:9", label: "21:9", title: "Ultra Wide" },
 ];
+
+// Custom Image Model Dropdown Component
+interface ImageModelDropdownProps {
+  models: any[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  placeholder: string;
+  apiKeyNotConfiguredLabel: string;
+  goToConfigureLabel: string;
+}
+
+function ImageModelDropdown({ models, selectedId, onSelect, placeholder, apiKeyNotConfiguredLabel, goToConfigureLabel }: ImageModelDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  const selectedModel = models.find(m => m.id === selectedId);
+  const needsApiKeyForSelected = selectedModel?.provider && selectedModel.provider.type !== 'LOCAL' && !selectedModel.provider.apiKey;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (model: any, needsApiKey: boolean) => {
+    if (needsApiKey) return; // Don't select if API key not configured
+    onSelect(model.id);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+      >
+        <span className={!selectedId ? 'text-muted-foreground' : ''}>
+          {selectedModel ? selectedModel.name : placeholder}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Dropdown Menu */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
+          >
+            <div className="max-h-64 overflow-y-auto custom-scrollbar">
+              {/* Placeholder option */}
+              <button
+                type="button"
+                onClick={() => { onSelect(''); setIsOpen(false); }}
+                className="w-full px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-secondary/50 transition-colors"
+              >
+                {placeholder}
+              </button>
+              
+              {models.map(m => {
+                const needsApiKey = m.provider && m.provider.type !== 'LOCAL' && !m.provider.apiKey;
+                return (
+                  <div
+                    key={m.id}
+                    className={`w-full px-4 py-2.5 text-left text-sm flex items-center justify-between gap-3 transition-colors ${
+                      needsApiKey 
+                        ? 'text-muted-foreground/50 cursor-not-allowed bg-secondary/20' 
+                        : 'text-foreground hover:bg-secondary/50 cursor-pointer'
+                    } ${selectedId === m.id ? 'bg-primary/10' : ''}`}
+                    onClick={() => handleSelect(m, needsApiKey)}
+                  >
+                    <span className="flex-1 min-w-0">
+                      {m.name}
+                    </span>
+                    {needsApiKey && (
+                      <Link
+                        href="/models"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-primary hover:underline shrink-0"
+                      >
+                        {goToConfigureLabel}
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Warning banner for selected model without API key */}
+      {needsApiKeyForSelected && (
+        <div className="mt-2 flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <span className="text-amber-600 dark:text-amber-400">{apiKeyNotConfiguredLabel}</span>
+          <Link 
+            href="/models" 
+            className="ml-auto text-primary hover:underline font-medium shrink-0 flex items-center gap-0.5"
+          >
+            {goToConfigureLabel}
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Template = {
   id: string;
@@ -606,19 +725,14 @@ function StudioPageContent() {
             {/* Image Model */}
             <div className="space-y-3">
                 <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.imageModelLabel')}</label>
-                <div className="relative">
-                    <select 
-                        value={selectedImageModelId}
-                        onChange={(e) => setSelectedImageModelId(e.target.value)}
-                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-                    >
-                        <option value="">{tr('create.imageModelPlaceholder')}</option>
-                        {imageModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                </div>
+                <ImageModelDropdown
+                    models={imageModels}
+                    selectedId={selectedImageModelId}
+                    onSelect={setSelectedImageModelId}
+                    placeholder={tr('create.imageModelPlaceholder')}
+                    apiKeyNotConfiguredLabel={tr('create.apiKeyNotConfigured')}
+                    goToConfigureLabel={tr('create.goToConfigure')}
+                />
             </div>
 
             {/* Aspect Ratio - Only show if model supports aspectRatio */}

@@ -8,9 +8,7 @@ import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import sharp from 'sharp';
 import fs from 'fs/promises';
 import path from 'path';
-
-const THUMBNAIL_SIZE = 384;
-const THUMBNAIL_QUALITY = 80;
+import { THUMBNAIL_SIZE, THUMBNAIL_QUALITY } from '../lib/imageConstants';
 
 async function main() {
   const adapter = new PrismaBetterSqlite3(
