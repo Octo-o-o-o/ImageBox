@@ -83,12 +83,17 @@ export function Sidebar() {
 
   return (
     <div className={clsx(
-      "h-screen fixed left-0 top-0 border-r border-border bg-background/50 backdrop-blur-xl flex flex-col z-50 transition-all duration-300",
+      "h-screen fixed left-0 top-0 bg-background/50 backdrop-blur-xl flex flex-col z-50 transition-all duration-300",
       isCollapsed ? "w-16" : "w-64",
-      platform === 'darwin' ? "pt-12 pb-4 px-4" : "p-4"
+      platform === 'darwin' ? "pt-12 pb-4 px-4" : "p-4 border-r border-border"
     )}>
       {/* Drag Region */}
       <div className="absolute top-0 left-0 w-full h-10 titlebar-drag-region z-0" />
+
+      {/* Right border - starts below traffic lights on macOS */}
+      {platform === 'darwin' && (
+        <div className="absolute right-0 top-10 bottom-0 w-px bg-border" />
+      )}
 
       {/* Header */}
       <div className={clsx(

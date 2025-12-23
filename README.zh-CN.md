@@ -28,6 +28,7 @@
   - Google Gemini 官方 API（Gemini 2.5 Flash、Gemini 3 Pro）
   - OpenAI 官方 API（DALL-E 3）
   - OpenAI 兼容接口（OpenRouter、自定义服务商）
+  - 内置预设服务商（Google Gemini、OpenRouter）首次启动自动配置
   - 内置预设自动配置参数
   - 智能参数映射，适配不同 API 格式
   - 智能模型排序（已配置模型优先，未配置模型靠后）
@@ -106,10 +107,11 @@
 - **🔍 高级图片预览** - 全功能图片预览模态框：
   - 使用鼠标滚轮或按钮缩放（50%-500%）
   - 拖拽平移放大的图片以查看细节
-  - 快捷操作：下载、复制到剪贴板
+  - 显示模型名称和生成参数
+  - 快捷操作：下载、复制图片、复制提示词
   - 键盘快捷键（ESC 关闭）
   - 在创建页面预览参考图片
-  - 在运行日志页面预览生成的图片
+  - 在图库和运行日志页面预览生成的图片
 - **🌍 多语言支持** - 13 种语言：英语、简体中文、繁体中文、日语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语、阿拉伯语（RTL）、挪威语、瑞典语
 - **🎨 主题系统** - 深色/浅色/跟随系统主题模式，无缝切换
 - **💻 原生桌面应用** - 基于 Electron 构建的跨平台桌面应用：
@@ -147,7 +149,30 @@
 3. 在设置 → 模型中添加 AI 服务商 API 密钥
 4. 开始创作！
 
-### 方式二：Web 应用（开发/自托管）
+### 方式二：Docker（推荐用于服务器部署）
+
+拉取并运行预构建的 Docker 镜像：
+
+```bash
+# 拉取最新镜像
+docker pull octoooo/imagebox:latest
+
+# 使用持久化数据卷运行
+docker run -d \
+  --name imagebox \
+  -p 3000:3000 \
+  -v imagebox-data:/app/data \
+  octoooo/imagebox:latest
+```
+
+在浏览器中打开 [http://localhost:3000](http://localhost:3000)。
+
+**Docker 说明：**
+- 多架构支持：amd64（Intel/AMD）和 arm64（Apple Silicon、树莓派）
+- 数据持久化在 `imagebox-data` 卷中（数据库 + 生成的图片）
+- 可用标签：`latest`、`v0.1.10` 等
+
+### 方式三：Web 应用（开发/自托管）
 
 #### 前置要求
 
@@ -455,7 +480,7 @@ imagebox/
 ### 未来增强
 - [ ] 性能优化（虚拟滚动、懒加载）
 - [ ] 数据库备份/恢复功能
-- [ ] Docker/Docker Compose 部署
+- [x] Docker 多架构部署（amd64/arm64，通过 GitHub Actions）
 - [ ] 移动端响应式界面改进
 
 ## 贡献

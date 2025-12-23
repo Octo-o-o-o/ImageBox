@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder, AlertTriangle, ChevronDown, ExternalLink } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, Folder, AlertTriangle, ChevronDown, ExternalLink, Check } from 'lucide-react';
 import { getMaxRefImages, getModelParameters } from '@/lib/modelParameters';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
@@ -209,10 +209,18 @@ function StudioPageContent() {
   const [isDragging, setIsDragging] = useState(false);
 
   // Image Preview State
-  const [previewImage, setPreviewImage] = useState<{ url: string, prompt: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{
+    url: string,
+    prompt: string,
+    modelName?: string,
+    params?: string
+  } | null>(null);
 
   // Reference Image Preview State
   const [previewRefImage, setPreviewRefImage] = useState<string | null>(null);
+
+  // Prompt textarea ref for focusing
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -701,6 +709,60 @@ function StudioPageContent() {
     }
   };
 
+  // Handle continue editing - add generated image as reference
+  const handleContinueEdit = async (url: string) => {
+    try {
+      // Check if already at limit
+      if (refImages.length >= maxRefImages) {
+        // Remove last image to make space
+        setRefImages(prev => prev.slice(0, -1));
+      }
+
+      // Load image and convert to base64
+      const response = await fetch(url);
+      const blob = await response.blob();
+
+      // Create File object for consistency with upload flow
+      const file = new File([blob], 'generated.png', { type: 'image/png' });
+
+      // Get image dimensions
+      const img = new Image();
+      const imageLoadPromise = new Promise<{width: number, height: number}>((resolve, reject) => {
+        img.onload = () => resolve({ width: img.width, height: img.height });
+        img.onerror = reject;
+      });
+      img.src = url;
+      const { width, height } = await imageLoadPromise;
+
+      // Convert to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(blob);
+      const base64 = await base64Promise;
+
+      // Add to beginning of refImages array
+      setRefImages(prev => [{
+        file,
+        preview: url,
+        base64,
+        width,
+        height
+      }, ...prev]);
+
+      // Focus prompt textarea
+      promptTextareaRef.current?.focus();
+
+      // Show toast
+      showToast(tr('create.continueEdit.success') || 'Added as reference image');
+    } catch (err) {
+      console.error('Failed to add image as reference:', err);
+      setError(tr('create.continueEdit.error') || 'Failed to add image as reference');
+    }
+  };
+
   const promptModels = models.filter(m => m.type === 'TEXT');
   const imageModels = models.filter(m => m.type === 'IMAGE');
 
@@ -877,6 +939,7 @@ function StudioPageContent() {
 
                 <div className="relative flex-1 flex flex-col group">
                     <textarea
+                        ref={promptTextareaRef}
                         value={finalImagePrompt}
                         onChange={(e) => setFinalImagePrompt(e.target.value)}
                         className="w-full h-full min-h-[220px] bg-secondary/30 hover:bg-secondary/40 transition-colors rounded-xl p-4 pb-14 text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none font-mono text-foreground placeholder-muted-foreground/50 leading-relaxed custom-scrollbar"
@@ -1060,39 +1123,51 @@ function StudioPageContent() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="relative w-full rounded-2xl overflow-hidden bg-card border border-border group shadow-sm hover:shadow-md transition-shadow"
+                    className="relative w-full rounded-2xl overflow-hidden bg-card border border-border shadow-sm hover:shadow-md transition-shadow"
                 >
                     <img
                         src={res.url}
                         alt={res.prompt}
-                        className="w-full h-auto object-contain cursor-zoom-in"
-                        onClick={() => setPreviewImage({ url: res.url, prompt: res.prompt })}
+                        className="w-full h-auto object-contain cursor-pointer"
+                        onClick={() => {
+                          const selectedModel = models.find(m => m.id === selectedImageModelId);
+                          const effectiveRatio = aspectRatio === ASPECT_RATIO_ORIGINAL ? getEffectiveAspectRatio() : aspectRatio;
+                          const params = {
+                            aspectRatio: effectiveRatio,
+                            imageSize: resolution,
+                            responseModalities: returnType === 'TEXT_IMAGE' ? ['TEXT', 'IMAGE'] : ['IMAGE']
+                          };
+                          setPreviewImage({
+                            url: res.url,
+                            prompt: res.prompt,
+                            modelName: selectedModel?.name,
+                            params: JSON.stringify(params)
+                          });
+                        }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end pointer-events-none">
-                        <p className="text-xs text-white/90 line-clamp-2 mb-3 font-medium">{res.prompt}</p>
-                        <div className="flex gap-2 pointer-events-auto">
-                            <button
-                                onClick={() => setPreviewImage({ url: res.url, prompt: res.prompt })}
-                                className="p-2 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm"
-                                title={tr('create.preview.view')}
-                            >
-                                <ZoomIn className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => handleCopyImage(res.url)}
-                                className="p-2 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm"
-                                title={tr('create.preview.copy')}
-                            >
-                                <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => handleDownloadImage(res.url, res.prompt)}
-                                className="p-2 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm"
-                                title={tr('create.preview.download')}
-                            >
-                                <Download className="w-4 h-4" />
-                            </button>
-                        </div>
+
+                    {/* Buttons below image */}
+                    <div className="p-3 bg-card/50 backdrop-blur-sm border-t border-border/50 flex gap-2 justify-center">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyImage(res.url);
+                            }}
+                            className="p-2 rounded-lg bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            title={tr('create.preview.copy')}
+                        >
+                            <Copy className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadImage(res.url, res.prompt);
+                            }}
+                            className="p-2 rounded-lg bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            title={tr('create.preview.download')}
+                        >
+                            <Download className="w-4 h-4" />
+                        </button>
                     </div>
                 </motion.div>
                 ))}
@@ -1125,57 +1200,111 @@ function StudioPageContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4 md:p-10"
             onClick={() => setPreviewImage(null)}
-            style={{ pointerEvents: 'auto' }}
           >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setPreviewImage(null);
-              }}
-              className="absolute top-4 right-4 z-[10000] p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={tr('create.close')}
-            >
-              <X className="w-6 h-6" />
-            </button>
-
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative max-w-7xl max-h-[90vh] w-full"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-6xl h-full max-h-[90vh] flex flex-col md:flex-row gap-6 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <img
-                src={previewImage.url}
-                alt={previewImage.prompt}
-                className="w-full h-auto max-h-[calc(90vh-80px)] object-contain rounded-2xl"
-              />
+              <button
+                onClick={()=> setPreviewImage(null)}
+                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors backdrop-blur-md md:hidden"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-              <div className="mt-4 p-4 rounded-2xl bg-zinc-900/80 border border-white/5 backdrop-blur-md">
-                <p className="text-sm text-zinc-300 mb-3 line-clamp-2">{previewImage.prompt}</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyImage(previewImage.url);
-                    }}
-                    className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-primary text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
-                  >
-                    <Copy className="w-4 h-4" />
-                    {tr('create.preview.copy')}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDownloadImage(previewImage.url, previewImage.prompt);
-                    }}
-                    className="flex-1 py-2 px-4 rounded-lg bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm flex items-center justify-center gap-2 text-sm font-medium"
-                  >
-                    <Download className="w-4 h-4" />
-                    {tr('create.preview.download')}
-                  </button>
+              {/* Image Area */}
+              <div className="flex-1 bg-black/5 dark:bg-black/40 relative flex items-center justify-center p-4 min-h-[300px]">
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.prompt}
+                  className="w-full h-auto max-h-full object-contain"
+                />
+              </div>
+
+              {/* Sidebar Info */}
+              <div className="w-full md:w-80 lg:w-96 bg-card flex flex-col border-l border-border">
+                <div className="p-6 flex items-center justify-between border-b border-border">
+                  <h3 className="font-semibold text-lg">{tr('library.details.title')}</h3>
+                  <div className="flex items-center gap-1">
+                    {/* Copy Image button */}
+                    <CopyImageButton url={previewImage.url} tr={tr} />
+
+                    {/* Download button */}
+                    <button
+                      onClick={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
+                      className="group/download relative p-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/download:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                        {tr('library.downloadImage')}
+                      </span>
+                    </button>
+
+                    {/* Close button */}
+                    <button
+                      onClick={() => setPreviewImage(null)}
+                      className="group/close relative p-2 rounded-lg hover:bg-secondary text-muted-foreground transition-colors hidden md:block ml-1"
+                    >
+                      <X className="w-5 h-5" />
+                      <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/close:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                        {tr('common.close')}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                  {/* Parameters */}
+                  {previewImage.params && previewImage.params !== '{}' && (
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.params')}</label>
+                      <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
+                        {(() => {
+                          try {
+                            const params = JSON.parse(previewImage.params);
+                            return (
+                              <div className="space-y-2">
+                                {Object.entries(params).map(([key, value]: [string, unknown]) => (
+                                  <div key={key} className="flex items-center justify-between text-sm">
+                                    <span className="text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                                    <span className="text-foreground font-medium">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          } catch {
+                            return <p className="text-xs text-muted-foreground italic">{tr('library.details.paramsInvalid')}</p>;
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Model */}
+                  {previewImage.modelName && (
+                    <div className="bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">{tr('library.details.model')}</label>
+                      <p className="text-sm text-foreground font-mono truncate flex-1">
+                        {previewImage.modelName}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Prompt - moved to bottom */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('library.details.prompt')}</label>
+                      <CopyPromptButton prompt={previewImage.prompt} tr={tr} />
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed bg-secondary/30 p-3 rounded-lg border border-border/50">
+                      {previewImage.prompt}
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1257,4 +1386,70 @@ export default function StudioPage() {
 
 function LoaderSpin() {
     return <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+}
+
+// Copy Image Button Component
+function CopyImageButton({ url, tr }: { url: string; tr: (key: string) => string }) {
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`group/copyimg relative p-2 rounded-lg transition-all ${
+        copySuccess
+          ? 'bg-green-500/10 text-green-500'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+      }`}
+    >
+      {copySuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+      <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/copyimg:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+        {copySuccess ? tr('library.details.copySuccess') : tr('library.copyImage')}
+      </span>
+    </button>
+  );
+}
+
+// Copy Prompt Button Component
+function CopyPromptButton({ prompt, tr }: { prompt: string; tr: (key: string) => string }) {
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`group/copyprompt relative p-1.5 rounded-md transition-all ${
+        copySuccess
+          ? 'bg-green-500/10 text-green-500'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+      }`}
+    >
+      {copySuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+      <span className="absolute bottom-full mb-2 right-0 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/copyprompt:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+        {copySuccess ? tr('library.details.copySuccess') : tr('library.details.copyPrompt')}
+      </span>
+    </button>
+  );
 }

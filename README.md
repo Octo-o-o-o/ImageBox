@@ -28,6 +28,7 @@
   - Google Gemini Official API (Gemini 2.5 Flash, Gemini 3 Pro)
   - OpenAI Official API (DALL-E 3)
   - OpenAI-compatible endpoints (OpenRouter, custom providers)
+  - Built-in preset providers (Google Gemini, OpenRouter) auto-configured on first launch
   - Auto-adaptive parameter configuration with built-in presets
   - Smart parameter mapping for different API formats
   - Intelligent model sorting (configured models first, unconfigured last)
@@ -106,10 +107,11 @@
 - **🔍 Advanced Image Preview** - Full-featured image preview modal:
   - Zoom in/out with mouse wheel or buttons (50%-500%)
   - Pan/drag zoomed images for detailed inspection
-  - Quick actions: Download, copy to clipboard
+  - Display model name and generation parameters
+  - Quick actions: Download, copy image, copy prompt
   - Keyboard shortcuts (ESC to close)
   - Preview reference images in Create page
-  - Preview generated images in Run Log page
+  - Preview generated images in Library and Run Log pages
 - **🌍 Multi-Language Support** - 13 languages: English, Chinese (Simplified & Traditional), Japanese, German, French, Russian, Portuguese, Spanish, Italian, Arabic (RTL), Norwegian, Swedish
 - **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
 - **💻 Native Desktop App** - Cross-platform desktop application built with Electron:
@@ -147,7 +149,30 @@ After installation:
 3. Add your AI provider API key in Settings → Models
 4. Start creating!
 
-### Option 2: Web Application (Development/Self-Hosted)
+### Option 2: Docker (Recommended for Servers)
+
+Pull and run the pre-built Docker image:
+
+```bash
+# Pull the latest image
+docker pull octoooo/imagebox:latest
+
+# Run with persistent data volume
+docker run -d \
+  --name imagebox \
+  -p 3000:3000 \
+  -v imagebox-data:/app/data \
+  octoooo/imagebox:latest
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+**Docker Notes:**
+- Multi-arch support: amd64 (Intel/AMD) and arm64 (Apple Silicon, Raspberry Pi)
+- Data persisted in `imagebox-data` volume (database + generated images)
+- Available tags: `latest`, `v0.1.10`, etc.
+
+### Option 3: Web Application (Development/Self-Hosted)
 
 #### Prerequisites
 
@@ -455,7 +480,7 @@ imagebox/
 ### Future Enhancements
 - [ ] Performance optimizations (virtual scrolling, lazy loading)
 - [ ] Database backup/restore functionality
-- [ ] Docker/Docker Compose deployment
+- [x] Docker multi-arch deployment (amd64/arm64 via GitHub Actions)
 - [ ] Mobile-responsive interface improvements
 
 ## Contributing
