@@ -165,6 +165,7 @@ type Template = {
   promptTemplate: string;
   systemPrompt?: string | null;
   promptGeneratorId?: string | null;
+  isEnabled?: boolean;
 };
 
 function StudioPageContent() {
