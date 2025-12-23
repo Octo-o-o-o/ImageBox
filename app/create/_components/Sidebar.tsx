@@ -28,13 +28,13 @@ export function Sidebar({ onNewSession, onSelectSession, currentSessionId, sessi
         {/* Top: Logo & New */}
         <div className="px-2">
             <div className="flex items-center gap-2 mb-6 text-white font-bold tracking-tight select-none">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20 flex items-center justify-center text-xs">IB</div>
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-orange-500 to-orange-600 shadow-lg shadow-orange-500/20 flex items-center justify-center text-xs">IB</div>
                 <span>ImageBox</span>
             </div>
-            
-            <button 
+
+            <button
               onClick={onNewSession}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 group"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 py-2.5 rounded-full text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 group"
             >
                 <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" /> 
                 New Creation
@@ -93,7 +93,7 @@ export function Sidebar({ onNewSession, onSelectSession, currentSessionId, sessi
         {/* User Footer */}
         <div className="mt-auto pt-4 border-t border-white/5 px-2">
              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
-                 <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">U</div>
+                 <div className="w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center text-xs font-bold">U</div>
                  <div className="flex flex-col overflow-hidden">
                      <span className="text-xs font-medium text-zinc-200 truncate">User</span>
                  </div>

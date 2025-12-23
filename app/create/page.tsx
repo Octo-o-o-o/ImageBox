@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, Folder, AlertTriangle, ChevronDown, ExternalLink, Check } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Sparkles, Copy, AlertCircle, RefreshCw, PenLine, Upload, X, Download, ZoomIn, Folder, AlertTriangle, ChevronDown, ExternalLink, Check } from 'lucide-react';
 import { getMaxRefImages, getModelParameters } from '@/lib/modelParameters';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
@@ -221,6 +221,12 @@ function StudioPageContent() {
 
   // Prompt textarea ref for focusing
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Track loaded reference image URLs to prevent duplicates
+  const loadedRefImageUrlRef = useRef<string | null>(null);
+
+  // Track newly added ref image for highlight animation
+  const [newlyAddedRefIndex, setNewlyAddedRefIndex] = useState<number | null>(null);
 
   // Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -550,6 +556,68 @@ function StudioPageContent() {
     }
   }, [searchParams, models]);
 
+  // Read refImage parameter and load as reference image
+  useEffect(() => {
+    const refImageUrl = searchParams.get('refImage');
+    if (!refImageUrl) return;
+
+    const decodedUrl = decodeURIComponent(refImageUrl);
+
+    // Check if we've already loaded this URL
+    if (loadedRefImageUrlRef.current === decodedUrl) {
+      return;
+    }
+
+    // Only load once per URL change
+    const loadReferenceImage = async () => {
+      try {
+        // Check if this image is already in refImages (avoid duplicates)
+        if (refImages.some(img => img.preview === decodedUrl)) {
+          loadedRefImageUrlRef.current = decodedUrl;
+          return;
+        }
+
+        // Check if we have space for more images
+        if (refImages.length >= maxRefImages) {
+          setWarning(tr('create.warning.limitExceeded', { count: 1 }));
+          loadedRefImageUrlRef.current = decodedUrl;
+          return;
+        }
+
+        // Mark as loading to prevent duplicate loads
+        loadedRefImageUrlRef.current = decodedUrl;
+
+        // Fetch the image
+        const response = await fetch(decodedUrl);
+        const blob = await response.blob();
+
+        // Create File object
+        const file = new File([blob], 'reference.png', { type: 'image/png' });
+
+        // Compress and add to refImages
+        const { base64, width, height } = await compressImage(file);
+
+        setRefImages(prev => [{
+          file,
+          preview: decodedUrl,
+          base64,
+          width,
+          height
+        }, ...prev]);
+
+        showToast(tr('create.refImages.added') || 'Reference image added');
+      } catch (err) {
+        console.error('Failed to load reference image:', err);
+        setError(tr('create.error.refImageLoad') || 'Failed to load reference image');
+        // Reset on error so user can retry
+        loadedRefImageUrlRef.current = null;
+      }
+    };
+
+    loadReferenceImage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]); // Trigger when URL search params change
+
   // Update maxRefImages and supportedParams when image model changes
   useEffect(() => {
     if (selectedImageModelId && models.length > 0) {
@@ -718,30 +786,15 @@ function StudioPageContent() {
         setRefImages(prev => prev.slice(0, -1));
       }
 
-      // Load image and convert to base64
+      // Fetch the image
       const response = await fetch(url);
       const blob = await response.blob();
 
-      // Create File object for consistency with upload flow
+      // Create File object
       const file = new File([blob], 'generated.png', { type: 'image/png' });
 
-      // Get image dimensions
-      const img = new Image();
-      const imageLoadPromise = new Promise<{width: number, height: number}>((resolve, reject) => {
-        img.onload = () => resolve({ width: img.width, height: img.height });
-        img.onerror = reject;
-      });
-      img.src = url;
-      const { width, height } = await imageLoadPromise;
-
-      // Convert to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(blob);
-      const base64 = await base64Promise;
+      // Use compress function for consistency
+      const { base64, width, height } = await compressImage(file);
 
       // Add to beginning of refImages array
       setRefImages(prev => [{
@@ -752,8 +805,14 @@ function StudioPageContent() {
         height
       }, ...prev]);
 
-      // Focus prompt textarea
-      promptTextareaRef.current?.focus();
+      // Highlight the newly added image (at index 0)
+      setNewlyAddedRefIndex(0);
+      setTimeout(() => setNewlyAddedRefIndex(null), 2000);
+
+      // Focus prompt textarea after a small delay to ensure render
+      setTimeout(() => {
+        promptTextareaRef.current?.focus();
+      }, 100);
 
       // Show toast
       showToast(tr('create.continueEdit.success') || 'Added as reference image');
@@ -1045,7 +1104,13 @@ function StudioPageContent() {
                   className={`grid grid-cols-4 gap-2 min-h-[80px] rounded-xl transition-all duration-300 ${maxRefImages > 0 ? 'border-2 border-dashed border-border/20 hover:border-primary/20 hover:bg-primary/5' : ''}`}
                 >
                     {refImages.map((img, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-secondary/20 group cursor-pointer" onClick={() => setPreviewRefImage(img.preview)}>
+                    <div
+                        key={index}
+                        className={`relative aspect-square rounded-lg overflow-hidden bg-secondary/20 group cursor-pointer ${
+                            index === newlyAddedRefIndex ? 'ring-2 ring-primary animate-pulse' : ''
+                        }`}
+                        onClick={() => setPreviewRefImage(img.preview)}
+                    >
                         <img src={img.preview} alt={tr('create.refImages.alt', { index: index + 1 })} className="w-full h-full object-cover" />
                         <button
                         onClick={(e) => { e.stopPropagation(); removeImage(index); }}
@@ -1090,7 +1155,7 @@ function StudioPageContent() {
              <button
                 onClick={handleGenerateImage}
                 disabled={generatingImage || !finalImagePrompt || !selectedImageModelId}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2 group active:scale-[0.98]"
+                className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-bold shadow-lg shadow-orange-500/25 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2 group active:scale-[0.98]"
               >
                 {generatingImage ? (
                    <>
@@ -1123,7 +1188,7 @@ function StudioPageContent() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="relative w-full rounded-2xl overflow-hidden bg-card border border-border shadow-sm hover:shadow-md transition-shadow"
+                    className="w-full overflow-hidden bg-card border border-border shadow-sm hover:shadow-md transition-shadow"
                 >
                     <img
                         src={res.url}
@@ -1147,27 +1212,64 @@ function StudioPageContent() {
                     />
 
                     {/* Buttons below image */}
-                    <div className="p-3 bg-card/50 backdrop-blur-sm border-t border-border/50 flex gap-2 justify-center">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyImage(res.url);
-                            }}
-                            className="p-2 rounded-lg bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                            title={tr('create.preview.copy')}
-                        >
-                            <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownloadImage(res.url, res.prompt);
-                            }}
-                            className="p-2 rounded-lg bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                            title={tr('create.preview.download')}
-                        >
-                            <Download className="w-4 h-4" />
-                        </button>
+                    <div className="p-4 flex justify-center items-center border-t border-border/30">
+                        <div className="flex gap-3 items-center bg-secondary/30 backdrop-blur-xl px-4 py-2.5 rounded-full border border-border/40">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const selectedModel = models.find(m => m.id === selectedImageModelId);
+                                    const effectiveRatio = aspectRatio === ASPECT_RATIO_ORIGINAL ? getEffectiveAspectRatio() : aspectRatio;
+                                    const params = {
+                                        aspectRatio: effectiveRatio,
+                                        imageSize: resolution,
+                                        responseModalities: returnType === 'TEXT_IMAGE' ? ['TEXT', 'IMAGE'] : ['IMAGE']
+                                    };
+                                    setPreviewImage({
+                                        url: res.url,
+                                        prompt: res.prompt,
+                                        modelName: selectedModel?.name,
+                                        params: JSON.stringify(params)
+                                    });
+                                }}
+                                className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all hover:scale-110 active:scale-95"
+                                title={tr('create.preview.view')}
+                            >
+                                <ZoomIn className="w-4 h-4" />
+                            </button>
+                            <div className="h-4 w-px bg-border/50" />
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyImage(res.url);
+                                }}
+                                className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all hover:scale-110 active:scale-95"
+                                title={tr('create.preview.copy')}
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                            <div className="h-4 w-px bg-border/50" />
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadImage(res.url, res.prompt);
+                                }}
+                                className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all hover:scale-110 active:scale-95"
+                                title={tr('create.preview.download')}
+                            >
+                                <Download className="w-4 h-4" />
+                            </button>
+                            <div className="h-4 w-px bg-border/50" />
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleContinueEdit(res.url);
+                                }}
+                                className="p-2 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all hover:scale-110 active:scale-95"
+                                title={tr('create.continueEdit.title') || 'Continue editing'}
+                            >
+                                <PenLine className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                 </motion.div>
                 ))}
@@ -1359,7 +1461,7 @@ function StudioPageContent() {
                     confirmDialog.onConfirm();
                     setConfirmDialog({ ...confirmDialog, isOpen: false });
                   }}
-                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold transition-all shadow-lg shadow-indigo-500/20"
+                  className="flex-1 py-3 px-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-lg shadow-orange-500/25"
                 >
                   {tr('create.confirm')}
                 </button>

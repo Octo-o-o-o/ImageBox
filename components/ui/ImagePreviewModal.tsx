@@ -245,7 +245,7 @@ export function ImagePreviewModal({
                 e.stopPropagation();
                 handleDownload();
               }}
-              className="group/download relative p-3 rounded-full bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm shadow-lg"
+              className="group/download relative p-3 rounded-full bg-white/10 hover:bg-primary text-white transition-colors backdrop-blur-sm shadow-lg"
             >
               <Download className="w-5 h-5" />
               <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/download:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">

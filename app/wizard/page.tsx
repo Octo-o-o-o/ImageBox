@@ -178,10 +178,10 @@ export default function WizardPage() {
       <div className="max-w-2xl w-full">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-indigo-500/20">
+          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-orange-500/25">
             <Box className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-white dark:to-white/70 mb-4">
+          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600 dark:from-white dark:to-white/70 mb-4">
             Welcome to ImageBox
           </h1>
           <p className="text-lg text-muted-foreground max-w-lg mx-auto">
@@ -205,11 +205,11 @@ export default function WizardPage() {
               >
                 <div className="grid grid-cols-2 gap-4 w-full max-w-md">
                    <div className="bg-secondary/30 p-4 rounded-2xl flex flex-col items-center gap-3 border border-border/50">
-                      <ImageIcon className="w-8 h-8 text-indigo-500" />
+                      <ImageIcon className="w-8 h-8 text-orange-500" />
                       <span className="font-medium">Image Generation</span>
                    </div>
                    <div className="bg-secondary/30 p-4 rounded-2xl flex flex-col items-center gap-3 border border-border/50">
-                      <Sparkles className="w-8 h-8 text-violet-500" />
+                      <Sparkles className="w-8 h-8 text-orange-400" />
                       <span className="font-medium">Direct Preview</span>
                    </div>
                 </div>
@@ -237,14 +237,14 @@ export default function WizardPage() {
                 <h2 className="text-2xl font-semibold text-center">Choose your AI Provider</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { id: 'GEMINI', name: 'Google Gemini', icon: 'G', desc: 'Fast & Efficient', color: 'indigo' },
-                    { id: 'OPENAI', name: 'OpenAI', icon: 'O', desc: 'DALL-E 3 & more', color: 'violet' },
+                    { id: 'GEMINI', name: 'Google Gemini', icon: 'G', desc: 'Fast & Efficient', color: 'orange' },
+                    { id: 'OPENAI', name: 'OpenAI', icon: 'O', desc: 'DALL-E 3 & more', color: 'orange' },
                     { id: 'CUSTOM', name: 'Custom / Proxy', icon: 'C', desc: 'Self-hosted / Other', color: 'zinc' },
                   ].map((p) => (
                     <button
                       key={p.id}
                       onClick={() => handleProviderSelect(p.id)}
-                      className="flex flex-col items-center p-6 border border-border rounded-2xl hover:bg-secondary/50 hover:border-indigo-500/50 transition-all group text-left"
+                      className="flex flex-col items-center p-6 border border-border rounded-2xl hover:bg-secondary/50 hover:border-orange-500/50 transition-all group text-left"
                     >
                       <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center font-bold text-xl mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                         {p.icon}
@@ -295,7 +295,7 @@ export default function WizardPage() {
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder={`Enter your ${providerName} API Key`}
-                      className="w-full bg-secondary/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      className="w-full bg-secondary/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
                     />
                   </div>
 
@@ -310,7 +310,7 @@ export default function WizardPage() {
                         value={baseUrl}
                         onChange={(e) => setBaseUrl(e.target.value)}
                         placeholder="https://api.openai.com/v1"
-                        className="w-full bg-secondary/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm font-mono"
+                        className="w-full bg-secondary/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-sm font-mono"
                       />
                       <p className="text-[10px] text-muted-foreground">Optional for specific proxies.</p>
                     </div>
@@ -326,7 +326,7 @@ export default function WizardPage() {
                       value={modelId}
                       onChange={(e) => setModelId(e.target.value)}
                       placeholder="e.g. dall-e-3"
-                      className="w-full bg-secondary/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      className="w-full bg-secondary/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
                     />
                   </div>
                 </div>
@@ -622,9 +622,9 @@ export default function WizardPage() {
                  <h2 className="text-2xl font-bold">All Set!</h2>
                  <p className="text-muted-foreground">Redirecting you to the studio...</p>
                  <div className="loading-dots flex gap-1 justify-center mt-4">
-                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.0 }} className="w-2 h-2 bg-indigo-500 rounded-full" />
-                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="w-2 h-2 bg-indigo-500 rounded-full" />
-                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} className="w-2 h-2 bg-indigo-500 rounded-full" />
+                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.0 }} className="w-2 h-2 bg-orange-500 rounded-full" />
+                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="w-2 h-2 bg-orange-500 rounded-full" />
+                    <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} className="w-2 h-2 bg-orange-500 rounded-full" />
                  </div>
               </motion.div>
             )}

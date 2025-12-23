@@ -3,6 +3,7 @@
 import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder, getStorageConfig, openLocalFolder } from '@/app/actions';
 import { getImageUrl } from '@/lib/imageUrl';
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import {
@@ -25,7 +26,8 @@ import {
   AlertCircle,
   FolderInput,
   AlertTriangle,
-  CheckSquare
+  CheckSquare,
+  PenLine
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useLanguage } from '@/components/LanguageProvider';
@@ -59,6 +61,7 @@ type ViewMode = 'grid' | 'list';
 const MAX_ANIMATED_ITEMS = 12;
 
 export default function LibraryPage() {
+  const router = useRouter();
   const { t } = useLanguage();
   const tr = (key: string, vars?: Record<string, string | number>) =>
     vars ? replaceTemplate(t(key), vars) : t(key);
@@ -426,6 +429,14 @@ export default function LibraryPage() {
       folderName: img.folder?.name
     });
   }, [isCustomStoragePath]);
+
+  const handleContinueEdit = useCallback(() => {
+    if (!previewImage) return;
+
+    // Navigate to create page with image URL as parameter
+    const imageUrl = encodeURIComponent(previewImage.url);
+    router.push(`/create?refImage=${imageUrl}`);
+  }, [previewImage, router]);
 
   return (
     <div className="flex h-[calc(100vh-2rem)] -m-8 bg-background text-foreground overflow-hidden">
@@ -931,13 +942,14 @@ export default function LibraryPage() {
       {/* Preview Modal */}
       <AnimatePresence>
         {previewImage && (
-          <PreviewModal 
+          <PreviewModal
             previewImage={previewImage}
             onClose={() => setPreviewImage(null)}
             onToggleFavorite={() => handleToggleFavorite(previewImage.id)}
             onDelete={() => handleDeleteImage(previewImage.id)}
             onDownload={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
             onCopy={() => handleCopyImage(previewImage.url)}
+            onContinueEdit={handleContinueEdit}
             tr={tr}
             isCustomStoragePath={isCustomStoragePath}
           />
@@ -1323,6 +1335,7 @@ interface PreviewModalProps {
   onDelete: () => void;
   onDownload: () => void;
   onCopy: () => void;
+  onContinueEdit?: () => void;
   tr: (key: string, vars?: Record<string, string | number>) => string;
   isCustomStoragePath?: boolean;
 }
@@ -1334,6 +1347,7 @@ function PreviewModal({
   onDelete,
   onDownload,
   onCopy,
+  onContinueEdit,
   tr,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isCustomStoragePath
@@ -1475,7 +1489,21 @@ function PreviewModal({
             {/* Parameters */}
             {previewImage.params && previewImage.params !== '{}' && (
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.params')}</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('library.details.params')}</label>
+                  {onContinueEdit && (
+                    <button
+                      onClick={onContinueEdit}
+                      className="group/continue relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary transition-all border border-primary/20 hover:border-primary/30"
+                    >
+                      <PenLine className="w-3.5 h-3.5" />
+                      <span className="text-xs font-medium">{tr('library.continueEdit') || 'Continue Editing'}</span>
+                      <span className="absolute bottom-full mb-2 right-0 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/continue:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                        {tr('library.continueEditTooltip') || 'Add this image to Create page as reference'}
+                      </span>
+                    </button>
+                  )}
+                </div>
                 <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
                   {(() => {
                     try {

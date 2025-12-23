@@ -49,12 +49,14 @@
   - High-quality compression preserving transparency for PNG images
   - Automatic adjustment based on model capabilities
   - Visual feedback for image compatibility
+  - **Continue Editing**: One-click to add generated images as reference for further refinement
 
 - **📁 Complete Asset Management** - Organize your creations:
   - Folder-based organization system
   - Masonry grid gallery with responsive layout
-  - Quick actions: Download, copy to clipboard, favorite, delete
+  - Quick actions: Download, copy to clipboard, favorite, delete, continue editing
   - Image metadata tracking (prompt, model, parameters, timestamp)
+  - Seamless workflow: Continue editing generated images by adding them as references
 
 - **📊 Full Run Logs** - Complete generation history tracking:
   - Detailed logs for every API call (prompt generation & image generation)
@@ -384,8 +386,11 @@ A beautiful {{subject}} in {{style}} style, highly detailed, 4k
 1. Go to **Create** page (`/create`)
 2. Enter a prompt or select a template
 3. Fill in template variables if applicable
-4. Click **Generate**
-5. View results in **Library** (`/library`)
+4. (Optional) Upload reference images or continue editing from Library
+5. Click **Generate**
+6. View results in **Library** (`/library`)
+
+**Pro Tip**: Click "Continue Editing" on any generated image in the Library to add it as a reference image for further refinement!
 
 ## Tech Stack
 

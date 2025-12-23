@@ -331,7 +331,8 @@ export default function ModelsPage() {
   return (
     <div className="space-y-12 max-w-5xl mx-auto pb-20">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-white dark:to-white/60 mb-2">
+          <h1 className="text-3xl font-bold flex items-center gap-3 text-foreground mb-2">
+            <Server className="text-primary" />
             {t('models.title')}
           </h1>
           <p className="text-muted-foreground">{t('models.subtitle')}</p>
@@ -341,7 +342,7 @@ export default function ModelsPage() {
       <section className="space-y-6">
          <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400"><Server className="w-5 h-5" /></div>
+                <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500"><Server className="w-5 h-5" /></div>
                 <div>
                     <h2 className="text-xl font-semibold text-foreground">{t('models.providers.title')}</h2>
                     <p className="text-xs text-muted-foreground">{t('models.providers.desc')}</p>
@@ -362,9 +363,9 @@ export default function ModelsPage() {
               >
                   <HardDrive className="w-4 h-4" /> {t('models.providers.addLocal')}
               </button>
-              <button 
+              <button
                   onClick={() => openNewProvider('OPENAI')}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
               >
                   <Plus className="w-4 h-4" /> {t('models.providers.add')}
               </button>
@@ -390,7 +391,7 @@ export default function ModelsPage() {
                             {p.type === 'LOCAL' && <HardDrive className="w-4 h-4 text-emerald-500" />}
                             <span className="text-lg font-bold text-card-foreground">{p.name}</span>
                             {isPreset && (
-                              <span className="px-1.5 py-0.5 text-[10px] bg-indigo-500/10 text-indigo-500 rounded">
+                              <span className="px-1.5 py-0.5 text-[10px] bg-orange-500/10 text-orange-500 rounded">
                                 {t('models.providers.preset') || '内置'}
                               </span>
                             )}
@@ -594,7 +595,7 @@ export default function ModelsPage() {
                {/* Option 3: Use ComfyUI */}
                <div className="p-4 bg-card rounded-lg border border-border">
                  <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                   <Server className="w-4 h-4 text-violet-500" />
+                   <Server className="w-4 h-4 text-orange-500" />
                    使用 ComfyUI
                  </h4>
                  <p className="text-xs text-muted-foreground mb-2">
@@ -1118,7 +1119,7 @@ export default function ModelsPage() {
                                                 try {
                                                     const config = JSON.parse(editingModel.parameterConfig);
                                                     return (config.supportedParams || []).map((param: string) => (
-                                                        <span key={param} className="text-[10px] px-2 py-1 bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 rounded border border-indigo-500/20">
+                                                        <span key={param} className="text-[10px] px-2 py-1 bg-orange-500/10 text-orange-500 dark:text-orange-300 rounded border border-orange-500/20">
                                                             {t(PARAMETER_DEFINITIONS[param]?.label) || param}
                                                         </span>
                                                     ));
@@ -1136,7 +1137,7 @@ export default function ModelsPage() {
                                                         <div className="pt-2 border-t border-border">
                                                             <p className="text-[10px] text-muted-foreground">
                                                                 {t('models.models.refImageLimitLabel')}
-                                                                <span className={maxRefImages === 0 ? "text-yellow-400 ml-1" : "text-indigo-300 ml-1"}>
+                                                                <span className={maxRefImages === 0 ? "text-yellow-400 ml-1" : "text-orange-400 ml-1"}>
                                                                     {maxRefImages === 0 ? t('models.models.refImageNotSupported') : t('models.models.refImageUpTo').replace('{{count}}', String(maxRefImages))}
                                                                 </span>
                                                             </p>
