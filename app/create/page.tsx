@@ -9,6 +9,7 @@ import { getMaxRefImages, getModelParameters } from '@/lib/modelParameters';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
 import Link from 'next/link';
+import { ImagePreviewModal } from '@/components/ui';
 
 const ASPECT_RATIOS = [
   { value: "1:1", label: "1:1", title: "Square" },
@@ -199,6 +200,9 @@ function StudioPageContent() {
 
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<{ url: string, prompt: string } | null>(null);
+
+  // Reference Image Preview State
+  const [previewRefImage, setPreviewRefImage] = useState<string | null>(null);
 
   // Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -941,14 +945,19 @@ function StudioPageContent() {
                   className={`grid grid-cols-4 gap-2 min-h-[80px] rounded-xl transition-all duration-300 ${maxRefImages > 0 ? 'border-2 border-dashed border-border/20 hover:border-primary/20 hover:bg-primary/5' : ''}`}
                 >
                     {refImages.map((img, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-secondary/20 group">
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-secondary/20 group cursor-pointer" onClick={() => setPreviewRefImage(img.preview)}>
                         <img src={img.preview} alt={tr('create.refImages.alt', { index: index + 1 })} className="w-full h-full object-cover" />
                         <button
-                        onClick={() => removeImage(index)}
-                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-destructive/80 transition-all opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100"
+                        onClick={(e) => { e.stopPropagation(); removeImage(index); }}
+                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-destructive/80 transition-all opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 z-10"
                         >
                         <X className="w-3 h-3" />
                         </button>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <div className="px-2 py-1 bg-white/90 text-black text-[10px] font-semibold rounded-full">
+                                {tr('common.clickToView')}
+                            </div>
+                        </div>
                     </div>
                     ))}
                     {refImages.length < maxRefImages && maxRefImages > 0 && (
@@ -1139,6 +1148,14 @@ function StudioPageContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Reference Image Preview Modal */}
+      <ImagePreviewModal
+        isOpen={!!previewRefImage}
+        imageUrl={previewRefImage || ''}
+        imageAlt={tr('create.refImages.preview') || 'Reference Image'}
+        onClose={() => setPreviewRefImage(null)}
+      />
 
       {/* Confirm Dialog */}
       <AnimatePresence>

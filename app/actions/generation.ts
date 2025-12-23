@@ -169,11 +169,12 @@ export async function generateImageAction(modelId: string, prompt: string, param
       throw new Error(`[${E.MODEL_NOT_FOUND}]`);
     }
 
-    // Map parameters based on provider type
+    // Map parameters based on provider type and model configuration
     const mappedParams = mapParametersForAPI(
       modelDef.provider.type,
       modelDef.provider.baseUrl || null,
-      params
+      params,
+      modelDef.parameterConfig || null
     );
 
     // 1. Start Log
@@ -190,7 +191,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
     runLogId = log.id;
 
     const wrapper = await getClientForModel(modelId);
-    let base64Images: string[] = [];
+    let base64Images: (string | Buffer)[] = [];
 
     // Check if using Grsai custom API
     if (mappedParams._useGrsaiAPI) {
@@ -327,7 +328,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
         throw new Error(`[${E.NO_IMAGE_RETURNED}]`);
       }
 
-      // Download images and convert to base64
+      // Download images directly as Buffer (faster, no base64 encoding needed)
       for (const result of finalResult.results) {
         if (result.url) {
           const imgRes = await fetch(result.url);
@@ -335,9 +336,8 @@ export async function generateImageAction(modelId: string, prompt: string, param
             throw new Error(`[${E.IMAGE_DOWNLOAD_FAILED}]${imgRes.status}: ${result.url.slice(0, 50)}`);
           }
           const arrayBuffer = await imgRes.arrayBuffer();
-          const b64 = Buffer.from(arrayBuffer).toString('base64');
-          const mime = imgRes.headers.get('content-type') || 'image/png';
-          base64Images.push(`data:${mime};base64,${b64}`);
+          // Directly use Buffer instead of converting to base64
+          base64Images.push(Buffer.from(arrayBuffer));
         }
       }
 
@@ -392,7 +392,8 @@ export async function generateImageAction(modelId: string, prompt: string, param
       if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
-            base64Images.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+            // Directly convert base64 to Buffer (faster than string concatenation + parsing)
+            base64Images.push(Buffer.from(part.inlineData.data, 'base64'));
           }
         }
       }
@@ -459,21 +460,21 @@ export async function generateImageAction(modelId: string, prompt: string, param
                        if (imgObj.type === 'image_url' && imgObj.image_url?.url) {
                            const imageUrl = imgObj.image_url.url;
 
-                           // If already base64 data URL
+                           // If already base64 data URL, extract and convert to Buffer
                            if (imageUrl.startsWith('data:image/')) {
-                               base64Images.push(imageUrl);
+                               const pureBase64 = imageUrl.replace(/^data:image\/\w+;base64,/, '');
+                               base64Images.push(Buffer.from(pureBase64, 'base64'));
                                imageFound = true;
                            }
-                           // If HTTP URL, download it
+                           // If HTTP URL, download it directly as Buffer
                            else if (imageUrl.startsWith('http')) {
                                const imgRes = await fetch(imageUrl);
                                if (!imgRes.ok) {
                                    throw new Error(`[${E.IMAGE_DOWNLOAD_FAILED}]${imgRes.status}: ${imageUrl.slice(0, 50)}`);
                                }
                                const arrayBuffer = await imgRes.arrayBuffer();
-                               const b64 = Buffer.from(arrayBuffer).toString('base64');
-                               const mime = imgRes.headers.get('content-type') || 'image/png';
-                               base64Images.push(`data:${mime};base64,${b64}`);
+                               // Use Buffer directly instead of base64 encoding
+                               base64Images.push(Buffer.from(arrayBuffer));
                                imageFound = true;
                            }
                        }
@@ -490,22 +491,21 @@ export async function generateImageAction(modelId: string, prompt: string, param
                    if (urlMatch) {
                        const imageUrl = urlMatch[1] || urlMatch[0];
 
-                       // Download image to convert to base64
+                       // Download image directly as Buffer
                        const imgRes = await fetch(imageUrl);
                        if (!imgRes.ok) {
                            throw new Error(`[${E.IMAGE_DOWNLOAD_FAILED}]${imgRes.status}: ${imageUrl.slice(0, 50)}`);
                        }
                        const arrayBuffer = await imgRes.arrayBuffer();
-                       const b64 = Buffer.from(arrayBuffer).toString('base64');
-                       const mime = imgRes.headers.get('content-type') || 'image/png';
-                       base64Images.push(`data:${mime};base64,${b64}`);
+                       base64Images.push(Buffer.from(arrayBuffer));
                        imageFound = true;
                        break;
                    }
 
                    // Check if content itself is base64 image data
                    if (content.length > 100 && /^[A-Za-z0-9+/=]+$/.test(content.substring(0, 100))) {
-                       base64Images.push(`data:image/png;base64,${content}`);
+                       // Directly convert to Buffer
+                       base64Images.push(Buffer.from(content, 'base64'));
                        imageFound = true;
                        break;
                    }
@@ -517,23 +517,22 @@ export async function generateImageAction(modelId: string, prompt: string, param
                        if (part.type === 'image_url' && part.image_url?.url) {
                            const imageUrl = part.image_url.url;
 
-                           // If already base64 data URL
+                           // If already base64 data URL, extract and convert to Buffer
                            if (imageUrl.startsWith('data:image/')) {
-                               base64Images.push(imageUrl);
+                               const pureBase64 = imageUrl.replace(/^data:image\/\w+;base64,/, '');
+                               base64Images.push(Buffer.from(pureBase64, 'base64'));
                                imageFound = true;
                                break;
                            }
 
-                           // If HTTP URL, download it
+                           // If HTTP URL, download it directly as Buffer
                            if (imageUrl.startsWith('http')) {
                                const imgRes = await fetch(imageUrl);
                                if (!imgRes.ok) {
                                    throw new Error(`[${E.IMAGE_DOWNLOAD_FAILED}]${imgRes.status}: ${imageUrl.slice(0, 50)}`);
                                }
                                const arrayBuffer = await imgRes.arrayBuffer();
-                               const b64 = Buffer.from(arrayBuffer).toString('base64');
-                               const mime = imgRes.headers.get('content-type') || 'image/png';
-                               base64Images.push(`data:${mime};base64,${b64}`);
+                               base64Images.push(Buffer.from(arrayBuffer));
                                imageFound = true;
                                break;
                            }
@@ -570,7 +569,8 @@ export async function generateImageAction(modelId: string, prompt: string, param
            if (mappedParams.style) requestBody.style = mappedParams.style;
 
            const response = await (wrapper.client as OpenAI).images.generate(requestBody);
-           base64Images = response.data?.map(d => `data:image/png;base64,${d.b64_json}`) || [];
+           // Directly convert base64 to Buffer (avoid string concatenation + parsing)
+           base64Images = response.data?.map(d => Buffer.from(d.b64_json || '', 'base64')).filter(b => b.length > 0) || [];
        }
     }
     else if (wrapper.type === 'LOCAL') {
@@ -628,15 +628,21 @@ export async function generateImageAction(modelId: string, prompt: string, param
         if (data.images && Array.isArray(data.images)) {
           for (const img of data.images) {
             if (typeof img === 'string') {
-              // Already base64
-              base64Images.push(img.startsWith('data:') ? img : `data:image/png;base64,${img}`);
+              // Extract pure base64 and convert to Buffer
+              const pureBase64 = img.startsWith('data:')
+                ? img.replace(/^data:image\/\w+;base64,/, '')
+                : img;
+              base64Images.push(Buffer.from(pureBase64, 'base64'));
             } else if (img.data) {
-              base64Images.push(`data:image/png;base64,${img.data}`);
+              base64Images.push(Buffer.from(img.data, 'base64'));
             }
           }
         } else if (data.image) {
           // Single image response
-          base64Images.push(data.image.startsWith('data:') ? data.image : `data:image/png;base64,${data.image}`);
+          const pureBase64 = data.image.startsWith('data:')
+            ? data.image.replace(/^data:image\/\w+;base64,/, '')
+            : data.image;
+          base64Images.push(Buffer.from(pureBase64, 'base64'));
         }
 
         if (base64Images.length === 0) {
@@ -660,7 +666,8 @@ export async function generateImageAction(modelId: string, prompt: string, param
           if (typeof message?.content === 'string' && message.content.length > 100) {
             // Check if it's base64 image data
             if (/^[A-Za-z0-9+/=]+$/.test(message.content.substring(0, 100))) {
-              base64Images.push(`data:image/png;base64,${message.content}`);
+              // Directly convert to Buffer
+              base64Images.push(Buffer.from(message.content, 'base64'));
             }
           }
         }

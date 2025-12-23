@@ -1119,7 +1119,7 @@ export default function ModelsPage() {
                                                     const config = JSON.parse(editingModel.parameterConfig);
                                                     return (config.supportedParams || []).map((param: string) => (
                                                         <span key={param} className="text-[10px] px-2 py-1 bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 rounded border border-indigo-500/20">
-                                                            {PARAMETER_DEFINITIONS[param]?.label || param}
+                                                            {t(PARAMETER_DEFINITIONS[param]?.label) || param}
                                                         </span>
                                                     ));
                                                 } catch (e) {

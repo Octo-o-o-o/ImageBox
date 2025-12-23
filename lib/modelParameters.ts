@@ -30,140 +30,140 @@ export interface ParameterDefinition {
 export const PARAMETER_DEFINITIONS: Record<string, ParameterDefinition> = {
   aspectRatio: {
     key: 'aspectRatio',
-    label: '画幅比例',
+    label: 'params.aspectRatio.label',
     type: 'select',
     default: '1:1',
     options: [
-      { value: 'auto', label: '自动', description: '自动选择比例' },
-      { value: '1:1', label: '1:1', description: '正方形' },
-      { value: '2:3', label: '2:3', description: '竖版' },
-      { value: '3:2', label: '3:2', description: '横版' },
-      { value: '3:4', label: '3:4', description: '竖版全屏' },
-      { value: '4:3', label: '4:3', description: '横版全屏' },
-      { value: '4:5', label: '4:5', description: '竖版' },
-      { value: '5:4', label: '5:4', description: '横版' },
-      { value: '9:16', label: '9:16', description: '竖版加长' },
-      { value: '16:9', label: '16:9', description: '横版加宽' },
-      { value: '21:9', label: '21:9', description: '超宽屏' },
+      { value: 'auto', label: 'params.aspectRatio.option.auto', description: 'params.aspectRatio.option.auto.desc' },
+      { value: '1:1', label: 'params.aspectRatio.option.1:1', description: 'params.aspectRatio.option.1:1.desc' },
+      { value: '2:3', label: 'params.aspectRatio.option.2:3', description: 'params.aspectRatio.option.2:3.desc' },
+      { value: '3:2', label: 'params.aspectRatio.option.3:2', description: 'params.aspectRatio.option.3:2.desc' },
+      { value: '3:4', label: 'params.aspectRatio.option.3:4', description: 'params.aspectRatio.option.3:4.desc' },
+      { value: '4:3', label: 'params.aspectRatio.option.4:3', description: 'params.aspectRatio.option.4:3.desc' },
+      { value: '4:5', label: 'params.aspectRatio.option.4:5', description: 'params.aspectRatio.option.4:5.desc' },
+      { value: '5:4', label: 'params.aspectRatio.option.5:4', description: 'params.aspectRatio.option.5:4.desc' },
+      { value: '9:16', label: 'params.aspectRatio.option.9:16', description: 'params.aspectRatio.option.9:16.desc' },
+      { value: '16:9', label: 'params.aspectRatio.option.16:9', description: 'params.aspectRatio.option.16:9.desc' },
+      { value: '21:9', label: 'params.aspectRatio.option.21:9', description: 'params.aspectRatio.option.21:9.desc' },
     ],
-    description: '生成图片的宽高比例'
+    description: 'params.aspectRatio.description'
   },
 
   imageSize: {
     key: 'imageSize',
-    label: '分辨率',
+    label: 'params.imageSize.label',
     type: 'select',
     default: '1K',
     options: [
-      { value: '1K', label: '1024x1024 (1K)', description: '标准分辨率' },
-      { value: '2K', label: '2048x2048 (2K)', description: '高清' },
-      { value: '4K', label: '4096x4096 (4K)', description: '超高清' },
+      { value: '1K', label: 'params.imageSize.option.1K', description: 'params.imageSize.option.1K.desc' },
+      { value: '2K', label: 'params.imageSize.option.2K', description: 'params.imageSize.option.2K.desc' },
+      { value: '4K', label: 'params.imageSize.option.4K', description: 'params.imageSize.option.4K.desc' },
     ],
-    description: '生成图片的分辨率'
+    description: 'params.imageSize.description'
   },
 
   responseModalities: {
     key: 'responseModalities',
-    label: '返回类型',
+    label: 'params.responseModalities.label',
     type: 'multiselect',
     default: ['image'],
     options: [
-      { value: 'image', label: '图片', description: '生成图片' },
-      { value: 'text', label: '文本', description: '附带文本描述' },
+      { value: 'image', label: 'params.responseModalities.option.image', description: 'params.responseModalities.option.image.desc' },
+      { value: 'text', label: 'params.responseModalities.option.text', description: 'params.responseModalities.option.text.desc' },
     ],
-    description: '返回的内容类型'
+    description: 'params.responseModalities.description'
   },
 
   quality: {
     key: 'quality',
-    label: '质量',
+    label: 'params.quality.label',
     type: 'select',
     default: 'standard',
     options: [
-      { value: 'standard', label: '标准', description: '标准质量' },
-      { value: 'hd', label: '高清', description: 'HD质量（更慢更贵）' },
+      { value: 'standard', label: 'params.quality.option.standard', description: 'params.quality.option.standard.desc' },
+      { value: 'hd', label: 'params.quality.option.hd', description: 'params.quality.option.hd.desc' },
     ],
-    description: '生成质量（仅DALL-E）'
+    description: 'params.quality.description'
   },
 
   style: {
     key: 'style',
-    label: '风格',
+    label: 'params.style.label',
     type: 'select',
     default: 'vivid',
     options: [
-      { value: 'vivid', label: '生动', description: '更有创意和戏剧性' },
-      { value: 'natural', label: '自然', description: '更贴近真实照片' },
+      { value: 'vivid', label: 'params.style.option.vivid', description: 'params.style.option.vivid.desc' },
+      { value: 'natural', label: 'params.style.option.natural', description: 'params.style.option.natural.desc' },
     ],
-    description: '图片风格（仅DALL-E）'
+    description: 'params.style.description'
   },
 
   refImagesEnabled: {
     key: 'refImagesEnabled',
-    label: '参考图',
+    label: 'params.refImagesEnabled.label',
     type: 'toggle',
     default: true,
-    description: '是否支持上传参考图片'
+    description: 'params.refImagesEnabled.description'
   },
 
   // === Local Model Specific Parameters ===
   steps: {
     key: 'steps',
-    label: '采样步数',
+    label: 'params.steps.label',
     type: 'slider',
     default: 8,
     min: 1,
     max: 50,
     step: 1,
-    description: '生成步数（Z-Image Turbo 推荐 8）'
+    description: 'params.steps.description'
   },
 
   cfgScale: {
     key: 'cfgScale',
-    label: 'CFG Scale',
+    label: 'params.cfgScale.label',
     type: 'slider',
     default: 0,
     min: 0,
     max: 10,
     step: 0.5,
-    description: '提示词引导强度（0=自动，Z-Image Turbo 推荐 0）'
+    description: 'params.cfgScale.description'
   },
 
   seed: {
     key: 'seed',
-    label: '随机种子',
+    label: 'params.seed.label',
     type: 'slider',
     default: -1,
     min: -1,
     max: 999999999,
     step: 1,
-    description: '-1 表示随机，固定值可复现结果'
+    description: 'params.seed.description'
   },
 
   sampler: {
     key: 'sampler',
-    label: '采样器',
+    label: 'params.sampler.label',
     type: 'select',
     default: 'euler',
     options: [
-      { value: 'euler', label: 'Euler', description: '快速，适合低步数' },
-      { value: 'euler_a', label: 'Euler A', description: '随机性更强' },
-      { value: 'dpm++_2m', label: 'DPM++ 2M', description: '高质量' },
-      { value: 'dpm++_2m_karras', label: 'DPM++ 2M Karras', description: '高质量+平滑' },
-      { value: 'lcm', label: 'LCM', description: '极速，配合低步数' },
+      { value: 'euler', label: 'params.sampler.option.euler', description: 'params.sampler.option.euler.desc' },
+      { value: 'euler_a', label: 'params.sampler.option.euler_a', description: 'params.sampler.option.euler_a.desc' },
+      { value: 'dpm++_2m', label: 'params.sampler.option.dpm++_2m', description: 'params.sampler.option.dpm++_2m.desc' },
+      { value: 'dpm++_2m_karras', label: 'params.sampler.option.dpm++_2m_karras', description: 'params.sampler.option.dpm++_2m_karras.desc' },
+      { value: 'lcm', label: 'params.sampler.option.lcm', description: 'params.sampler.option.lcm.desc' },
     ],
-    description: '采样算法'
+    description: 'params.sampler.description'
   },
 
   numberOfImages: {
     key: 'numberOfImages',
-    label: '生成数量',
+    label: 'params.numberOfImages.label',
     type: 'slider',
     default: 1,
     min: 1,
     max: 4,
     step: 1,
-    description: '一次生成多少张图片'
+    description: 'params.numberOfImages.description'
   },
 };
 
@@ -339,7 +339,8 @@ export function getMaxRefImages(parameterConfig: string): number {
 export function mapParametersForAPI(
   providerType: string,
   baseUrl: string | null,
-  params: Record<string, any>
+  params: Record<string, any>,
+  parameterConfig?: string | null
 ): Record<string, any> {
   const mappedParams: Record<string, any> = {};
 
@@ -350,7 +351,21 @@ export function mapParametersForAPI(
     baseUrl.includes('generativelanguage.googleapis.com')
   );
 
-  const isGrsai = baseUrl && (baseUrl.includes('grsai') || baseUrl.includes('dakka.com.cn'));
+  // Check if model uses Grsai Nano Banana preset (more reliable than baseUrl check)
+  let isGrsai = false;
+  if (parameterConfig) {
+    try {
+      const config = JSON.parse(parameterConfig);
+      isGrsai = !!(config.description && config.description.includes('Grsai Nano Banana'));
+    } catch (e) {
+      // Fallback to baseUrl check if config parsing fails
+      isGrsai = !!(baseUrl && (baseUrl.includes('grsai') || baseUrl.includes('dakka.com.cn')));
+    }
+  } else {
+    // Fallback to baseUrl check if no config provided
+    isGrsai = !!(baseUrl && (baseUrl.includes('grsai') || baseUrl.includes('dakka.com.cn')));
+  }
+
   const isOpenRouter = baseUrl && baseUrl.includes('openrouter.ai');
   const isOfficialOpenAI = providerType === 'OPENAI' && !baseUrl;
 

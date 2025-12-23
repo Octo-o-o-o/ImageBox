@@ -98,6 +98,13 @@
 ### User Experience
 
 - **✨ Modern UI** - Beautiful dark glassmorphism design with smooth animations
+- **🔍 Advanced Image Preview** - Full-featured image preview modal:
+  - Zoom in/out with mouse wheel or buttons (50%-500%)
+  - Pan/drag zoomed images for detailed inspection
+  - Quick actions: Download, copy to clipboard
+  - Keyboard shortcuts (ESC to close)
+  - Preview reference images in Create page
+  - Preview generated images in Run Log page
 - **🌍 Multi-Language Support** - 13 languages: English, Chinese (Simplified & Traditional), Japanese, German, French, Russian, Portuguese, Spanish, Italian, Arabic (RTL), Norwegian, Swedish
 - **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
 - **💻 Native Desktop App** - Cross-platform desktop application built with Electron:
@@ -107,6 +114,10 @@
   - Standalone builds with no external dependencies
 - **🌐 Cross-Platform Access** - Use via localhost or LAN from any device with secure remote access
 - **⚡ Fast & Secure** - Next.js Server Actions for optimized API calls
+- **⚙️ Performance Optimized** - Efficient image processing and storage:
+  - Direct Buffer-based image handling (faster than base64 string operations)
+  - Asynchronous thumbnail generation (non-blocking responses)
+  - Optimized memory usage for large image batches
 - **🆓 100% Free & Open Source** - No hidden fees, only your own API key costs
 
 ## Screenshots
@@ -162,6 +173,21 @@ npm run db:setup
 # Start development server
 npm run dev
 ```
+
+**Troubleshooting Installation Issues:**
+
+If you encounter a `better-sqlite3` module error when running `npm run dev` (e.g., `NODE_MODULE_VERSION` mismatch), this means the native module was compiled for a different Node.js version:
+
+```bash
+# Solution 1: Rebuild the native module (recommended)
+npm rebuild better-sqlite3
+
+# Solution 2: Reinstall all dependencies (if rebuild doesn't work)
+rm -rf node_modules
+npm install
+```
+
+This issue occurs because `better-sqlite3` is a native C++ module that needs to be compiled for your specific Node.js version. The rebuild command will recompile it for your current Node.js version.
 
 **Troubleshooting Windows Installation:**
 
@@ -402,6 +428,8 @@ imagebox/
 - [x] **Native Desktop App** - Cross-platform Electron wrapper with system tray, shortcuts, and auto-updates
 - [x] **Setup Wizard** - First-time configuration guide for seamless onboarding
 - [x] **Thumbnail Generation** - Optimized image thumbnails for faster gallery loading
+- [x] **Advanced Image Preview** - Full-featured modal with zoom, pan, and quick actions
+- [x] **Performance Optimization** - Buffer-based image processing and async thumbnail generation
 
 ### High Priority
 - [ ] **Local Model Support (In Development)** - Run AI models completely offline on your own hardware

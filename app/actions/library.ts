@@ -155,8 +155,18 @@ export async function deleteFolder(id: string) {
 
 // --- Images ---
 
-export async function saveGeneratedImage(base64Data: string, finalPrompt: string, modelName: string, params: string, templateId?: string, folderId?: string) {
-  const buffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+export async function saveGeneratedImage(
+  imageData: string | Buffer,
+  finalPrompt: string,
+  modelName: string,
+  params: string,
+  templateId?: string,
+  folderId?: string
+) {
+  // Support both base64 string and Buffer input for efficiency
+  const buffer = typeof imageData === 'string'
+    ? Buffer.from(imageData.replace(/^data:image\/\w+;base64,/, ""), 'base64')
+    : imageData;
   // Determine target directory
   let targetFolderId = folderId;
   let subDir = '';
@@ -200,20 +210,7 @@ export async function saveGeneratedImage(base64Data: string, finalPrompt: string
   // Save original image to configured storage path
   await fs.writeFile(path.join(targetDir, filename), buffer);
 
-  // Generate and save thumbnail
-  try {
-    await sharp(buffer)
-      .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
-        fit: 'cover',
-        position: 'centre'
-      })
-      .jpeg({ quality: THUMBNAIL_QUALITY })
-      .toFile(path.join(thumbnailDir, thumbnailFilename));
-  } catch (e) {
-    console.error('Failed to generate thumbnail:', e);
-    // Continue without thumbnail if it fails
-  }
-
+  // Create DB record first (don't wait for thumbnail)
   const image = await prisma.image.create({
     data: {
       path: relativePath,
@@ -223,6 +220,22 @@ export async function saveGeneratedImage(base64Data: string, finalPrompt: string
       params,
       templateId,
       folderId: targetFolderId
+    }
+  });
+
+  // Generate thumbnail asynchronously (non-blocking)
+  // This happens in the background and won't delay the response
+  setImmediate(async () => {
+    try {
+      await sharp(buffer)
+        .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+          fit: 'cover',
+          position: 'centre'
+        })
+        .jpeg({ quality: THUMBNAIL_QUALITY })
+        .toFile(path.join(thumbnailDir, thumbnailFilename));
+    } catch (e) {
+      console.error('Failed to generate thumbnail:', e);
     }
   });
 

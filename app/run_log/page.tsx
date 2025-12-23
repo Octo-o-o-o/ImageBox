@@ -18,6 +18,7 @@ import {
   Terminal
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageProvider';
+import { ImagePreviewModal } from '@/components/ui';
 
 // Use a type that matches the Prisma model
 type RunLog = {
@@ -175,6 +176,7 @@ export default function RunLogPage() {
 
 function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels: Record<string, string>, statusLabels: Record<string, string>, t: (key: string) => string }) {
   const [expanded, setExpanded] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Status Styles
   const statusColor = 
@@ -192,16 +194,18 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
   const typeText = typeLabels[log.type] || log.type;
 
   return (
-    <motion.div 
+    <motion.div
       layout
-      onClick={() => setExpanded(!expanded)}
       className={`
-        group relative overflow-hidden rounded-xl border transition-all cursor-pointer
+        group relative overflow-hidden rounded-xl border transition-all
         ${expanded ? 'bg-card border-primary/50 shadow-lg' : 'bg-card/50 border-border hover:border-primary/20 hover:bg-card'}
       `}
     >
       {/* Summary Row */}
-      <div className="flex items-center gap-4 p-4 h-16">
+      <div
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-4 p-4 h-16 cursor-pointer"
+      >
         
         {/* Icon & Type */}
         <div className={`p-2 rounded-lg ${isImage ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'}`}>
@@ -249,6 +253,7 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-border bg-muted/5"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm">
                 
@@ -300,15 +305,19 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                          ) : isImage ? (
                              <div className="space-y-4">
                                 {(log.output?.split(', ') || []).map((path, idx) => (
-                                    <div key={idx} className="relative aspect-video bg-black/50 rounded-lg overflow-hidden border border-white/10 group">
-                                        <img 
-                                            src={path} 
-                                            alt={t('runLog.imageAlt')} 
-                                            className="w-full h-full object-contain"
+                                    <div
+                                        key={idx}
+                                        className="relative w-full bg-black/50 rounded-lg overflow-hidden border border-white/10 group cursor-pointer hover:border-primary/50 transition-colors"
+                                        onClick={() => setPreviewImage(path)}
+                                    >
+                                        <img
+                                            src={path}
+                                            alt={t('runLog.imageAlt')}
+                                            className="w-full h-auto object-contain"
                                             onError={(e) => {
                                                 const target = e.target as HTMLImageElement;
                                                 target.style.display = 'none';
-                                                target.parentElement?.classList.add('flex', 'items-center', 'justify-center', 'bg-destructive/10');
+                                                target.parentElement?.classList.add('flex', 'items-center', 'justify-center', 'bg-destructive/10', 'min-h-[200px]');
                                                 const span = document.createElement('span');
                                                 span.className = 'text-destructive text-xs font-semibold';
                                                 span.innerText = t('runLog.imageDeleted');
@@ -317,6 +326,11 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                                         />
                                         <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white text-[10px] rounded font-mono">
                                             {path}
+                                        </div>
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                            <div className="px-3 py-1.5 bg-white/90 text-black text-xs font-semibold rounded-full">
+                                                {t('common.clickToView')}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -333,6 +347,14 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        isOpen={!!previewImage}
+        imageUrl={previewImage || ''}
+        imageAlt={t('runLog.imageAlt')}
+        onClose={() => setPreviewImage(null)}
+      />
     </motion.div>
   );
 }

@@ -482,36 +482,38 @@ export default function LibraryPage() {
           </AnimatePresence>
 
           {/* All Images Item */}
-          <button
-            onClick={() => {
-              setSelectedFolderId('all');
-              setShowFavoritesOnly(false);
-            }}
-            className={clsx(
-              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group',
-              selectedFolderId === 'all' && !showFavoritesOnly
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-            )}
-          >
-            <LayoutGrid className="w-4 h-4 opacity-70" />
-            <span className="flex-1 text-left truncate">{tr('library.allImages')}</span>
-            
+          <div className={clsx(
+            'group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+            selectedFolderId === 'all' && !showFavoritesOnly
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          )}>
             <button
-                onClick={(e) => handleOpenLocalFolder(undefined, e)}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-background/20 rounded transition-all"
-                title={tr('library.openFolder')}
+              onClick={() => {
+                setSelectedFolderId('all');
+                setShowFavoritesOnly(false);
+              }}
+              className="flex-1 flex items-center gap-3 text-sm font-medium min-w-0"
             >
-                <FolderOpen className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-4 h-4 opacity-70" />
+              <span className="flex-1 text-left truncate">{tr('library.allImages')}</span>
             </button>
-            
+
+            <button
+              onClick={(e) => handleOpenLocalFolder(undefined, e)}
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-background/20 rounded transition-all shrink-0"
+              title={tr('library.openFolder')}
+            >
+              <FolderOpen className="w-3.5 h-3.5" />
+            </button>
+
             <span className={clsx(
-              "text-xs px-2 py-0.5 rounded-full bg-background/20",
+              "text-xs px-2 py-0.5 rounded-full bg-background/20 shrink-0",
               selectedFolderId === 'all' && !showFavoritesOnly ? "text-primary-foreground/90" : "text-muted-foreground group-hover:bg-background/50"
             )}>
               {totalImagesCount}
             </span>
-          </button>
+          </div>
 
           {/* Favorites Item */}
           <button
