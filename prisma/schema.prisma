@@ -39,7 +39,6 @@ model AIModel {
   createdAt       DateTime @default(now())
 
   templatesAsPrompter Template[] @relation("PromptGen")
-  templatesAsImager   Template[] @relation("ImageGen")
 }
 
 model Template {
@@ -47,17 +46,14 @@ model Template {
   name              String
   icon              String?
   description       String?
-  
-  // Prompt Generation Configuration
-  promptTemplate    String   // The prompt sent to the LLM (with {{slots}})
-  systemPrompt      String?  // System instructions for the LLM
+
+  // Prompt Optimization Configuration
+  promptTemplate    String   // The template for prompt optimization
+  systemPrompt      String?  // System instructions for the optimization model
   promptGenerator   AIModel?   @relation("PromptGen", fields: [promptGeneratorId], references: [id])
   promptGeneratorId String?
 
-  // Image Generation Configuration
-  imageGenerator    AIModel?   @relation("ImageGen", fields: [imageGeneratorId], references: [id])
-  imageGeneratorId  String?
-  defaultParams     String   // JSON string of params (aspectRatio, etc.) for image gen
+  isEnabled         Boolean  @default(true) // Whether the template is enabled
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

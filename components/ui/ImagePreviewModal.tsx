@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Download, Copy, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { X, Download, Copy, ZoomIn, ZoomOut, Maximize2, Check } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageProvider';
 import { useEffect, useState, useRef } from 'react';
 
@@ -29,6 +29,7 @@ export function ImagePreviewModal({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [copySuccess, setCopySuccess] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Reset zoom and position when modal opens/closes
@@ -134,10 +135,10 @@ export function ImagePreviewModal({
         await navigator.clipboard.write([
           new ClipboardItem({ 'image/png': blob })
         ]);
-        alert(t('create.copy.success') || 'Image copied to clipboard!');
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
       } catch (err) {
         console.error('Copy failed:', err);
-        alert(t('create.copy.fail') || 'Failed to copy image');
       }
     }
   };
@@ -161,10 +162,12 @@ export function ImagePreviewModal({
                 e.stopPropagation();
                 onClose();
               }}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={t('common.close') || 'Close'}
+              className="group/close relative p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
             >
               <X className="w-6 h-6" />
+              <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/close:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                {t('common.close')}
+              </span>
             </button>
 
             {/* Divider */}
@@ -176,30 +179,36 @@ export function ImagePreviewModal({
                 e.stopPropagation();
                 handleZoomIn();
               }}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={t('common.zoomIn') || 'Zoom in'}
+              className="group/zoomin relative p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
             >
               <ZoomIn className="w-5 h-5" />
+              <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/zoomin:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                {t('common.zoomIn')}
+              </span>
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleZoomOut();
               }}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={t('common.zoomOut') || 'Zoom out'}
+              className="group/zoomout relative p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
             >
               <ZoomOut className="w-5 h-5" />
+              <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/zoomout:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                {t('common.zoomOut')}
+              </span>
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleResetZoom();
               }}
-              className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={t('common.resetZoom') || 'Reset zoom'}
+              className="group/reset relative p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm shadow-lg"
             >
-              <RotateCcw className="w-5 h-5" />
+              <Maximize2 className="w-5 h-5" />
+              <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/reset:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                {t('common.resetZoom')}
+              </span>
             </button>
 
             {/* Scale indicator */}
@@ -216,20 +225,32 @@ export function ImagePreviewModal({
                 e.stopPropagation();
                 handleCopy();
               }}
-              className="p-3 rounded-full bg-white/10 hover:bg-primary text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={t('create.preview.copy') || 'Copy'}
+              className={`group/copy relative p-3 rounded-full text-white transition-all backdrop-blur-sm shadow-lg ${
+                copySuccess
+                  ? 'bg-green-500 hover:bg-green-600'
+                  : 'bg-white/10 hover:bg-primary'
+              }`}
             >
-              <Copy className="w-5 h-5" />
+              {copySuccess ? (
+                <Check className="w-5 h-5" />
+              ) : (
+                <Copy className="w-5 h-5" />
+              )}
+              <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/copy:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                {t('create.preview.copy')}
+              </span>
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleDownload();
               }}
-              className="p-3 rounded-full bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm shadow-lg"
-              title={t('create.preview.download') || 'Download'}
+              className="group/download relative p-3 rounded-full bg-white/10 hover:bg-indigo-500 text-white transition-colors backdrop-blur-sm shadow-lg"
             >
               <Download className="w-5 h-5" />
+              <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center bg-popover text-popover-foreground border border-border/50 px-3 py-1.5 rounded-lg shadow-xl pointer-events-none opacity-0 group-hover/download:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                {t('create.preview.download')}
+              </span>
             </button>
             {additionalActions}
           </div>
@@ -239,7 +260,6 @@ export function ImagePreviewModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
             className="relative w-full h-full"
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Image Container */}
             <div
@@ -248,6 +268,7 @@ export function ImagePreviewModal({
               style={{
                 cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
               }}
+              onClick={(e) => e.stopPropagation()}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}

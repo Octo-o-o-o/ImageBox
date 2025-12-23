@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getTemplates, generateImageAction, generateTextAction, saveGeneratedImage, getModels, getFolders, ensureDefaultFolder } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,9 +37,26 @@ interface ImageModelDropdownProps {
 function ImageModelDropdown({ models, selectedId, onSelect, placeholder, apiKeyNotConfiguredLabel, goToConfigureLabel }: ImageModelDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const selectedModel = models.find(m => m.id === selectedId);
   const needsApiKeyForSelected = selectedModel?.provider && selectedModel.provider.type !== 'LOCAL' && !selectedModel.provider.apiKey;
+
+  // Sort models: available (with API key) first, then unavailable
+  const sortedModels = useMemo(() => {
+    const available: any[] = [];
+    const unavailable: any[] = [];
+
+    models.forEach(m => {
+      const needsApiKey = m.provider && m.provider.type !== 'LOCAL' && !m.provider.apiKey;
+      if (needsApiKey) {
+        unavailable.push(m);
+      } else {
+        available.push(m);
+      }
+    });
+
+    return [...available, ...unavailable];
+  }, [models]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -91,15 +108,15 @@ function ImageModelDropdown({ models, selectedId, onSelect, placeholder, apiKeyN
               >
                 {placeholder}
               </button>
-              
-              {models.map(m => {
+
+              {sortedModels.map(m => {
                 const needsApiKey = m.provider && m.provider.type !== 'LOCAL' && !m.provider.apiKey;
                 return (
                   <div
                     key={m.id}
                     className={`w-full px-4 py-2.5 text-left text-sm flex items-center justify-between gap-3 transition-colors ${
-                      needsApiKey 
-                        ? 'text-muted-foreground/50 cursor-not-allowed bg-secondary/20' 
+                      needsApiKey
+                        ? 'text-muted-foreground/50 cursor-not-allowed bg-secondary/20'
                         : 'text-foreground hover:bg-secondary/50 cursor-pointer'
                     } ${selectedId === m.id ? 'bg-primary/10' : ''}`}
                     onClick={() => handleSelect(m, needsApiKey)}
@@ -129,8 +146,8 @@ function ImageModelDropdown({ models, selectedId, onSelect, placeholder, apiKeyN
         <div className="mt-2 flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           <span className="text-amber-600 dark:text-amber-400">{apiKeyNotConfiguredLabel}</span>
-          <Link 
-            href="/models" 
+          <Link
+            href="/models"
             className="ml-auto text-primary hover:underline font-medium shrink-0 flex items-center gap-0.5"
           >
             {goToConfigureLabel}
@@ -148,8 +165,6 @@ type Template = {
   promptTemplate: string;
   systemPrompt?: string | null;
   promptGeneratorId?: string | null;
-  imageGeneratorId?: string | null;
-  defaultParams: string;
 };
 
 function StudioPageContent() {
@@ -160,16 +175,10 @@ function StudioPageContent() {
   const { t } = useLanguage();
   const tr = (key: string, vars?: Record<string, string | number>) => vars ? replaceTemplate(t(key), vars) : t(key);
 
-  // Generation State
-  const [templatePrompt, setTemplatePrompt] = useState(''); // The prompt with {{vars}} or the raw prompt gen prompt
-  const [variables, setVariables] = useState<Record<string, string>>({});
-  const [variableKeys, setVariableKeys] = useState<string[]>([]);
-
-  const [finalImagePrompt, setFinalImagePrompt] = useState(''); // The result of "Generate Prompt"
-  const [_isPromptGenerated, setIsPromptGenerated] = useState(false); // Reserved for future use
+  // Final prompt state
+  const [finalImagePrompt, setFinalImagePrompt] = useState('');
 
   // Configuration Overrides
-  const [selectedPromptModelId, setSelectedPromptModelId] = useState('');
   const [selectedImageModelId, setSelectedImageModelId] = useState('');
 
   // Status
@@ -186,8 +195,8 @@ function StudioPageContent() {
   const [resolution, setResolution] = useState('1K');
   const [returnType, setReturnType] = useState('IMAGE'); // IMAGE or TEXT_IMAGE
   const [refImages, setRefImages] = useState<{file: File, preview: string, base64: string, width: number, height: number}[]>([]);
-  const [maxRefImages, setMaxRefImages] = useState<number>(14); // Dynamically adjusted based on model config
-  const [supportedParams, setSupportedParams] = useState<string[]>(['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled']); // Params supported by current model
+  const [maxRefImages, setMaxRefImages] = useState<number>(14);
+  const [supportedParams, setSupportedParams] = useState<string[]>(['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled']);
   const [toast, setToast] = useState<{ message: string } | null>(null);
 
   const ASPECT_RATIO_ORIGINAL = "ORIGINAL";
@@ -217,9 +226,69 @@ function StudioPageContent() {
     onConfirm: () => {},
   });
 
+  // Template dropdown state
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
+  const templateDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Previous prompt for undo
+  const [previousPrompt, setPreviousPrompt] = useState<string | null>(null);
+  const [lastPromptRunId, setLastPromptRunId] = useState<string | undefined>(undefined);
+
   const showToast = (message: string) => {
       setToast({ message });
       setTimeout(() => setToast(null), 3000);
+  };
+
+  // 智能压缩图片函数
+  const compressImage = async (file: File): Promise<{base64: string, width: number, height: number}> => {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                  let { width, height } = img;
+
+                  // 如果图片尺寸过大，进行压缩
+                  // 目标：长边不超过2048px
+                  const MAX_DIMENSION = 2048;
+                  const maxSide = Math.max(width, height);
+
+                  if (maxSide > MAX_DIMENSION) {
+                      const scale = MAX_DIMENSION / maxSide;
+                      width = Math.round(width * scale);
+                      height = Math.round(height * scale);
+                  }
+
+                  // 创建canvas进行压缩
+                  const canvas = document.createElement('canvas');
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+
+                  if (!ctx) {
+                      reject(new Error('Failed to get canvas context'));
+                      return;
+                  }
+
+                  // 使用高质量设置
+                  ctx.imageSmoothingEnabled = true;
+                  ctx.imageSmoothingQuality = 'high';
+                  ctx.drawImage(img, 0, 0, width, height);
+
+                  // 根据原始文件类型选择输出格式
+                  // PNG保持透明度，其他格式使用JPEG以减小大小
+                  const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+                  const quality = file.type === 'image/png' ? 1.0 : 0.92;
+                  const base64 = canvas.toDataURL(mimeType, quality);
+
+                  resolve({ base64, width, height });
+              };
+              img.onerror = () => reject(new Error('Failed to load image'));
+              img.src = e.target?.result as string;
+          };
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(file);
+      });
   };
 
   const processFiles = async (files: File[]) => {
@@ -240,41 +309,21 @@ function StudioPageContent() {
           showToast(tr('create.toast.limitExceeded', { count: imageFiles.length - availableSlots }));
       }
 
-      // Reset error
       setError('');
       setWarning('');
 
       const newImages: {file: File, preview: string, base64: string, width: number, height: number}[] = [];
 
       for (const file of filesToProcess) {
-          // Check file size
-          const MAX_SIZE = 30 * 1024 * 1024; 
+          const MAX_SIZE = 50 * 1024 * 1024; // 增加到50MB
           if (file.size > MAX_SIZE) {
                setError(tr('create.error.fileTooLarge', { name: file.name, size: (file.size / 1024 / 1024).toFixed(2) }));
                continue;
           }
 
           try {
-              const base64 = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
-                  reader.onerror = reject;
-                  reader.readAsDataURL(file);
-              });
-
-              const { width, height } = await new Promise<{width: number, height: number}>((resolve, reject) => {
-                  const img = new Image();
-                  img.onload = () => resolve({ width: img.width, height: img.height });
-                  img.onerror = reject;
-                  img.src = base64;
-              });
-
-              // Check resolution warning
-              const MIN_RESOLUTION = 512;
-              if (width < MIN_RESOLUTION || height < MIN_RESOLUTION) {
-                  // We can still accumulate warnings if needed, or just let it slide as user removed the yellow warning request
-                  // Keeping it minimal as requested
-              }
+              // 使用智能压缩
+              const { base64, width, height } = await compressImage(file);
 
               newImages.push({
                   file,
@@ -289,7 +338,7 @@ function StudioPageContent() {
               setError(tr('create.error.fileRead', { name: file.name }));
           }
       }
-      
+
       if (newImages.length > 0) {
           setRefImages(prev => [...prev, ...newImages]);
       }
@@ -325,10 +374,6 @@ function StudioPageContent() {
   const onDragLeave = (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      // Only set to false if we are leaving the main container
-      // (checking relatedTarget is one way, but simpler here is to rely on the overlay)
-      
-      // If the related target is outside the current target (the container), then we left.
       if (e.currentTarget.contains(e.relatedTarget as Node)) {
           return;
       }
@@ -343,25 +388,31 @@ function StudioPageContent() {
       };
       window.addEventListener('paste', handlePaste);
       return () => window.removeEventListener('paste', handlePaste);
-  }, [refImages, maxRefImages]); // Re-bind when state changes to capture correct closure limits OR use functional updates (but processFiles uses limit)
-  // Actually processFiles uses refImages.length. To avoid stale closures, processFiles should be in dependency, or use ref inside.
-  // Better: use functional upgrade in processFiles logic? 
-  // Wait, `processFiles` reads `refImages.length`. If I don't put it in dependencies, `handlePaste` which calls `processFiles` will see old `refImages`.
-  // So [refImages, maxRefImages] is correct, but frequent re-binding. It's fine for this page.
+  }, [refImages, maxRefImages]);
+
+  // Close template dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
+        setIsTemplateDropdownOpen(false);
+      }
+    };
+    if (isTemplateDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isTemplateDropdownOpen]);
 
   const getEffectiveAspectRatio = (): string => {
       if (refImages.length === 0) return "1:1";
 
-      // 1. Calculate stats for each image against candidates
       const counts: Record<string, { count: number, maxRes: number }> = {};
-      
-      // Initialize counts
+
       ASPECT_RATIOS.forEach(r => counts[r.value] = { count: 0, maxRes: 0 });
 
       refImages.forEach(img => {
           const imgRatio = img.width / img.height;
-          
-          // Find closest candidate
+
           let bestRatio = "1:1";
           let minDiff = Number.MAX_VALUE;
 
@@ -375,15 +426,12 @@ function StudioPageContent() {
               }
           });
 
-          // Update stats
           if (counts[bestRatio]) {
               counts[bestRatio].count++;
-              counts[bestRatio].maxRes = Math.max(counts[bestRatio].maxRes, Math.max(img.width, img.height)); // "Resolution big" - simply using max dimension or area? User said "resolution big". I'll use area.
-              // Actually let's use area
+              counts[bestRatio].maxRes = Math.max(counts[bestRatio].maxRes, Math.max(img.width, img.height));
           }
       });
-      
-      // Find winner
+
       let winner = "1:1";
       let maxCount = -1;
       let winnerMaxRes = -1;
@@ -408,11 +456,48 @@ function StudioPageContent() {
       setRefImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  // LocalStorage key for last used model
+  const LAST_USED_IMAGE_MODEL_KEY = 'imagebox_last_used_image_model';
+
   useEffect(() => {
     getTemplates().then(setTemplates);
-    getModels().then(setModels);
+    getModels().then(models => {
+      setModels(models);
 
-    // Load folders and set default
+      // Auto-select model based on priority:
+      // 1. Last used model (if available with API key)
+      // 2. First model with API key
+      // 3. No selection if no models have API key
+      if (models.length > 0 && !selectedImageModelId) {
+        // Try to get last used model from localStorage
+        const lastUsedModelId = localStorage.getItem(LAST_USED_IMAGE_MODEL_KEY);
+
+        if (lastUsedModelId) {
+          const lastUsedModel = models.find((m: any) => m.id === lastUsedModelId);
+          // Check if last used model exists and has API key configured
+          if (lastUsedModel) {
+            const needsApiKey = lastUsedModel.provider && lastUsedModel.provider.type !== 'LOCAL' && !lastUsedModel.provider.apiKey;
+            if (!needsApiKey) {
+              setSelectedImageModelId(lastUsedModelId);
+              return;
+            }
+          }
+        }
+
+        // If no last used model or it's not available, select first available model
+        const imageModels = models.filter((m: any) => m.type === 'IMAGE');
+        const firstAvailableModel = imageModels.find((m: any) => {
+          const needsApiKey = m.provider && m.provider.type !== 'LOCAL' && !m.provider.apiKey;
+          return !needsApiKey;
+        });
+
+        if (firstAvailableModel) {
+          setSelectedImageModelId(firstAvailableModel.id);
+        }
+        // If no available model, don't select anything (selectedImageModelId stays empty)
+      }
+    });
+
     getFolders().then(folderList => {
       setFolders(folderList);
       const defaultFolder = folderList.find((f: any) => f.isDefault);
@@ -424,19 +509,17 @@ function StudioPageContent() {
 
   // Read URL parameters for recreating from library
   useEffect(() => {
-    if (models.length === 0) return; // Wait for models to load
-    
+    if (models.length === 0) return;
+
     const prompt = searchParams.get('prompt');
     const modelName = searchParams.get('model');
     const paramsStr = searchParams.get('params');
 
     if (prompt) {
       setFinalImagePrompt(prompt);
-      setIsPromptGenerated(true);
     }
 
     if (modelName && models.length > 0) {
-      // Try to find model by name
       const model = models.find(m => m.name === modelName || m.modelIdentifier === modelName);
       if (model) {
         setSelectedImageModelId(model.id);
@@ -463,118 +546,69 @@ function StudioPageContent() {
     if (selectedImageModelId && models.length > 0) {
       const selectedModel = models.find(m => m.id === selectedImageModelId);
       if (selectedModel && selectedModel.parameterConfig) {
-        // Get max ref images
         const max = getMaxRefImages(selectedModel.parameterConfig);
         setMaxRefImages(max);
 
-        // Get supported parameters
         const params = getModelParameters(selectedModel.parameterConfig);
         const paramKeys = params.map(p => p.key);
         setSupportedParams(paramKeys);
 
-        // If current ref images exceed the new limit, show warning and trim
         if (refImages.length > max) {
           setWarning(tr('create.warning.limitTrimmed', { count: max }));
           setRefImages(prev => prev.slice(0, max));
         }
       } else {
-        // Default to all params if no config
         setSupportedParams(['aspectRatio', 'imageSize', 'responseModalities', 'refImagesEnabled']);
         setMaxRefImages(14);
       }
     }
   }, [selectedImageModelId, models]);
 
-  // Check aspect ratio mismatch when aspect ratio changes
+  // Handle template optimization
+  const handleOptimizePrompt = async (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
 
-
-  useEffect(() => {
-    if (selectedTemplateId) {
-      const tmpl = templates.find(t => t.id === selectedTemplateId);
-      if (tmpl) {
-        setTemplatePrompt(tmpl.promptTemplate);
-        if (tmpl.promptGeneratorId) setSelectedPromptModelId(tmpl.promptGeneratorId);
-        if (tmpl.imageGeneratorId) setSelectedImageModelId(tmpl.imageGeneratorId);
-        
-        // Apply default params from template
-        try {
-          const defaultParams = JSON.parse(tmpl.defaultParams || '{}');
-          if (defaultParams.aspectRatio) setAspectRatio(defaultParams.aspectRatio);
-          if (defaultParams.resolution) setResolution(defaultParams.resolution);
-        } catch (e) {
-          console.error('Failed to parse template defaultParams:', e);
-        }
-        
-        // Extract variables {{var}}
-        const regex = /\{\{([^}]+)\}\}/g;
-        const matches = [...tmpl.promptTemplate.matchAll(regex)];
-        const keys = Array.from(new Set(matches.map(m => m[1]))).filter(k => k !== 'user_input');
-        setVariableKeys(keys);
-        setVariables(keys.reduce((acc, k) => ({...acc, [k]: ''}), {}));
-        
-        setFinalImagePrompt('');
-        setIsPromptGenerated(false);
-      }
-    } else {
-         // Custom Mode
-         setTemplatePrompt('');
-         setVariableKeys([]);
-         setFinalImagePrompt('');
-         setIsPromptGenerated(true); // In custom mode, you write directly
-    }
-  }, [selectedTemplateId, templates]);
-
-  // Step 1: Generate Prompt (if using template)
-  const [lastPromptRunId, setLastPromptRunId] = useState<string | undefined>(undefined);
-  const [previousPrompt, setPreviousPrompt] = useState<string | null>(null);
-
-  const handleGeneratePrompt = async () => {
-    // If no optimizer is selected, we can't really "optimize".
-    // But check if we are in "Variable Mode" or "Direct Mode"
-    const inputPrompt = finalImagePrompt || templatePrompt; 
-
-    if (!inputPrompt) return; // Nothing to optimize
-
-    // If variables exist and we haven't compiled them yet into finalImagePrompt, do that first?
-    let promptToProcess = templatePrompt;
-    
-    // Inject Main Textarea content as user_input
-    promptToProcess = promptToProcess.replace(/\{\{user_input\}\}/g, finalImagePrompt);
-
-    // Inject other variables
-    for (const k of variableKeys) {
-        promptToProcess = promptToProcess.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), variables[k]);
+    if (!finalImagePrompt.trim()) {
+      setError(tr('create.error.promptRequired'));
+      return;
     }
 
-    if (!selectedPromptModelId) {
-        // Just fill variables if no optimizer
-        setFinalImagePrompt(promptToProcess);
-        setIsPromptGenerated(true);
-        return;
+    // If template has no promptGenerator, just show message
+    if (!template.promptGeneratorId) {
+      setError(tr('create.error.templateNoModel'));
+      return;
     }
 
     setGeneratingPrompt(true);
     setError('');
-    
+    setIsTemplateDropdownOpen(false);
+
     // Save current state for Undo
-    setPreviousPrompt(promptToProcess);
+    setPreviousPrompt(finalImagePrompt);
 
     try {
-        const tmpl = templates.find(t => t.id === selectedTemplateId);
-        // Pass variables as config if needed
-        const res = await generateTextAction(selectedPromptModelId, promptToProcess, tmpl?.systemPrompt || undefined, { variables });
-        
-        if (res.success && res.text) {
-            setFinalImagePrompt(res.text);
-            setIsPromptGenerated(true);
-            setLastPromptRunId(res.runId);
-        } else {
-            setError(res.error || tr('create.error.promptGenerateFail'));
-        }
+      // Replace {{user_input}} with the actual prompt
+      const promptToProcess = template.promptTemplate.replace(/\{\{user_input\}\}/g, finalImagePrompt);
+
+      const res = await generateTextAction(
+        template.promptGeneratorId,
+        promptToProcess,
+        template.systemPrompt || undefined,
+        {}
+      );
+
+      if (res.success && res.text) {
+        setFinalImagePrompt(res.text);
+        setLastPromptRunId(res.runId);
+        setSelectedTemplateId(templateId);
+      } else {
+        setError(res.error || tr('create.error.promptGenerateFail'));
+      }
     } catch (e: any) {
-        setError(e.message);
+      setError(e.message);
     } finally {
-        setGeneratingPrompt(false);
+      setGeneratingPrompt(false);
     }
   };
 
@@ -585,14 +619,13 @@ function StudioPageContent() {
       }
   };
 
-  // Step 2: Generate Image
+  // Generate Image
   const handleGenerateImage = async () => {
     if (!finalImagePrompt.trim() || !selectedImageModelId) {
         setError(tr('create.error.imageGeneratePrereq'));
         return;
     }
 
-    // If there are existing results, show confirmation
     if (results.length > 0) {
         setConfirmDialog({
           isOpen: true,
@@ -606,7 +639,6 @@ function StudioPageContent() {
     performImageGeneration();
   };
 
-  // Perform the actual image generation
   const performImageGeneration = async () => {
     setGeneratingImage(true);
     setError('');
@@ -617,15 +649,24 @@ function StudioPageContent() {
           aspectRatio: effectiveRatio,
           imageSize: resolution,
           responseModalities: returnType === 'TEXT_IMAGE' ? ['TEXT', 'IMAGE'] : ['IMAGE'],
-          refImages: refImages.map(img => img.base64) // Pass base64 strings
+          refImages: refImages.map(img => img.base64)
       };
 
-      // Pass lastPromptRunId as parentTaskId, selectedTemplateId, and selectedFolderId
-      const res = await generateImageAction(selectedImageModelId, finalImagePrompt, params, lastPromptRunId, selectedTemplateId || undefined, selectedFolderId || undefined);
+      const res = await generateImageAction(
+        selectedImageModelId,
+        finalImagePrompt,
+        params,
+        lastPromptRunId,
+        selectedTemplateId || undefined,
+        selectedFolderId || undefined
+      );
 
       if (res.success && res.images) {
         const newImages = res.images as { id: string, url: string, prompt: string }[];
-        setResults(newImages); // Replace instead of prepend when regenerating
+        setResults(newImages);
+
+        // Save the used model to localStorage for next time
+        localStorage.setItem(LAST_USED_IMAGE_MODEL_KEY, selectedImageModelId);
       } else {
         setError(res.error || tr('create.error.unknown'));
       }
@@ -636,7 +677,6 @@ function StudioPageContent() {
     }
   };
 
-  // Download image
   const handleDownloadImage = (url: string, prompt: string) => {
     const link = document.createElement('a');
     link.href = url;
@@ -646,7 +686,6 @@ function StudioPageContent() {
     document.body.removeChild(link);
   };
 
-  // Copy image to clipboard
   const handleCopyImage = async (url: string) => {
     try {
       const response = await fetch(url);
@@ -664,71 +703,34 @@ function StudioPageContent() {
   const promptModels = models.filter(m => m.type === 'TEXT');
   const imageModels = models.filter(m => m.type === 'IMAGE');
 
+  // Get templates that have a prompt generator configured and are enabled
+  const availableTemplates = templates.filter(t => t.promptGeneratorId && t.isEnabled !== false);
+
   return (
-    <div 
+    <div
       className="h-[calc(100vh-6rem)] flex gap-4 relative"
       onDragOver={onDragOver}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDrop={handleDrop}
     >
-      
+
       {/* 1. Parameters Column */}
-      <div className="w-[320px] flex-none flex flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-6 p-5 rounded-2xl bg-card border border-border backdrop-blur-md min-h-full shadow-sm">
-            
+      <div className="w-[280px] flex-none flex flex-col gap-4 overflow-y-auto">
+        <div className="flex flex-col gap-5 p-5 rounded-2xl bg-card border border-border backdrop-blur-md min-h-full shadow-sm">
+
             {/* Header */}
             <div>
               <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
                 <Wand2 className="w-5 h-5 text-primary" />
                 {tr('create.title')}
               </h2>
-              <p className="text-muted-foreground text-sm mt-1">{tr('create.subtitle')}</p>
+              <p className="text-muted-foreground text-xs mt-1">{tr('create.subtitle')}</p>
             </div>
-
-            {/* Template */}
-            <div className="space-y-3">
-                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.templateLabel')}</label>
-                <div className="relative">
-                    <select 
-                        value={selectedTemplateId}
-                        onChange={(e) => setSelectedTemplateId(e.target.value)}
-                        className="w-full appearance-none bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-                    >
-                        <option value="">{tr('create.template.customOption')}</option>
-                        {templates.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                </div>
-            </div>
-
-             {/* Input Variables */}
-            {selectedTemplateId && variableKeys.length > 0 && (
-                <div className="p-3 bg-secondary/20 rounded-xl border border-border space-y-3">
-                    <h3 className="text-xs font-bold text-foreground/80 uppercase flex items-center gap-2">
-                        <PenLine className="w-3 h-3" /> {tr('create.variables.title')}
-                    </h3>
-                    {variableKeys.map(key => (
-                        <div key={key}>
-                            <label className="text-xs text-muted-foreground block mb-1">{key}</label>
-                            <input 
-                                value={variables[key]}
-                                onChange={e => setVariables(p => ({...p, [key]: e.target.value}))}
-                                className="w-full bg-background/50 border border-border/50 rounded-lg px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none"
-                                placeholder={tr('create.variables.placeholder', { key })}
-                            />
-                        </div>
-                    ))}
-                </div>
-            )}
 
             {/* Image Model */}
-            <div className="space-y-3">
-                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.imageModelLabel')}</label>
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">Model</label>
                 <ImageModelDropdown
                     models={imageModels}
                     selectedId={selectedImageModelId}
@@ -739,12 +741,11 @@ function StudioPageContent() {
                 />
             </div>
 
-            {/* Aspect Ratio - Only show if model supports aspectRatio */}
+            {/* Aspect Ratio */}
             {supportedParams.includes('aspectRatio') && (
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.aspectRatioLabel')}</label>
-                
-                {/* Follow Original Button - Full Width */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">Ratio</label>
+
                 <button
                     onClick={() => setAspectRatio(ASPECT_RATIO_ORIGINAL)}
                     className={`w-full relative py-2.5 px-3 rounded-xl text-xs font-medium transition-all duration-200 border flex items-center justify-center gap-2 ${
@@ -761,7 +762,7 @@ function StudioPageContent() {
                     )}
                 </button>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-5 gap-1.5">
                     {ASPECT_RATIOS.map(ratio => {
                         const [w, h] = ratio.value.split(':').map(Number);
                         const aspect = w / h;
@@ -773,20 +774,19 @@ function StudioPageContent() {
                         <button
                         key={ratio.value}
                         onClick={() => setAspectRatio(ratio.value)}
-                        className={`group relative py-2 px-1 rounded-xl text-xs font-medium transition-all duration-200 border ${
+                        className={`group relative py-2 px-1 rounded-xl text-[10px] font-medium transition-all duration-200 border ${
                             aspectRatio === ratio.value
                             ? 'bg-primary/5 border-primary/20 text-primary shadow-sm'
                             : 'bg-secondary/30 border-transparent hover:bg-secondary/50 text-muted-foreground hover:text-foreground'
                         }`}
-                        >   
-                            <div className="flex flex-col items-center gap-1.5">
+                        >
+                            <div className="flex flex-col items-center gap-1">
                                 <span className="truncate w-full text-center">{ratio.label}</span>
                             </div>
 
-                             {/* Visual Tooltip */}
                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-popover text-popover-foreground border border-border/50 p-2 rounded-xl shadow-xl z-[100] pointer-events-none scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all origin-bottom duration-200">
                                 <div className="w-8 h-8 flex items-center justify-center bg-secondary/50 rounded-lg mb-1">
-                                    <div 
+                                    <div
                                         className="bg-primary rounded-[2px]"
                                         style={{ width: `${width}px`, height: `${height}px` }}
                                     />
@@ -800,10 +800,10 @@ function StudioPageContent() {
               </div>
             )}
 
-            {/* Resolution - Only show if model supports imageSize */}
+            {/* Resolution */}
             {supportedParams.includes('imageSize') && (
-              <div className="space-y-3">
-                  <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.resolutionLabel')}</label>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">Size</label>
                   <div className="relative">
                     <select
                         value={resolution}
@@ -822,8 +822,8 @@ function StudioPageContent() {
             )}
 
             {/* Return Type */}
-            <div className="space-y-3">
-                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{tr('create.returnTypeLabel')}</label>
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest">Output</label>
                 <div className="relative">
                     <select
                         value={returnType}
@@ -840,10 +840,10 @@ function StudioPageContent() {
             </div>
 
             {/* Folder Selection */}
-            <div className="space-y-3">
-                <label className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest flex items-center gap-2">
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest flex items-center gap-2">
                   <Folder className="w-3 h-3" />
-                  {tr('create.folderLabel')}
+                  Folder
                 </label>
                 <div className="relative">
                     <select
@@ -866,34 +866,25 @@ function StudioPageContent() {
       </div>
 
       {/* 2. Prompt & Upload Column */}
-      <div className="w-[440px] flex-none flex flex-col gap-4">
-          
+      <div className="w-[480px] flex-none flex flex-col gap-4">
+
           <div className="flex-1 flex flex-col gap-6 p-5 rounded-2xl bg-card border border-border backdrop-blur-md overflow-y-auto">
-             
-            {/* Final Image Prompt & Optimizer */}
+
+            {/* Prompt with Template Optimizer */}
             <div className="space-y-2 flex-1 flex flex-col">
-                <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.promptLabel')}</label>
-                    {selectedPromptModelId && (
-                         <span className="text-[10px] items-center gap-1.5 text-muted-foreground hidden group-hover:flex">
-                             <Sparkles className="w-3 h-3 text-primary" />
-                             {promptModels.find(m=>m.id===selectedPromptModelId)?.name}
-                         </span>
-                    )}
-                </div>
-                
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('create.promptLabel')}</label>
+
                 <div className="relative flex-1 flex flex-col group">
                     <textarea
                         value={finalImagePrompt}
                         onChange={(e) => setFinalImagePrompt(e.target.value)}
                         className="w-full h-full min-h-[220px] bg-secondary/30 hover:bg-secondary/40 transition-colors rounded-xl p-4 pb-14 text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none font-mono text-foreground placeholder-muted-foreground/50 leading-relaxed custom-scrollbar"
-                        placeholder={selectedPromptModelId ? tr('create.promptPlaceholderWithModel') : tr('create.promptPlaceholder')}
+                        placeholder={tr('create.promptPlaceholder')}
                     />
-                    
+
                     {/* Inner Toolbar */}
                     <div className="absolute bottom-2 right-2 left-2 flex items-center justify-between p-1">
                         <div className='flex items-center gap-2'>
-                             {/* Undo Button */}
                              {previousPrompt !== null && (
                                 <button
                                     onClick={handleUndoPrompt}
@@ -906,21 +897,67 @@ function StudioPageContent() {
                              )}
                         </div>
 
-                        <div>
-                            {/* Optimizer Button */}
-                            {selectedPromptModelId && (
-                                <button
-                                    onClick={handleGeneratePrompt}
-                                    disabled={generatingPrompt || !finalImagePrompt.trim()}
-                                    className="py-2 px-4 bg-primary/90 hover:bg-primary text-primary-foreground rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
-                                >
-                                    {generatingPrompt ? (
-                                        <LoaderSpin />
+                        <div className="flex items-center gap-2">
+                            {/* Template Optimizer */}
+                            {availableTemplates.length > 0 && (
+                                <div className="relative" ref={templateDropdownRef}>
+                                    {availableTemplates.length === 1 ? (
+                                        // Single template - show optimize button
+                                        <button
+                                            onClick={() => handleOptimizePrompt(availableTemplates[0].id)}
+                                            disabled={generatingPrompt || !finalImagePrompt.trim()}
+                                            className="py-2 px-4 bg-primary/90 hover:bg-primary text-primary-foreground rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
+                                        >
+                                            {generatingPrompt ? (
+                                                <LoaderSpin />
+                                            ) : (
+                                                <Sparkles className="w-3.5 h-3.5" />
+                                            )}
+                                            {generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
+                                        </button>
                                     ) : (
-                                        <Wand2 className="w-3.5 h-3.5" />
+                                        // Multiple templates - show button with dropdown
+                                        <>
+                                            <button
+                                                onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
+                                                disabled={generatingPrompt || !finalImagePrompt.trim()}
+                                                className="py-2 px-4 bg-primary/90 hover:bg-primary text-primary-foreground rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
+                                            >
+                                                {generatingPrompt ? (
+                                                    <LoaderSpin />
+                                                ) : (
+                                                    <Sparkles className="w-3.5 h-3.5" />
+                                                )}
+                                                {generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
+                                                <ChevronDown className={`w-3 h-3 transition-transform ${isTemplateDropdownOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+
+                                            {/* Template Dropdown */}
+                                            <AnimatePresence>
+                                                {isTemplateDropdownOpen && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -4 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -4 }}
+                                                        transition={{ duration: 0.15 }}
+                                                        className="absolute bottom-full right-0 mb-2 bg-popover border border-border rounded-xl shadow-xl overflow-hidden min-w-[200px] z-50"
+                                                    >
+                                                        {availableTemplates.map(template => (
+                                                            <button
+                                                                key={template.id}
+                                                                onClick={() => handleOptimizePrompt(template.id)}
+                                                                className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-secondary/50 transition-colors flex items-center gap-2"
+                                                            >
+                                                                <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                                <span className="flex-1">{template.name}</span>
+                                                            </button>
+                                                        ))}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </>
                                     )}
-                                    {generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
-                                </button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -940,8 +977,7 @@ function StudioPageContent() {
                         <span className="text-[10px] text-yellow-500 font-medium">{tr('create.refImages.unsupported')}</span>
                     )}
                 </div>
-                {/* Drop Zone (Visual only now, logic handled by parent) */}
-                <div 
+                <div
                   className={`grid grid-cols-4 gap-2 min-h-[80px] rounded-xl transition-all duration-300 ${maxRefImages > 0 ? 'border-2 border-dashed border-border/20 hover:border-primary/20 hover:bg-primary/5' : ''}`}
                 >
                     {refImages.map((img, index) => (
@@ -1092,7 +1128,6 @@ function StudioPageContent() {
             onClick={() => setPreviewImage(null)}
             style={{ pointerEvents: 'auto' }}
           >
-            {/* Close Button - 放在最外层以确保可点击 */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1111,14 +1146,12 @@ function StudioPageContent() {
               className="relative max-w-7xl max-h-[90vh] w-full"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Image */}
               <img
                 src={previewImage.url}
                 alt={previewImage.prompt}
                 className="w-full h-auto max-h-[calc(90vh-80px)] object-contain rounded-2xl"
               />
 
-              {/* Actions Bar */}
               <div className="mt-4 p-4 rounded-2xl bg-zinc-900/80 border border-white/5 backdrop-blur-md">
                 <p className="text-sm text-zinc-300 mb-3 line-clamp-2">{previewImage.prompt}</p>
                 <div className="flex gap-2">
@@ -1174,19 +1207,16 @@ function StudioPageContent() {
               className="relative max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
               <div className="p-6 pb-4 border-b border-white/5">
                 <h3 className="text-lg font-bold text-white">{confirmDialog.title}</h3>
               </div>
 
-              {/* Content */}
               <div className="p-6">
                 <p className="text-sm text-zinc-300 whitespace-pre-line leading-relaxed">
                   {confirmDialog.message}
                 </p>
               </div>
 
-              {/* Actions */}
               <div className="p-6 pt-4 flex gap-3">
                 <button
                   onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}

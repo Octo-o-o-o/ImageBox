@@ -52,6 +52,14 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     description: 'OpenRouter API 代理，支持多种模型，需要配置 API Key',
     apiKeyApplyUrl: 'https://openrouter.ai/keys',
   },
+  {
+    id: `${PRESET_ID_PREFIX}grsai`,
+    name: 'GRSAI',
+    type: 'GEMINI',
+    baseUrl: 'https://grsai.dakka.com.cn',
+    description: 'GRSAI Nano Banana 图像生成服务，需要配置 API Key',
+    apiKeyApplyUrl: 'https://grsai.dakka.com.cn',
+  },
 ];
 
 /**
@@ -109,6 +117,24 @@ export const PRESET_MODELS: PresetModel[] = [
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}openrouter`,
     parameterConfig: JSON.stringify(MODEL_PRESETS.GEMINI_OPENROUTER),
+  },
+
+  // --- GRSAI Models ---
+  {
+    id: `${PRESET_ID_PREFIX}grsai-nano-banana-pro`,
+    name: 'Nano Banana Pro',
+    modelIdentifier: 'nano-banana-pro',
+    type: 'IMAGE',
+    providerId: `${PRESET_ID_PREFIX}grsai`,
+    parameterConfig: JSON.stringify(MODEL_PRESETS.GRSAI_NANO_BANANA),
+  },
+  {
+    id: `${PRESET_ID_PREFIX}grsai-nano-banana-fast`,
+    name: 'Nano Banana Fast',
+    modelIdentifier: 'nano-banana-fast',
+    type: 'IMAGE',
+    providerId: `${PRESET_ID_PREFIX}grsai`,
+    parameterConfig: JSON.stringify(MODEL_PRESETS.GRSAI_NANO_BANANA),
   },
 ];
 

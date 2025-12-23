@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   experimental: {
     serverActions: {
-      bodySizeLimit: '30mb',
+      // 增加到50MB以支持多张参考图片的base64编码
+      bodySizeLimit: '50mb',
     },
   },
   images: {

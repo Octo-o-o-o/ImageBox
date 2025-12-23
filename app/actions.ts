@@ -46,6 +46,8 @@ export {
   createTemplate,
   deleteTemplate,
   updateTemplate,
+  toggleTemplateEnabled,
+  ensurePresetTemplates,
 } from './actions/templates';
 
 // --- Generation & Run Logs ---

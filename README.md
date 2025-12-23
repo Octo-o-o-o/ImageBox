@@ -30,6 +30,7 @@
   - OpenAI-compatible endpoints (OpenRouter, custom providers)
   - Auto-adaptive parameter configuration with built-in presets
   - Smart parameter mapping for different API formats
+  - Intelligent model sorting (configured models first, unconfigured last)
 
 - **📝 Advanced Template System** - Powerful prompt management workflow:
   - Create reusable templates with `{{variable}}` syntax
@@ -37,10 +38,14 @@
   - Separate model selection for prompt enhancement and image creation
   - Customizable system prompts for prompt optimization
   - Dynamic form generation from template variables
+  - Built-in preset templates (Universal Optimizer, Presentation Graphics)
+  - Enable/disable templates for better organization
 
 - **🖼️ Image-to-Image Generation** - Reference-guided creation:
   - Upload reference images to guide generation (supports 2-14 images per model)
   - Smart validation for image size and aspect ratio
+  - Automatic image compression (max 2048px) for optimal API performance
+  - High-quality compression preserving transparency for PNG images
   - Automatic adjustment based on model capabilities
   - Visual feedback for image compatibility
 

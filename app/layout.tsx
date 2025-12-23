@@ -3,7 +3,9 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { LanguageProvider } from "@/components/LanguageProvider";
+import { SidebarProvider } from "@/components/SidebarProvider";
 import { DM_Sans } from 'next/font/google';
+import { LayoutContent } from "@/components/LayoutContent";
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -30,12 +32,12 @@ export default function RootLayout({
       <body className={`bg-background text-foreground min-h-screen font-[var(--font-dm-sans)] antialiased`}>
         <LanguageProvider>
           <ThemeProvider>
-            <Sidebar />
-            <main className="pl-64 min-h-screen">
-              <div className="w-full max-w-7xl p-8">
+            <SidebarProvider>
+              <Sidebar />
+              <LayoutContent>
                 {children}
-              </div>
-            </main>
+              </LayoutContent>
+            </SidebarProvider>
           </ThemeProvider>
         </LanguageProvider>
       </body>

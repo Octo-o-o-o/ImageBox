@@ -53,7 +53,8 @@ export default function RunLogPage() {
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   // Simplified time filter for demo (could be date picker)
-  const [timeRange, setTimeRange] = useState<string>('all'); 
+  const [timeRange, setTimeRange] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>(''); 
 
   useEffect(() => {
     loadLogs();
@@ -65,7 +66,7 @@ export default function RunLogPage() {
       // Calculate date range based on timeRange
       let start: Date | undefined;
       const now = new Date();
-      
+
       switch (timeRange) {
         case '24h':
           start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -81,7 +82,7 @@ export default function RunLogPage() {
           start = undefined;
           break;
       }
-      
+
       const serverLogs = await getRunLogs({
         type: filterType || undefined,
         status: filterStatus || undefined,
@@ -94,6 +95,12 @@ export default function RunLogPage() {
       setLoading(false);
     }
   };
+
+  // Filter logs by search query on client side
+  const filteredLogs = logs.filter(log => {
+    if (!searchQuery.trim()) return true;
+    return log.actualInput?.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <div className="min-h-screen p-6 space-y-6 text-zinc-100">
@@ -111,8 +118,8 @@ export default function RunLogPage() {
         {/* Filters */}
         <div className="flex items-center gap-3 bg-card p-2 rounded-xl border border-border backdrop-blur-sm shadow-sm">
           <Filter className="w-4 h-4 text-muted-foreground ml-2" />
-          
-          <select 
+
+          <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="bg-transparent text-sm border-none focus:ring-0 text-foreground outline-none"
@@ -124,7 +131,7 @@ export default function RunLogPage() {
 
           <div className="h-4 w-[1px] bg-border" />
 
-          <select 
+          <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="bg-transparent text-sm border-none focus:ring-0 text-foreground outline-none"
@@ -136,8 +143,8 @@ export default function RunLogPage() {
           </select>
 
            <div className="h-4 w-[1px] bg-border" />
-           
-           <select 
+
+           <select
            value={timeRange}
            onChange={(e) => setTimeRange(e.target.value)}
            className="bg-transparent text-sm border-none focus:ring-0 text-foreground outline-none"
@@ -147,12 +154,19 @@ export default function RunLogPage() {
             <option value="7d">{t('runLog.timeRange.7d')}</option>
             <option value="30d">{t('runLog.timeRange.30d')}</option>
           </select>
-           
+
            <div className="h-4 w-[1px] bg-border" />
-           
-           <button onClick={() => loadLogs()} className="p-1 hover:bg-secondary rounded-full transition-colors">
-              <Search className="w-4 h-4 text-muted-foreground" />
-           </button>
+
+           <div className="flex items-center gap-2">
+             <Search className="w-4 h-4 text-muted-foreground" />
+             <input
+               type="text"
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               placeholder={t('runLog.searchPlaceholder')}
+               className="bg-transparent text-sm border-none focus:ring-0 text-foreground outline-none w-32 placeholder:text-muted-foreground/50"
+             />
+           </div>
         </div>
       </div>
 
@@ -160,12 +174,12 @@ export default function RunLogPage() {
       <div className="space-y-2">
         {loading ? (
              <div className="text-center py-20 text-muted-foreground">{t('runLog.loading')}</div>
-        ) : logs.length === 0 ? (
+        ) : filteredLogs.length === 0 ? (
              <div className="text-center py-20 text-muted-foreground bg-muted/30 rounded-2xl border border-dashed border-border">
-                {t('runLog.empty')}
+                {searchQuery ? t('runLog.noResults') : t('runLog.empty')}
              </div>
         ) : (
-          logs.map(log => (
+          filteredLogs.map(log => (
             <LogItem key={log.id} log={log} typeLabels={typeLabels} statusLabels={statusLabels} t={t} />
           ))
         )}
@@ -276,7 +290,7 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                              </pre>
                         </div>
                     )}
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-secondary/20 p-3 rounded-lg border border-border">
                             <span className="text-muted-foreground text-xs block mb-1">{t('runLog.modelUsed')}</span>
@@ -289,6 +303,20 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                             </div>
                         )}
                     </div>
+
+                    {/* Image Paths - Only show for successful image generation */}
+                    {isImage && log.status === 'SUCCESS' && log.output && (
+                        <div className="bg-secondary/20 p-3 rounded-lg border border-border">
+                            <span className="text-muted-foreground text-xs block mb-2">{t('runLog.imagePaths')}</span>
+                            <div className="space-y-1">
+                                {(log.output.split(', ') || []).map((path, idx) => (
+                                    <div key={idx} className="text-foreground font-mono text-[10px] break-all bg-background/50 p-2 rounded">
+                                        {path}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right: Output */}
@@ -297,9 +325,9 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                         {t('runLog.outputResult')}
                     </h4>
                     
-                    <div className="min-h-[200px] bg-secondary/30 rounded-xl border border-border p-4">
+                    <div className="min-h-[200px]">
                          {log.status === 'FAILURE' ? (
-                             <div className="text-red-400 font-mono text-xs">
+                             <div className="text-red-400 font-mono text-xs bg-secondary/30 rounded-xl border border-border p-4">
                                 {t('runLog.errorPrefix')}{log.output}
                              </div>
                          ) : isImage ? (
@@ -307,36 +335,34 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                                 {(log.output?.split(', ') || []).map((path, idx) => (
                                     <div
                                         key={idx}
-                                        className="relative w-full bg-black/50 rounded-lg overflow-hidden border border-white/10 group cursor-pointer hover:border-primary/50 transition-colors"
-                                        onClick={() => setPreviewImage(path)}
+                                        className="relative w-full bg-black/50 rounded-lg overflow-hidden"
                                     >
-                                        <img
-                                            src={path}
-                                            alt={t('runLog.imageAlt')}
-                                            className="w-full h-auto object-contain"
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.style.display = 'none';
-                                                target.parentElement?.classList.add('flex', 'items-center', 'justify-center', 'bg-destructive/10', 'min-h-[200px]');
-                                                const span = document.createElement('span');
-                                                span.className = 'text-destructive text-xs font-semibold';
-                                                span.innerText = t('runLog.imageDeleted');
-                                                target.parentElement?.appendChild(span);
-                                            }}
-                                        />
-                                        <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white text-[10px] rounded font-mono">
-                                            {path}
-                                        </div>
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                            <div className="px-3 py-1.5 bg-white/90 text-black text-xs font-semibold rounded-full">
-                                                {t('common.clickToView')}
+                                        <div className="group/image cursor-pointer" onClick={() => setPreviewImage(path)}>
+                                            <img
+                                                src={path}
+                                                alt={t('runLog.imageAlt')}
+                                                className="w-full h-auto object-contain"
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.style.display = 'none';
+                                                    target.parentElement?.classList.add('flex', 'items-center', 'justify-center', 'bg-destructive/10', 'min-h-[200px]');
+                                                    const span = document.createElement('span');
+                                                    span.className = 'text-destructive text-xs font-semibold';
+                                                    span.innerText = t('runLog.imageDeleted');
+                                                    target.parentElement?.appendChild(span);
+                                                }}
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover/image:opacity-100 pointer-events-none">
+                                                <div className="px-3 py-1.5 bg-white/90 text-black text-xs font-semibold rounded-full">
+                                                    {t('common.clickToView')}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
                              </div>
                          ) : (
-                             <div className="font-mono text-foreground text-xs whitespace-pre-wrap">
+                             <div className="font-mono text-foreground text-xs whitespace-pre-wrap bg-secondary/30 rounded-xl border border-border p-4">
                                  {log.output}
                              </div>
                          )}

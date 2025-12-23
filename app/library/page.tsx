@@ -25,7 +25,6 @@ import {
   AlertCircle,
   FolderInput,
   AlertTriangle,
-  Wand2,
   CheckSquare
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -1328,17 +1327,44 @@ interface PreviewModalProps {
   isCustomStoragePath?: boolean;
 }
 
-function PreviewModal({ 
-  previewImage, 
-  onClose, 
-  onToggleFavorite, 
-  onDelete, 
-  onDownload, 
+function PreviewModal({
+  previewImage,
+  onClose,
+  onToggleFavorite,
+  onDelete,
+  onDownload,
   onCopy,
   tr,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isCustomStoragePath
 }: PreviewModalProps) {
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [promptCopySuccess, setPromptCopySuccess] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      const response = await fetch(previewImage.url);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(previewImage.prompt);
+      setPromptCopySuccess(true);
+      setTimeout(() => setPromptCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1379,41 +1405,73 @@ function PreviewModal({
         <div className="w-full md:w-80 lg:w-96 bg-card flex flex-col border-l border-border">
           <div className="p-6 flex items-center justify-between border-b border-border">
             <h3 className="font-semibold text-lg">{tr('library.details.title')}</h3>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-secondary text-muted-foreground transition-colors hidden md:block"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Star/Favorite button */}
+              <button
+                onClick={onToggleFavorite}
+                className={`group/star relative p-2 rounded-lg transition-all ${
+                  previewImage.isFavorite
+                    ? 'text-yellow-500 hover:bg-yellow-500/10'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                <Star className={`w-4 h-4 ${previewImage.isFavorite ? 'fill-yellow-500' : ''}`} />
+                <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/star:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                  {previewImage.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
+                </span>
+              </button>
+
+              {/* Copy Image button */}
+              <button
+                onClick={handleCopy}
+                className={`group/copyimg relative p-2 rounded-lg transition-all ${
+                  copySuccess
+                    ? 'bg-green-500/10 text-green-500'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                {copySuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/copyimg:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                  {copySuccess ? tr('library.details.copySuccess') : tr('library.copyImage')}
+                </span>
+              </button>
+
+              {/* Download button */}
+              <button
+                onClick={onDownload}
+                className="group/download relative p-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/download:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                  {tr('library.downloadImage')}
+                </span>
+              </button>
+
+              {/* Delete button */}
+              <button
+                onClick={onDelete}
+                className="group/delete relative p-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/delete:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                  {tr('library.delete')}
+                </span>
+              </button>
+
+              {/* Close button */}
+              <button
+                onClick={onClose}
+                className="group/close relative p-2 rounded-lg hover:bg-secondary text-muted-foreground transition-colors hidden md:block ml-1"
+              >
+                <X className="w-5 h-5" />
+                <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/close:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                  {tr('common.close')}
+                </span>
+              </button>
+            </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-            {/* Prompt */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.prompt')}</label>
-              <p className="text-sm text-foreground leading-relaxed bg-secondary/30 p-3 rounded-lg border border-border/50">
-                {previewImage.prompt}
-              </p>
-            </div>
-
-            {/* Model & Template */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.model')}</label>
-                <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 font-mono">
-                  {previewImage.modelName}
-                </p>
-              </div>
-              {previewImage.templateName && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.template')}</label>
-                  <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 truncate">
-                    {previewImage.templateName}
-                  </p>
-                </div>
-              )}
-            </div>
-
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
             {/* Parameters */}
             {previewImage.params && previewImage.params !== '{}' && (
               <div>
@@ -1439,104 +1497,65 @@ function PreviewModal({
                 </div>
               </div>
             )}
-            
-            {/* Metadata Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1 block">{tr('library.details.created')}</label>
-                <p className="text-sm text-foreground">
-                  {new Date(previewImage.createdAt).toLocaleDateString()}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {new Date(previewImage.createdAt).toLocaleTimeString()}
+
+            {/* Model */}
+            <div className="bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">{tr('library.details.model')}</label>
+              <p className="text-sm text-foreground font-mono truncate flex-1">
+                {previewImage.modelName}
+              </p>
+            </div>
+
+            {/* Template */}
+            {previewImage.templateName && (
+              <div className="bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">{tr('library.details.template')}</label>
+                <p className="text-sm text-foreground truncate flex-1">
+                  {previewImage.templateName}
                 </p>
               </div>
+            )}
+
+            {/* Created */}
+            <div className="bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">{tr('library.details.created')}</label>
+              <p className="text-sm text-foreground flex-1">
+                {new Date(previewImage.createdAt).toLocaleDateString()} {new Date(previewImage.createdAt).toLocaleTimeString()}
+              </p>
             </div>
 
             {/* Folder */}
             {previewImage.folderName && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">{tr('library.details.folder')}</label>
-                <p className="text-sm text-foreground bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
-                  <Folder className="w-4 h-4 text-muted-foreground" />
-                  {previewImage.folderName}
+              <div className="bg-secondary/30 px-3 py-2 rounded-lg border border-border/50 flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">{tr('library.details.folder')}</label>
+                <p className="text-sm text-foreground flex items-center gap-2 flex-1 truncate">
+                  <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="truncate">{previewImage.folderName}</span>
                 </p>
               </div>
             )}
-          </div>
 
-          <div className="p-6 border-t border-border bg-muted/10 space-y-3">
-            {/* Recreate Actions */}
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  const params = new URLSearchParams({
-                    prompt: previewImage.prompt,
-                    model: previewImage.modelName,
-                    params: previewImage.params
-                  });
-                  window.location.href = `/create?${params.toString()}`;
-                }}
-                className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium transition-all flex items-center justify-center gap-2 shadow-sm"
-              >
-                <Wand2 className="w-4 h-4" />
-                {tr('library.details.recreate')}
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(previewImage.prompt);
-                    alert(tr('library.details.copyPromptSuccess'));
-                  } catch (err) {
-                    console.error('Failed to copy:', err);
-                    alert(tr('library.details.copyPromptFail'));
-                  }
-                }}
-                className="w-full py-2.5 px-4 rounded-lg bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium transition-colors flex items-center justify-center gap-2 border border-border"
-              >
-                <Copy className="w-4 h-4" />
-                {tr('library.details.copyPrompt')}
-              </button>
-            </div>
-            
-            {/* Divider */}
-            <div className="h-px bg-border/50" />
-            
-            {/* Standard Actions */}
-            <button
-              onClick={onToggleFavorite}
-              className={clsx(
-                "w-full py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm border",
-                previewImage.isFavorite
-                  ? "bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80 border-border"
-              )}
-            >
-              <Star className={clsx("w-4 h-4", previewImage.isFavorite && "fill-white")} />
-              {previewImage.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
-            </button>
-            <button
-              onClick={onDownload}
-              className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              {tr('library.downloadImage')}
-            </button>
-            <div className="flex gap-3">
-              <button
-                onClick={onCopy}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2 border border-border"
-              >
-                <Copy className="w-4 h-4" />
-                {tr('library.copyImage')}
-              </button>
-              <button
-                onClick={onDelete}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors flex items-center justify-center gap-2 border border-destructive/20"
-              >
-                <Trash2 className="w-4 h-4" />
-                {tr('library.delete')}
-              </button>
+            {/* Prompt - moved to bottom */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('library.details.prompt')}</label>
+                <button
+                  onClick={handleCopyPrompt}
+                  className={`group/copyprompt relative p-1.5 rounded-md transition-all ${
+                    promptCopySuccess
+                      ? 'bg-green-500/10 text-green-500'
+                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  }`}
+                >
+                  {promptCopySuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span className="absolute bottom-full mb-2 right-0 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/copyprompt:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
+                    {promptCopySuccess ? tr('library.details.copySuccess') : tr('library.details.copyPrompt')}
+                  </span>
+                </button>
+              </div>
+              <p className="text-sm text-foreground leading-relaxed bg-secondary/30 p-3 rounded-lg border border-border/50">
+                {previewImage.prompt}
+              </p>
             </div>
           </div>
         </div>
