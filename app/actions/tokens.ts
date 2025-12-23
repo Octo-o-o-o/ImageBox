@@ -47,7 +47,7 @@ export async function getAccessTokens() {
     orderBy: { createdAt: 'desc' }
   });
 
-  return tokens.map(t => ({
+  return tokens.map((t: typeof tokens[number]) => ({
     ...t,
     isExpired: t.expiresAt < new Date()
   }));
@@ -81,6 +81,55 @@ export async function createAccessToken(expiresIn: number) {
       expiresAt
     }
   });
+
+  return {
+    id: accessToken.id,
+    name: accessToken.name,
+    description: accessToken.description,
+    token: accessToken.token,
+    expiresAt: accessToken.expiresAt,
+    createdAt: accessToken.createdAt
+  };
+}
+
+/**
+ * Create access token AND enable remote access atomically
+ * Used in setup mode to avoid race condition where token is created
+ * but remote access is not yet enabled, causing subsequent requests to fail
+ * @param expiresIn validity period (hours), -1 means permanent
+ * @returns object containing full token
+ */
+export async function createAccessTokenWithRemoteAccess(expiresIn: number) {
+  const token = generateToken();
+
+  // Calculate expiration time
+  let expiresAt: Date;
+  if (expiresIn === -1) {
+    // Permanent: set to 100 years later
+    expiresAt = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+  } else {
+    expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
+  }
+
+  // Auto-generate name: Token + sequence
+  const count = await prisma.accessToken.count();
+  const name = `Token ${count + 1}`;
+
+  // Use transaction to ensure both operations complete atomically
+  const [accessToken] = await prisma.$transaction([
+    prisma.accessToken.create({
+      data: {
+        name,
+        token,
+        expiresAt
+      }
+    }),
+    prisma.setting.upsert({
+      where: { key: 'remoteAccessEnabled' },
+      update: { value: 'true' },
+      create: { key: 'remoteAccessEnabled', value: 'true' }
+    })
+  ]);
 
   return {
     id: accessToken.id,

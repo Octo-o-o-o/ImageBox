@@ -77,6 +77,7 @@ export {
   setRemoteAccessEnabled,
   getAccessTokens,
   createAccessToken,
+  createAccessTokenWithRemoteAccess,
   updateAccessTokenDescription,
   deleteAccessToken,
   revokeAccessToken,

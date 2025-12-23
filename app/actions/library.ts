@@ -239,7 +239,7 @@ export async function getImagesByFolder(folderId?: string) {
   // Check if local files exist
   const storagePath = await getActualStoragePath();
 
-  return await Promise.all(images.map(async (img) => {
+  return await Promise.all(images.map(async (img: typeof images[number]) => {
     let fileExists = true;
     try {
       let relativePart = img.path;

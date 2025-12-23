@@ -39,10 +39,28 @@ docker run -p 3000:3000 -v imagebox-data:/app/data imagebox
 # Or use Docker Hub image
 docker pull octoooo/imagebox:latest
 docker run -p 3000:3000 -v imagebox-data:/app/data octoooo/imagebox
+```
 
-# Release new version (triggers Docker Hub build via GitHub Actions)
+### Release to Docker Hub
+```bash
+# Recommended: Use the release script (auto-increment version, build check, confirmation)
+./scripts/release.sh              # Auto-increment patch version (e.g., 0.1.7 -> 0.1.8)
+./scripts/release.sh 0.2.0        # Specify version explicitly
+
+# Manual release (if needed)
+npm run build                     # Verify build passes first!
 git tag v0.1.x && git push origin v0.1.x
 ```
+
+**Release Notes:**
+- Build takes ~25-30 minutes (multi-arch: amd64 + arm64)
+- Monitor progress: `gh run list --limit 1` or `gh run watch`
+- View on GitHub: https://github.com/Octo-o-o-o/ImageBox/actions
+- Images pushed to: `octoooo/imagebox:{version}` and `octoooo/imagebox:latest`
+
+**Common Build Issues:**
+- **Prerender error with Prisma**: Add `export const dynamic = 'force-dynamic'` to pages with database operations
+- **TypeScript errors**: Run `npm run build` locally before releasing to catch type errors early
 
 ## Architecture
 

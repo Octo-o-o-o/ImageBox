@@ -22,6 +22,11 @@ COPY prisma.config.ts ./
 # 安装所有依赖（包括 devDependencies 用于构建）
 RUN npm ci
 
+# 重新编译 better-sqlite3 以确保 ABI 兼容性
+# npm ci 会触发 postinstall (electron-builder install-app-deps)，
+# 这会为 Electron 编译 better-sqlite3，但 Docker 需要 Node.js 原生版本
+RUN npm rebuild better-sqlite3
+
 # 生成 Prisma Client（Prisma 7+ 需要 prisma.config.ts）
 RUN npx prisma generate
 

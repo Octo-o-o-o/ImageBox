@@ -26,11 +26,12 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/components/LanguageProvider';
-import { 
-  getRemoteAccessEnabled, 
-  setRemoteAccessEnabled, 
-  getAccessTokens, 
-  createAccessToken, 
+import {
+  getRemoteAccessEnabled,
+  setRemoteAccessEnabled,
+  getAccessTokens,
+  createAccessToken,
+  createAccessTokenWithRemoteAccess,
   deleteAccessToken,
   updateAccessTokenDescription,
   getStorageConfig,
@@ -146,7 +147,17 @@ function SettingsContent() {
     setCreating(true);
     setShowCreateMenu(false);
     try {
-      const result = await createAccessToken(expiresIn);
+      let result;
+
+      if (isSetupMode) {
+        // Setup mode: use atomic action that creates token AND enables remote access
+        // This avoids race condition where token exists but remote access is not yet enabled
+        result = await createAccessTokenWithRemoteAccess(expiresIn);
+        setRemoteEnabled(true);
+      } else {
+        result = await createAccessToken(expiresIn);
+      }
+
       await loadData();
       const newToken = {
         ...result,
@@ -154,11 +165,8 @@ function SettingsContent() {
         isExpired: false,
         lastUsedAt: null
       } as AccessTokenDisplay;
-      
+
       if (isSetupMode) {
-        // 设置模式下，自动开启远程访问
-        await setRemoteAccessEnabled(true);
-        setRemoteEnabled(true);
         setSetupToken(newToken);
         setSetupStep('done');
       } else {
