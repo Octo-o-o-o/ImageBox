@@ -27,10 +27,10 @@ jobs:
       matrix:
         include:
           # Intel runner to build x64
-          - runner: macos-13
+          - runner: macos-15-intel
             arch: x64
           # Apple Silicon runner to build arm64
-          - runner: macos-14
+          - runner: macos-latest
             arch: arm64
 
     steps:
