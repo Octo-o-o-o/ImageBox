@@ -54,7 +54,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * 获取当前平台 (win32, darwin, linux)
    */
-  platform: process.platform
+  platform: process.platform,
+
+  /**
+   * 同步当前语言到主进程（用于托盘菜单多语言）
+   */
+  setLanguage: (language: string): void => {
+    ipcRenderer.send('i18n:setLanguage', language);
+  },
+
+  /**
+   * 获取系统语言
+   */
+  getSystemLanguage: (): string => {
+    return ipcRenderer.sendSync('i18n:getSystemLanguage');
+  }
 });
 
 // TypeScript 类型声明
@@ -69,6 +83,8 @@ declare global {
       onUpdateProgress: (callback: (percent: number) => void) => void;
       isDesktop: boolean;
       platform: string;
+      setLanguage?: (language: string) => void;
+      getSystemLanguage?: () => string;
     };
   }
 }

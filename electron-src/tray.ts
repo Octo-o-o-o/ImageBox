@@ -1,6 +1,7 @@
 import { Tray, Menu, nativeImage, app, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { normalizeLanguage, tTray, type Language } from './trayI18n';
 
 // 扩展 app 类型以支持 isQuitting 属性
 interface ExtendedApp extends Electron.App {
@@ -9,26 +10,90 @@ interface ExtendedApp extends Electron.App {
 const extApp = app as ExtendedApp;
 
 let tray: Tray | null = null;
+let currentLanguage: Language = normalizeLanguage(app.getLocale?.());
+let trayMainWindow: BrowserWindow | null = null;
+
+function getAssetPath(...segments: string[]): string {
+  const base = app.isPackaged ? app.getAppPath() : process.cwd();
+  return path.join(base, ...segments);
+}
+
+function showMainWindow(mainWindow: BrowserWindow): void {
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  mainWindow.focus();
+}
+
+function buildTrayMenu(mainWindow: BrowserWindow): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: tTray(currentLanguage, 'tray.showMainWindow'),
+      click: () => showMainWindow(mainWindow),
+    },
+    { type: 'separator' },
+    {
+      label: tTray(currentLanguage, 'tray.quit'),
+      click: () => {
+        extApp.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+function updateTrayMenu(mainWindow: BrowserWindow): void {
+  if (!tray) return;
+  const menu = buildTrayMenu(mainWindow);
+
+  // macOS 上如果 setContextMenu，会导致左键也弹菜单；这里保持“左键显示窗口，右键弹菜单”的一致交互。
+  if (process.platform !== 'darwin') {
+    tray.setContextMenu(menu);
+  }
+}
+
+export function setTrayLanguage(language: string): void {
+  currentLanguage = normalizeLanguage(language);
+  if (tray && trayMainWindow) {
+    updateTrayMenu(trayMainWindow);
+  }
+}
 
 /**
  * 创建系统托盘
  */
 export function createTray(mainWindow: BrowserWindow): Tray {
-  // 获取托盘图标路径
-  const iconPaths = [
-    // macOS 使用 Template 图标（自动适配暗色/亮色模式）
+  trayMainWindow = mainWindow;
+  // 标准做法：优先使用应用 icon，并按平台调整尺寸/模板属性
+  const iconPaths =
     process.platform === 'darwin'
-      ? path.join(process.cwd(), 'assets', 'tray-iconTemplate.png')
-      : path.join(process.cwd(), 'assets', 'tray-icon.png'),
-    path.join(process.cwd(), 'assets', 'tray-icon.png'),
-    path.join(app.getAppPath(), 'assets', 'tray-icon.png')
-  ];
+      ? [
+          // macOS 推荐使用 template icon（单色，系统自动适配深浅色）
+          getAssetPath('assets', 'tray-iconTemplate.png'),
+          // 如果没有 template，则回退到同款彩色图标
+          getAssetPath('assets', 'tray-icon.png'),
+          // 回退到应用 icon
+          getAssetPath('assets', 'icon.png'),
+          path.join(app.getAppPath(), 'assets', 'icon.png'),
+        ]
+      : [
+          // Windows/Linux：使用与应用图标同款的彩色托盘图标
+          getAssetPath('assets', 'tray-icon.png'),
+          // 回退到应用 icon
+          getAssetPath('assets', 'icon.png'),
+          path.join(app.getAppPath(), 'assets', 'icon.png'),
+        ];
 
   let icon = nativeImage.createEmpty();
+  let shouldSetTemplate = false;
   
   for (const iconPath of iconPaths) {
     if (fs.existsSync(iconPath)) {
       icon = nativeImage.createFromPath(iconPath);
+      shouldSetTemplate = process.platform === 'darwin' && iconPath.endsWith('tray-iconTemplate.png');
       break;
     }
   }
@@ -55,58 +120,34 @@ export function createTray(mainWindow: BrowserWindow): Tray {
     );
   }
 
+  // 统一调整为托盘常用尺寸，避免 Windows/Linux 过大/过小
+  if (!icon.isEmpty()) {
+    if (process.platform === 'darwin') {
+      icon = icon.resize({ width: 18, height: 18 });
+      if (shouldSetTemplate) {
+        icon.setTemplateImage(true);
+      }
+    } else {
+      icon = icon.resize({ width: 16, height: 16 });
+    }
+  }
+
   tray = new Tray(icon);
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: '显示窗口',
-      click: () => {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    },
-    {
-      label: '新建生成',
-      click: () => {
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.webContents.send('navigate', '/create');
-      }
-    },
-    {
-      label: '图片库',
-      click: () => {
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.webContents.send('navigate', '/library');
-      }
-    },
-    { type: 'separator' },
-    {
-      label: '退出',
-      click: () => {
-        extApp.isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
-
   tray.setToolTip('ImageBox');
-  tray.setContextMenu(contextMenu);
+  updateTrayMenu(mainWindow);
 
-  // 点击托盘图标显示窗口
-  tray.on('click', () => {
-    if (mainWindow.isVisible()) {
-      mainWindow.focus();
-    } else {
-      mainWindow.show();
-    }
-  });
+  // 左键：显示主界面
+  tray.on('click', () => showMainWindow(mainWindow));
 
-  // macOS: 双击显示窗口
-  tray.on('double-click', () => {
-    mainWindow.show();
-    mainWindow.focus();
+  // 右键：弹系统样式菜单（只包含：显示主界面 / 退出）
+  tray.on('right-click', () => {
+    // Windows/Linux 已通过 setContextMenu 使用系统原生右键菜单；
+    // macOS 需要手动 popUp，避免 setContextMenu 导致左键也弹菜单。
+    if (process.platform !== 'darwin') return;
+    if (!tray) return;
+    const menu = buildTrayMenu(mainWindow);
+    tray.popUpContextMenu(menu);
   });
 
   return tray;
@@ -120,5 +161,6 @@ export function destroyTray(): void {
     tray.destroy();
     tray = null;
   }
+  trayMainWindow = null;
 }
 

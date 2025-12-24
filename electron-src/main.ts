@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import log from 'electron-log';
 import { ensureDatabase } from './database';
-import { createTray } from './tray';
+import { createTray, setTrayLanguage } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { initAutoUpdater } from './updater';
 
@@ -209,6 +209,21 @@ async function createWindow(): Promise<void> {
       splashWindow = null;
     }
     mainWindow?.show();
+
+    // 尝试从渲染进程 localStorage 读取用户选择的语言（与前端保持一致）
+    // 注意：如果读取失败，托盘会保持系统默认语言，随后 LanguageProvider 也会通过 IPC 再同步一次。
+    try {
+      void mainWindow?.webContents
+        .executeJavaScript("localStorage.getItem('imagebox-language')", true)
+        .then((lang) => {
+          if (typeof lang === 'string' && lang) {
+            setTrayLanguage(lang);
+          }
+        })
+        .catch(() => null);
+    } catch {
+      // ignore
+    }
   });
 
   // 开发模式打开 DevTools
@@ -247,6 +262,17 @@ async function createWindow(): Promise<void> {
  * IPC 处理
  */
 function setupIPC(): void {
+  // 渲染进程同步当前语言（用于托盘菜单多语言）
+  ipcMain.on('i18n:setLanguage', (_, language: string) => {
+    setTrayLanguage(String(language ?? ''));
+  });
+
+  // 获取系统语言（用于前端初始化）
+  ipcMain.on('i18n:getSystemLanguage', (event) => {
+    const systemLocale = app.getLocale();
+    event.returnValue = systemLocale;
+  });
+
   // 文件夹选择对话框
   ipcMain.handle('dialog:selectFolder', async () => {
     const result = await dialog.showOpenDialog({
