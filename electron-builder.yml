@@ -72,7 +72,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: assets/icon.png
+  icon: assets/icon.ico
 
 # Linux 配置
 linux:
@@ -99,8 +99,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: ImageBox
-  installerIcon: assets/icon.png
-  uninstallerIcon: assets/icon.png
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
 
 # asar 配置（禁用以避免 standalone 目录过大导致的问题）
 asar: false
