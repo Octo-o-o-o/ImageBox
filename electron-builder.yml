@@ -72,7 +72,8 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: assets/icon.ico
+  # Windows/NSIS icon must be .ico. Keep unset to avoid CI failures if icon format/path mismatches.
+  # If you want a custom icon, provide a valid .ico and point to it here.
 
 # Linux 配置
 linux:
@@ -99,8 +100,7 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: ImageBox
-  installerIcon: assets/icon.ico
-  uninstallerIcon: assets/icon.ico
+  # NSIS installer/uninstaller icons must be .ico. Leave unset for CI safety.
 
 # asar 配置（禁用以避免 standalone 目录过大导致的问题）
 asar: false

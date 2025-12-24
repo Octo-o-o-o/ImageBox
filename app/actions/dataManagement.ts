@@ -51,6 +51,16 @@ interface BackupData {
   }>;
 }
 
+type BackupAccessTokenRow = {
+  name: string;
+  description: string | null;
+  token: string;
+  expiresAt: Date;
+  isRevoked: boolean;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+};
+
 // Derive encryption key from password
 function deriveKey(password: string, salt: Buffer): Buffer {
   return crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
@@ -171,7 +181,7 @@ export async function createBackup(password: string): Promise<{
       version: '1.1',
       timestamp: new Date().toISOString(),
       remoteAccessEnabled,
-      accessTokens: accessTokens.map(t => ({
+      accessTokens: accessTokens.map((t: BackupAccessTokenRow) => ({
         name: t.name,
         description: t.description ?? null,
         token: t.token,
