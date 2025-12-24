@@ -63,7 +63,7 @@
 
 #### 做法 2：保证 `prisma/template.db` 一定包含 schema
 - `package.json`：将 `db:template` 加入 `electron:build*` 链路
-  - `db:template`：`DATABASE_URL=file:./prisma/template.db prisma db push`
+  - `db:template`：`node scripts/db-template.js`（跨平台，Windows/macOS/Linux 都可用）
 
 ---
 

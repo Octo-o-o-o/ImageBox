@@ -2,6 +2,10 @@
   "name": "imagebox",
   "version": "0.1.0",
   "private": true,
+  "author": {
+    "name": "wangyixiao",
+    "email": "wangyixiao@users.noreply.github.com"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -12,7 +16,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:setup": "prisma generate && prisma db push",
-    "db:template": "DATABASE_URL=file:./prisma/template.db prisma db push",
+    "db:template": "node scripts/db-template.js",
     "electron:compile": "tsc -p tsconfig.electron.json",
     "electron:prepare": "node scripts/prepare-standalone.js",
     "electron:dev": "npm run electron:compile && concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 -t 60000 && electron .\"",
