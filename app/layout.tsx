@@ -5,16 +5,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { SidebarProvider } from "@/components/SidebarProvider";
 import { GenerationProvider } from "@/components/GenerationProvider";
-import { DM_Sans } from 'next/font/google';
 import { LayoutContent } from "@/components/LayoutContent";
 import { SetupWizard } from "@/components/SetupWizard";
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-dm-sans',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: "ImageBox",
@@ -30,8 +22,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={dmSans.variable}>
-      <body className={`bg-background text-foreground min-h-screen font-[var(--font-dm-sans)] antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      {/* Avoid next/font/google during Docker/CI builds (can fail due to blocked/slow Google Fonts). Use system font stack. */}
+      <body className="bg-background text-foreground min-h-screen font-sans antialiased">
         <LanguageProvider>
           <ThemeProvider>
             <GenerationProvider>

@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag name (e.g. v0.1.0)"
+        required: true
+      target:
+        description: "Target commit/branch for the tag (default: main)"
+        required: false
+        default: "main"
 
 concurrency:
   group: release-${{ github.ref }}
@@ -19,7 +28,8 @@ jobs:
       - name: Create GitHub Release (auto notes)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.event_name == 'workflow_dispatch' && inputs.target || '' }}
           generate_release_notes: true
           draft: false
 
