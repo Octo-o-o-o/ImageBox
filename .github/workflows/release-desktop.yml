@@ -25,11 +25,20 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Create GitHub Release (auto notes)
+      - name: Create GitHub Release (auto notes) [tag push]
+        if: ${{ github.event_name == 'push' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          target_commitish: ${{ github.event_name == 'workflow_dispatch' && inputs.target || '' }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+
+      - name: Create GitHub Release (auto notes) [manual]
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ inputs.target }}
           generate_release_notes: true
           draft: false
 
@@ -66,14 +75,22 @@ jobs:
       - name: Build & Publish (Windows x64)
         env:
           CI: "true"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run electron:compile
           npm run db:generate
           npm run db:template
           npm run build
           npm run electron:prepare
-          npx --yes electron-builder --win --x64 --publish always
+          npx --yes electron-builder --win --x64 --publish never
+
+      - name: Upload assets to GitHub Release (Windows x64)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-electron/*.exe
+            dist-electron/*.yml
+            dist-electron/*.blockmap
 
   publish-macos:
     needs: create-release
@@ -117,14 +134,23 @@ jobs:
       - name: Build & Publish (macOS ${{ matrix.arch }})
         env:
           CI: "true"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run electron:compile
           npm run db:generate
           npm run db:template
           npm run build
           npm run electron:prepare
-          npx --yes electron-builder --mac --${{ matrix.arch }} --publish always
+          npx --yes electron-builder --mac --${{ matrix.arch }} --publish never
+
+      - name: Upload assets to GitHub Release (macOS ${{ matrix.arch }})
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-electron/*.dmg
+            dist-electron/*.zip
+            dist-electron/latest-mac*.yml
+            dist-electron/*.blockmap
 
   publish-linux-x64:
     needs: create-release
@@ -171,13 +197,23 @@ jobs:
       - name: Build & Publish (Linux x64)
         env:
           CI: "true"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run electron:compile
           npm run db:generate
           npm run db:template
           npm run build
           npm run electron:prepare
-          npx --yes electron-builder --linux --x64 --publish always
+          npx --yes electron-builder --linux --x64 --publish never
+
+      - name: Upload assets to GitHub Release (Linux x64)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.rpm
+            dist-electron/*.yml
+            dist-electron/*.blockmap
 
 

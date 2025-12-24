@@ -49,10 +49,8 @@ function updateTrayMenu(mainWindow: BrowserWindow): void {
   if (!tray) return;
   const menu = buildTrayMenu(mainWindow);
 
-  // macOS 上如果 setContextMenu，会导致左键也弹菜单；这里保持“左键显示窗口，右键弹菜单”的一致交互。
-  if (process.platform !== 'darwin') {
-    tray.setContextMenu(menu);
-  }
+  // Windows/Linux: 使用系统原生右键菜单；macOS: 也设置，右键可直接弹出，左键由 click 事件手动弹出。
+  tray.setContextMenu(menu);
 }
 
 export function setTrayLanguage(language: string): void {
@@ -123,7 +121,8 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   // 统一调整为托盘常用尺寸，避免 Windows/Linux 过大/过小
   if (!icon.isEmpty()) {
     if (process.platform === 'darwin') {
-      icon = icon.resize({ width: 18, height: 18 });
+      // macOS 菜单栏图标略缩小一点点（约 3%-5%），避免比旁边图标显得更大
+      icon = icon.resize({ width: 17, height: 17 });
       if (shouldSetTemplate) {
         icon.setTemplateImage(true);
       }
@@ -137,17 +136,23 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   tray.setToolTip('ImageBox');
   updateTrayMenu(mainWindow);
 
-  // 左键：显示主界面
-  tray.on('click', () => showMainWindow(mainWindow));
+  // macOS：左键/右键都弹出菜单，更符合常见状态栏交互
+  // Windows/Linux：左键显示主界面
+  tray.on('click', () => {
+    if (!tray) return;
+    if (process.platform === 'darwin') {
+      tray.popUpContextMenu(buildTrayMenu(mainWindow));
+      return;
+    }
+    showMainWindow(mainWindow);
+  });
 
   // 右键：弹系统样式菜单（只包含：显示主界面 / 退出）
   tray.on('right-click', () => {
-    // Windows/Linux 已通过 setContextMenu 使用系统原生右键菜单；
-    // macOS 需要手动 popUp，避免 setContextMenu 导致左键也弹菜单。
-    if (process.platform !== 'darwin') return;
     if (!tray) return;
-    const menu = buildTrayMenu(mainWindow);
-    tray.popUpContextMenu(menu);
+    if (process.platform === 'darwin') {
+      tray.popUpContextMenu(buildTrayMenu(mainWindow));
+    }
   });
 
   return tray;
