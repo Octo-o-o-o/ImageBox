@@ -85,8 +85,21 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     // 恢复窗口标题
     mainWindow.setTitle('ImageBox');
 
-    // 只有在有网络时才显示错误
-    if (err.message && !err.message.includes('net::ERR_INTERNET_DISCONNECTED')) {
+    // 静默忽略网络相关错误（断网、超时、连接失败等）
+    const networkErrors = [
+      'net::ERR_INTERNET_DISCONNECTED',
+      'net::ERR_TIMED_OUT',
+      'net::ERR_CONNECTION_REFUSED',
+      'net::ERR_CONNECTION_RESET',
+      'net::ERR_NETWORK_CHANGED',
+      'net::ERR_NAME_NOT_RESOLVED',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'ECONNREFUSED'
+    ];
+    const isNetworkError = networkErrors.some(e => err.message?.includes(e));
+
+    if (!isNetworkError) {
       dialog.showErrorBox('更新失败', `检查更新时出错: ${err.message}`);
     }
   });

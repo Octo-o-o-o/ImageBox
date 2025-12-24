@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-
-// 指定使用 Node.js runtime 而非 Edge runtime
-// Prisma 需要 Node.js 的 fs 模块
-export const runtime = 'nodejs';
 
 // 公开路径（无需认证）
 const PUBLIC_PATHS = [
@@ -61,18 +56,26 @@ function isPublicPath(pathname: string): boolean {
 }
 
 /**
- * 获取系统配置状态（直接查询数据库）
+ * 获取系统配置状态（通过 API，避免 middleware 环境引入 Prisma/Node 依赖）
  */
-async function getAuthStatus() {
+async function getAuthStatus(request: NextRequest) {
   try {
-    const [tokenCount, setting] = await Promise.all([
-      prisma.accessToken.count(),
-      prisma.setting.findUnique({ where: { key: 'remoteAccessEnabled' } })
-    ]);
-    
+    const url = new URL('/api/auth/status', request.url);
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        // 透传 cookie，避免未来扩展鉴权时丢失上下文
+        cookie: request.headers.get('cookie') || ''
+      }
+    });
+
+    if (!res.ok) throw new Error(`status api failed: ${res.status}`);
+    const json = await res.json();
+
     return {
-      isConfigured: tokenCount > 0,
-      remoteAccessEnabled: setting?.value === 'true'
+      isConfigured: Boolean(json?.isConfigured),
+      remoteAccessEnabled: Boolean(json?.remoteAccessEnabled)
     };
   } catch (error) {
     console.error('Failed to get auth status:', error);
@@ -82,25 +85,24 @@ async function getAuthStatus() {
 }
 
 /**
- * 验证 token（直接查询数据库）
+ * 验证 token（通过 API，避免 middleware 环境引入 Prisma/Node 依赖）
  */
-async function validateToken(token: string): Promise<boolean> {
+async function validateToken(request: NextRequest, token: string): Promise<boolean> {
   try {
-    const accessToken = await prisma.accessToken.findUnique({
-      where: { token }
+    const url = new URL('/api/auth/validate', request.url);
+    const res = await fetch(url, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'content-type': 'application/json',
+        cookie: request.headers.get('cookie') || ''
+      },
+      body: JSON.stringify({ token })
     });
-    
-    if (!accessToken) return false;
-    if (accessToken.isRevoked) return false;
-    if (accessToken.expiresAt < new Date()) return false;
-    
-    // 更新最后使用时间（异步，不阻塞）
-    prisma.accessToken.update({
-      where: { id: accessToken.id },
-      data: { lastUsedAt: new Date() }
-    }).catch(() => {});
-    
-    return true;
+
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json?.valid);
   } catch (error) {
     console.error('Token validation error:', error);
     return false;
@@ -110,6 +112,9 @@ async function validateToken(token: string): Promise<boolean> {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLocal = isLocalRequest(request);
+  // 通过 Electron 启动的 Next.js 服务器会注入 USER_DATA_PATH
+  // 用于区分“桌面版（更强调本机安全）”与“Web/Docker（更强调远程部署）”
+  const isDesktopServer = typeof process !== 'undefined' && !!process.env.USER_DATA_PATH;
   
   // 桌面应用模式：通过自定义 header 识别 Electron 请求，跳过所有认证
   if (request.headers.get('x-electron-app') === 'true') {
@@ -128,11 +133,19 @@ export async function middleware(request: NextRequest) {
   
   // === 远程请求处理 ===
   
-  // 获取系统配置状态（直接查询数据库，避免 Docker 网络问题）
-  const { isConfigured, remoteAccessEnabled } = await getAuthStatus();
+  // 获取系统配置状态（通过 API）
+  const { isConfigured, remoteAccessEnabled } = await getAuthStatus(request);
   
   // 情况1: 系统未配置（无任何授权码）-> 允许访问，但强制跳转到设置页
   if (!isConfigured) {
+    // 桌面版：首次配置必须在本机完成，避免局域网里“未初始化即被接管”
+    if (isDesktopServer) {
+      return new NextResponse('This desktop app must be configured locally first. Please open Settings on the host machine to create an access token.', {
+        status: 403,
+        headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+
     // 如果已经在设置页或设置相关API，直接放行
     if (pathname.startsWith('/settings') || pathname.startsWith('/api/')) {
       return NextResponse.next();
@@ -165,7 +178,7 @@ export async function middleware(request: NextRequest) {
   }
   
   // 验证 token（直接查询数据库）
-  const isValid = await validateToken(token);
+  const isValid = await validateToken(request, token);
   
   if (!isValid) {
     // Token 无效，重定向到登录页

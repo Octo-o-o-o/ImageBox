@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import { getDatabaseUrl } from './paths'
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient | undefined }
@@ -11,12 +10,19 @@ const createPrismaClient = () => {
   // 2. 其次使用 paths.ts 的动态路径（桌面应用或 Web 模式）
   const databaseUrl = process.env.DATABASE_URL || getDatabaseUrl()
 
-  // Create adapter with URL configuration (not Database instance)
+  /**
+   * 说明：
+   * - 之前使用 `@prisma/adapter-better-sqlite3` + `better-sqlite3`。
+   * - Prisma 7 起，PrismaClient 需要提供 driver adapter（或 Accelerate），无法降级回“默认引擎”。
+   * - Electron 打包白屏的根因通常是：better-sqlite3 原生 binding 架构/ABI 不匹配。
+   *   我们在打包阶段用 afterPack 钩子确保 standalone 目录里的 binding 与当前 arch 一致。
+   */
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3')
   const adapter = new PrismaBetterSqlite3(
     { url: databaseUrl },
     { timestampFormat: 'unixepoch-ms' } // For backward compatibility
   )
-
   return new PrismaClient({ adapter })
 }
 

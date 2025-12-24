@@ -45,6 +45,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isDesktop: true,
 
   /**
+   * 获取默认路径
+   */
+  getDefaultPaths: (): Promise<{ documents: string; downloads: string; userData: string }> => {
+    return ipcRenderer.invoke('app:getDefaultPaths');
+  },
+
+  /**
    * 获取当前平台 (win32, darwin, linux)
    */
   platform: process.platform
@@ -57,6 +64,7 @@ declare global {
       selectFolder: () => Promise<string | undefined>;
       showInFinder: (filePath: string) => Promise<void>;
       openExternal: (url: string) => Promise<void>;
+      getDefaultPaths: () => Promise<{ documents: string; downloads: string; userData: string }>;
       onNavigate: (callback: (path: string) => void) => void;
       onUpdateProgress: (callback: (percent: number) => void) => void;
       isDesktop: boolean;

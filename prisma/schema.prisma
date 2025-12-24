@@ -1,5 +1,9 @@
 generator client {
   provider = "prisma-client-js"
+  // 打包到 Electron 时可能会同时构建 x64/arm64（或在某个架构上构建另一架构的安装包）
+  // 若只生成 “native”，另一架构运行时会报 “Query engine for current platform not found”，导致 Next 首页 500 白屏。
+  // 这里显式把 macOS 两个架构都打进包里（体积略增，但稳定性大幅提升）。
+  binaryTargets = ["native", "darwin", "darwin-arm64"]
 }
 
 datasource db {

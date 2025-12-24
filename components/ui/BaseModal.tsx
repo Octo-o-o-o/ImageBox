@@ -17,6 +17,8 @@ interface BaseModalProps {
   closeOnBackdrop?: boolean;
   /** Whether ESC key closes modal, defaults to true */
   closeOnEscape?: boolean;
+  /** Custom z-index class, defaults to z-50 */
+  zIndex?: string;
 }
 
 export function BaseModal({
@@ -28,6 +30,7 @@ export function BaseModal({
   showCloseButton = true,
   closeOnBackdrop = true,
   closeOnEscape = true,
+  zIndex = 'z-50',
 }: BaseModalProps) {
   // ESC key close handler
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -60,7 +63,7 @@ export function BaseModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          className={`fixed inset-0 ${zIndex} flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm`}
           onClick={handleBackdropClick}
         >
           <motion.div

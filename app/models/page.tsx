@@ -1,11 +1,10 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { getModels, saveModel, deleteModel, getProviders, saveProvider, deleteProvider, discoverLocalServicesAction, checkLocalServiceAction, checkLocalProviderStatusAction, checkInstallPrerequisitesAction, getInstallCommandsAction, runAutoInstallStepAction, installPrerequisiteAction } from '@/app/actions';
-import { Save, Loader2, Key, Plus, Trash2, Cpu, Server, Check, RefreshCw, AlertTriangle, HardDrive, Search, Wifi, WifiOff, Download, Terminal, Copy, CheckCircle, XCircle, Play } from 'lucide-react';
+import { getModels, saveModel, deleteModel, getProviders, saveProvider, deleteProvider, discoverLocalServicesAction, checkLocalServiceAction, checkLocalProviderStatusAction } from '@/app/actions';
+import { Save, Loader2, Key, Plus, Trash2, Cpu, Server, Check, RefreshCw, AlertTriangle, HardDrive, Search, Wifi, WifiOff, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MODEL_PRESETS, PARAMETER_DEFINITIONS } from '@/lib/modelParameters';
-import { isPresetProvider, getApiKeyApplyUrl } from '@/lib/presetProviders';
-import { ExternalLink } from 'lucide-react';
+import { isPresetProvider, isPresetModel, getApiKeyApplyUrl } from '@/lib/presetProviders';
 import { useLanguage } from '@/components/LanguageProvider';
 import { ConfirmDialog } from '@/components/ui';
 
@@ -29,10 +28,10 @@ export default function ModelsPage() {
   // Local Model States
   const [localProviderStatus, setLocalProviderStatus] = useState<Record<string, 'online' | 'offline' | 'checking'>>({});
   const [scanning, setScanning] = useState(false);
-  const [scanCompleted, setScanCompleted] = useState(false); // Track if scan has completed
   const [discoveredServices, setDiscoveredServices] = useState<any[]>([]);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [selectedService, setSelectedService] = useState<any | null>(null);
 
   const refreshInfo = async () => {
     setLoading(true);
@@ -96,26 +95,63 @@ export default function ModelsPage() {
     if (type === 'OPENAI') defaultUrl = 'https://api.openai.com/v1';
     if (type === 'GEMINI') defaultUrl = 'https://generativelanguage.googleapis.com';
     if (type === 'LOCAL') defaultUrl = 'http://127.0.0.1:8080';
-    
+
     setNewProvider({ name: '', type, baseUrl: defaultUrl, apiKey: '', localBackend: 'SD_CPP' });
     setEditingProvider(null);
     setEditingProvider({ id: undefined, name: '', type, baseUrl: defaultUrl, apiKey: '', localBackend: 'SD_CPP' });
     setConnectionTestResult(null);
+
+    // Reset scan state when opening provider modal
+    if (type === 'LOCAL') {
+      setDiscoveredServices([]);
+      setSelectedService(null);
+      setScanning(false);
+    }
   };
-  
+
+  // Open the Add Local Model modal (directly opens provider modal with LOCAL type)
+  const openAddLocalModelModal = () => {
+    openNewProvider('LOCAL');
+  };
+
   // Scan for local services
   const handleScanServices = async () => {
     setScanning(true);
-    setScanCompleted(false);
     setDiscoveredServices([]);
+    setSelectedService(null);
     try {
       const services = await discoverLocalServicesAction();
       setDiscoveredServices(services);
+
+      // Auto-fill if only one service found
+      if (services.length === 1) {
+        const service = services[0];
+        const backend = service.type === 'COMFYUI' ? 'COMFYUI' : 'SD_CPP';
+        setEditingProvider((prev: any) => ({
+          ...prev,
+          baseUrl: service.url,
+          localBackend: backend,
+          name: prev?.name || `Local ${service.type}`,
+        }));
+        setSelectedService(service);
+      }
     } catch (e) {
       console.error('Scan failed:', e);
     }
     setScanning(false);
-    setScanCompleted(true);
+  };
+
+  // Select a service from the list
+  const handleSelectService = (service: any) => {
+    const backend = service.type === 'COMFYUI' ? 'COMFYUI' : 'SD_CPP';
+    setEditingProvider((prev: any) => ({
+      ...prev,
+      baseUrl: service.url,
+      localBackend: backend,
+      name: prev?.name || `Local ${service.type}`,
+    }));
+    setSelectedService(service);
+    setDiscoveredServices([]);
   };
   
   // Test connection to a local service
@@ -133,152 +169,6 @@ export default function ModelsPage() {
       setConnectionTestResult({ success: false, message: t('models.providers.testFailed') });
     }
     setTestingConnection(false);
-  };
-  
-  // Quick add a discovered local service (one-click)
-  const [quickAdding, setQuickAdding] = useState<string | null>(null);
-  
-  // Auto install states
-  const [showInstallWizard, setShowInstallWizard] = useState(false);
-  const [installPrereqs, setInstallPrereqs] = useState<any>(null);
-  const [installCommands, setInstallCommands] = useState<any>(null);
-  const [selectedModelVariant, setSelectedModelVariant] = useState<'full' | 'q8' | 'q4' | 'q2'>('q4');
-  const [installing, setInstalling] = useState(false);
-  const [installStep, setInstallStep] = useState<string>('');
-  const [installLogs, setInstallLogs] = useState<{step: string; success: boolean; message: string}[]>([]);
-  const [copied, setCopied] = useState(false);
-  const [installingPrereq, setInstallingPrereq] = useState<string | null>(null);
-  const handleQuickAddLocalService = async (service: any) => {
-    setQuickAdding(service.url);
-    try {
-      // Determine backend type and preset
-      const backend = service.type === 'COMFYUI' ? 'COMFYUI' : 'SD_CPP';
-      const presetKey = backend === 'COMFYUI' ? 'LOCAL_ZIMAGE_COMFYUI' : 'LOCAL_ZIMAGE_SDCPP';
-      const parameterConfig = JSON.stringify(MODEL_PRESETS[presetKey as keyof typeof MODEL_PRESETS] || {});
-      
-      // Create provider
-      const provider = await saveProvider({
-        name: `Local ${service.type}`,
-        type: 'LOCAL',
-        baseUrl: service.url,
-        localBackend: backend,
-      });
-      
-      // Create model
-      await saveModel({
-        name: 'Z-Image Turbo',
-        modelIdentifier: 'z-image-turbo',
-        type: 'IMAGE',
-        providerId: provider.id,
-        parameterConfig,
-      });
-      
-      // Clear discovered services and refresh
-      setDiscoveredServices([]);
-      refreshInfo();
-    } catch (e) {
-      console.error('Quick add failed:', e);
-      alert('添加失败: ' + (e instanceof Error ? e.message : String(e)));
-    }
-    setQuickAdding(null);
-  };
-  
-  // Start auto install wizard
-  const handleStartInstallWizard = async () => {
-    setShowInstallWizard(true);
-    setInstallLogs([]);
-    
-    // Check prerequisites
-    const prereqs = await checkInstallPrerequisitesAction();
-    setInstallPrereqs(prereqs);
-    
-    // Get install commands
-    const commands = await getInstallCommandsAction(selectedModelVariant, 8080);
-    setInstallCommands(commands);
-  };
-  
-  // Update commands when model variant changes
-  const handleModelVariantChange = async (variant: 'full' | 'q8' | 'q4' | 'q2') => {
-    setSelectedModelVariant(variant);
-    const commands = await getInstallCommandsAction(variant, 8080);
-    setInstallCommands(commands);
-  };
-  
-  // Copy one-liner to clipboard
-  const handleCopyOneLiner = async () => {
-    if (installCommands?.oneLiner) {
-      await navigator.clipboard.writeText(installCommands.oneLiner);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-  
-  // Install a missing prerequisite
-  const handleInstallPrerequisite = async (tool: 'cmake' | 'huggingface') => {
-    setInstallingPrereq(tool);
-    try {
-      const result = await installPrerequisiteAction(tool);
-      if (result.success) {
-        // Refresh prerequisites
-        const prereqs = await checkInstallPrerequisitesAction();
-        setInstallPrereqs(prereqs);
-      } else {
-        alert(`安装失败: ${result.error || result.message}`);
-      }
-    } catch (e) {
-      alert(`安装失败: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    setInstallingPrereq(null);
-  };
-  
-  // Run automatic installation
-  const handleRunAutoInstall = async () => {
-    setInstalling(true);
-    setInstallLogs([]);
-    
-    const steps: Array<'create-dir' | 'clone-repo' | 'build' | 'download-model' | 'verify'> = [
-      'create-dir',
-      'clone-repo', 
-      'build',
-      'download-model',
-      'verify'
-    ];
-    
-    const stepNames: Record<string, string> = {
-      'create-dir': '创建目录',
-      'clone-repo': '克隆仓库',
-      'build': '编译项目',
-      'download-model': '下载模型',
-      'verify': '验证安装'
-    };
-    
-    for (const step of steps) {
-      setInstallStep(stepNames[step]);
-      
-      try {
-        const result = await runAutoInstallStepAction(step, selectedModelVariant);
-        setInstallLogs(prev => [...prev, { step: stepNames[step], success: result.success, message: result.message }]);
-        
-        if (!result.success) {
-          setInstallStep('安装失败');
-          setInstalling(false);
-          return;
-        }
-      } catch (e) {
-        setInstallLogs(prev => [...prev, { step: stepNames[step], success: false, message: String(e) }]);
-        setInstallStep('安装失败');
-        setInstalling(false);
-        return;
-      }
-    }
-    
-    setInstallStep('安装完成');
-    setInstalling(false);
-    
-    // Scan for the newly installed service
-    setTimeout(() => {
-      handleScanServices();
-    }, 2000);
   };
 
   // --- Model Handlers ---
@@ -349,16 +239,8 @@ export default function ModelsPage() {
                 </div>
             </div>
             <div className="flex gap-2">
-              <button 
-                  onClick={handleScanServices}
-                  disabled={scanning}
-                  className="flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                  {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} 
-                  {t('models.providers.scanServices')}
-              </button>
-              <button 
-                  onClick={() => openNewProvider('LOCAL')}
+              <button
+                  onClick={openAddLocalModelModal}
                   className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
               >
                   <HardDrive className="w-4 h-4" /> {t('models.providers.addLocal')}
@@ -471,360 +353,6 @@ export default function ModelsPage() {
               );
             })}
          </div>
-         
-         {/* Discovered Services */}
-         {discoveredServices.length > 0 && (
-           <div className="mt-6 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
-             <h3 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-3 flex items-center gap-2">
-               <Wifi className="w-4 h-4" />
-               {t('models.providers.foundServices').replace('{{count}}', String(discoveredServices.length))}
-             </h3>
-             <div className="space-y-2">
-               {discoveredServices.map((service, idx) => (
-                 <div key={idx} className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
-                   <div className="flex items-center gap-3">
-                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                     <div>
-                       <p className="text-sm font-medium text-foreground">{service.type}</p>
-                       <p className="text-xs text-muted-foreground font-mono">{service.url}</p>
-                     </div>
-                   </div>
-                   <div className="flex gap-2">
-                     <button
-                       onClick={() => {
-                         openNewProvider('LOCAL');
-                         setTimeout(() => {
-                           setEditingProvider((prev: any) => ({ ...prev, baseUrl: service.url, localBackend: service.type === 'COMFYUI' ? 'COMFYUI' : 'SD_CPP' }));
-                         }, 0);
-                       }}
-                       className="px-3 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg text-xs font-medium"
-                     >
-                       {t('common.edit')}
-                     </button>
-                     <button
-                       onClick={() => handleQuickAddLocalService(service)}
-                       disabled={quickAdding === service.url}
-                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
-                     >
-                       {quickAdding === service.url ? (
-                         <Loader2 className="w-3 h-3 animate-spin" />
-                       ) : (
-                         <Plus className="w-3 h-3" />
-                       )}
-                       {t('models.providers.quickAdd')}
-                     </button>
-                   </div>
-                 </div>
-               ))}
-             </div>
-           </div>
-         )}
-         
-         {/* No Services Found - Show Installation Guide */}
-         {scanCompleted && discoveredServices.length === 0 && (
-           <div className="mt-6 p-5 bg-amber-500/5 border border-amber-500/20 rounded-xl">
-             <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400 mb-3 flex items-center gap-2">
-               <WifiOff className="w-4 h-4" />
-               {t('models.providers.noServicesFoundScan')}
-             </h3>
-             <p className="text-sm text-muted-foreground mb-4">
-               未发现本地推理服务。您可以：
-             </p>
-             <div className="space-y-3">
-               {/* Option 1: Auto Install */}
-               <div className="p-4 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-lg border border-emerald-500/30">
-                 <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                   <Download className="w-4 h-4 text-emerald-500" />
-                   自动安装 Z-Image（推荐）
-                 </h4>
-                 <p className="text-xs text-muted-foreground mb-3">
-                   ImageBox 帮你自动下载、编译、配置本地推理环境
-                 </p>
-                 <button
-                   onClick={handleStartInstallWizard}
-                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium flex items-center gap-2"
-                 >
-                   <Play className="w-4 h-4" />
-                   开始自动安装
-                 </button>
-               </div>
-               
-               {/* Option 2: Manual Install with guide */}
-               <div className="p-4 bg-card rounded-lg border border-border">
-                 <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                   <Terminal className="w-4 h-4 text-blue-500" />
-                   手动安装（高级用户）
-                 </h4>
-                 <p className="text-xs text-muted-foreground mb-3">
-                   在终端中手动执行安装命令
-                 </p>
-                 <details className="text-xs">
-                   <summary className="cursor-pointer text-primary hover:underline">查看安装命令</summary>
-                   <div className="mt-3 bg-secondary/50 p-3 rounded-lg font-mono text-foreground overflow-x-auto">
-                     {/* Platform hint */}
-                     <div className="text-amber-500 text-xs mb-3 p-2 bg-amber-500/10 rounded flex items-start gap-2 font-sans">
-                       <span>⚠️</span>
-                       <span>
-                         以下为 macOS (Apple Silicon) 示例。
-                         <a
-                           href="https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/build.md"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           className="underline ml-1 hover:text-amber-400"
-                         >
-                           Windows/Linux 请参考官方文档 →
-                         </a>
-                       </span>
-                     </div>
-
-                     <p className="text-muted-foreground mb-1"># 1. 克隆项目并初始化子模块</p>
-                     <p>git clone https://github.com/leejet/stable-diffusion.cpp</p>
-                     <p>cd stable-diffusion.cpp && git submodule update --init --recursive</p>
-                     <p className="text-muted-foreground mt-2 mb-1"># 2. 编译 (macOS Metal)</p>
-                     <p>mkdir build && cd build</p>
-                     <p>cmake .. -DSD_METAL=ON && cmake --build . --config Release</p>
-                     <p className="text-muted-foreground/60 mt-1 mb-1 text-xs"># Windows/Linux (CUDA): cmake .. -DSD_CUDA=ON && cmake --build . --config Release</p>
-                    <p className="text-muted-foreground mt-2 mb-1"># 3. 下载 Z-Image 模型</p>
-                    <p>python3 -c &quot;from huggingface_hub import snapshot_download; snapshot_download(&apos;Tongyi-MAI/Z-Image-Turbo&apos;, local_dir=&apos;models/Z-Image-Turbo&apos;)&quot;</p>
-                     <p className="text-muted-foreground mt-2 mb-1"># 4. 启动服务</p>
-                     <p>./bin/sd --mode server --model models/z-image-turbo.gguf --port 8080</p>
-                   </div>
-                 </details>
-               </div>
-               
-               {/* Option 3: Use ComfyUI */}
-               <div className="p-4 bg-card rounded-lg border border-border">
-                 <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                   <Server className="w-4 h-4 text-orange-500" />
-                   使用 ComfyUI
-                 </h4>
-                 <p className="text-xs text-muted-foreground mb-2">
-                   功能丰富的图形化界面，通过工作流支持 Z-Image
-                 </p>
-                 <a 
-                   href="https://github.com/comfyanonymous/ComfyUI" 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                 >
-                   ComfyUI 安装指南 →
-                 </a>
-               </div>
-               
-               {/* Option 4: Manual Add */}
-               <div className="flex items-center gap-3 pt-2">
-                 <span className="text-xs text-muted-foreground">或者</span>
-                 <button
-                   onClick={() => openNewProvider('LOCAL')}
-                   className="text-xs text-primary hover:underline"
-                 >
-                   手动添加已有的本地服务 →
-                 </button>
-               </div>
-             </div>
-           </div>
-         )}
-         
-         {/* Auto Install Wizard Modal */}
-         <AnimatePresence>
-           {showInstallWizard && (
-             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-               <motion.div 
-                 initial={{ opacity: 0, scale: 0.95 }}
-                 animate={{ opacity: 1, scale: 1 }}
-                 exit={{ opacity: 0, scale: 0.95 }}
-                 className="w-full max-w-2xl bg-popover border border-border rounded-2xl p-6 shadow-2xl max-h-[80vh] overflow-y-auto"
-               >
-                 <h2 className="text-lg font-bold mb-4 text-popover-foreground flex items-center gap-2">
-                   <Download className="w-5 h-5 text-emerald-500" />
-                   自动安装 Z-Image 本地模型
-                 </h2>
-                 
-                 {/* Prerequisites Check */}
-                 {installPrereqs && (
-                   <div className="mb-6 p-4 bg-secondary/30 rounded-lg">
-                     <h3 className="text-sm font-medium mb-3">环境检测</h3>
-                     <div className="space-y-2 text-xs">
-                       {/* Git */}
-                       <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-2">
-                           {installPrereqs.prerequisites.git ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                           <span>Git</span>
-                         </div>
-                         {!installPrereqs.prerequisites.git && (
-                           <span className="text-muted-foreground">请手动安装</span>
-                         )}
-                       </div>
-                       
-                       {/* CMake */}
-                       <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-2">
-                           {installPrereqs.prerequisites.cmake ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                           <span>CMake</span>
-                         </div>
-                         {!installPrereqs.prerequisites.cmake && (
-                           <button
-                             onClick={() => handleInstallPrerequisite('cmake')}
-                             disabled={installingPrereq === 'cmake'}
-                             className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] flex items-center gap-1 disabled:opacity-50"
-                           >
-                             {installingPrereq === 'cmake' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                             自动安装
-                           </button>
-                         )}
-                       </div>
-                       
-                       {/* Python */}
-                       <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-2">
-                           {installPrereqs.prerequisites.python ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                           <span>Python</span>
-                         </div>
-                         {!installPrereqs.prerequisites.python && (
-                           <span className="text-muted-foreground">请手动安装</span>
-                         )}
-                       </div>
-                       
-                       {/* HuggingFace CLI */}
-                       <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-2">
-                           {installPrereqs.prerequisites.huggingface ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                           <span>HuggingFace CLI</span>
-                         </div>
-                         {!installPrereqs.prerequisites.huggingface && installPrereqs.prerequisites.python && (
-                           <button
-                             onClick={() => handleInstallPrerequisite('huggingface')}
-                             disabled={installingPrereq === 'huggingface'}
-                             className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] flex items-center gap-1 disabled:opacity-50"
-                           >
-                             {installingPrereq === 'huggingface' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                             自动安装
-                           </button>
-                         )}
-                         {!installPrereqs.prerequisites.huggingface && !installPrereqs.prerequisites.python && (
-                           <span className="text-muted-foreground">需要先安装 Python</span>
-                         )}
-                       </div>
-                       
-                       {/* Xcode CLI Tools (macOS only) */}
-                       {installPrereqs.prerequisites.xcode !== undefined && (
-                         <div className="flex items-center justify-between">
-                           <div className="flex items-center gap-2">
-                             {installPrereqs.prerequisites.xcode ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                             <span>Xcode CLI Tools</span>
-                           </div>
-                           {!installPrereqs.prerequisites.xcode && (
-                             <span className="text-muted-foreground text-[10px]">运行: xcode-select --install</span>
-                           )}
-                         </div>
-                       )}
-                     </div>
-                     <p className="text-[10px] text-muted-foreground mt-3 pt-2 border-t border-border">
-                       安装目录: {installPrereqs.installDir}
-                     </p>
-                   </div>
-                 )}
-                 
-                 {/* Model Variant Selection */}
-                 <div className="mb-6">
-                   <h3 className="text-sm font-medium mb-3">选择模型版本</h3>
-                   <div className="grid grid-cols-2 gap-3">
-                     {[
-                       { id: 'q4', name: 'Q4 量化版', size: '~3GB', desc: '推荐，平衡质量和大小' },
-                       { id: 'q8', name: 'Q8 量化版', size: '~6GB', desc: '高质量' },
-                       { id: 'full', name: '完整版', size: '~12GB', desc: '最高质量' },
-                       { id: 'q2', name: 'Q2 极限量化', size: '~1.5GB', desc: '最小，质量较低' },
-                     ].map((v) => (
-                       <button
-                         key={v.id}
-                         onClick={() => handleModelVariantChange(v.id as any)}
-                         className={`p-3 rounded-lg border text-left transition-all ${
-                           selectedModelVariant === v.id 
-                             ? 'border-emerald-500 bg-emerald-500/10' 
-                             : 'border-border hover:border-emerald-500/50'
-                         }`}
-                       >
-                         <div className="flex justify-between items-start">
-                           <span className="font-medium text-sm">{v.name}</span>
-                           <span className="text-xs text-muted-foreground">{v.size}</span>
-                         </div>
-                         <p className="text-xs text-muted-foreground mt-1">{v.desc}</p>
-                       </button>
-                     ))}
-                   </div>
-                 </div>
-                 
-                 {/* One-liner copy */}
-                 {installCommands && (
-                   <div className="mb-6">
-                     <h3 className="text-sm font-medium mb-2">一键复制安装命令</h3>
-                     <div className="relative">
-                       <div className="bg-secondary/50 p-3 pr-12 rounded-lg font-mono text-xs text-foreground overflow-x-auto max-h-20">
-                         {installCommands.oneLiner}
-                       </div>
-                       <button
-                         onClick={handleCopyOneLiner}
-                         className="absolute right-2 top-2 p-2 bg-secondary hover:bg-secondary/80 rounded-md"
-                       >
-                         {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                       </button>
-                     </div>
-                     <p className="text-[10px] text-muted-foreground mt-1">
-                       预计下载: {installCommands.estimatedSize}
-                     </p>
-                   </div>
-                 )}
-                 
-                 {/* Install Logs */}
-                 {installLogs.length > 0 && (
-                   <div className="mb-6">
-                     <h3 className="text-sm font-medium mb-2">安装日志</h3>
-                     <div className="bg-secondary/30 p-3 rounded-lg max-h-40 overflow-y-auto">
-                       {installLogs.map((log, idx) => (
-                         <div key={idx} className="flex items-center gap-2 text-xs py-1">
-                           {log.success ? (
-                             <CheckCircle className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                           ) : (
-                             <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
-                           )}
-                           <span className="font-medium">{log.step}:</span>
-                           <span className="text-muted-foreground">{log.message}</span>
-                         </div>
-                       ))}
-                       {installing && (
-                         <div className="flex items-center gap-2 text-xs py-1">
-                           <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
-                           <span>{installStep}...</span>
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                 )}
-                 
-                 {/* Actions */}
-                 <div className="flex justify-end gap-3 border-t border-border pt-4">
-                   <button 
-                     onClick={() => setShowInstallWizard(false)} 
-                     className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm"
-                   >
-                     取消
-                   </button>
-                   <button
-                     onClick={handleRunAutoInstall}
-                     disabled={installing || !installPrereqs?.prerequisites.git || !installPrereqs?.prerequisites.cmake}
-                     className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
-                   >
-                     {installing ? (
-                       <><Loader2 className="w-4 h-4 animate-spin" /> 安装中...</>
-                     ) : (
-                       <><Download className="w-4 h-4" /> 开始自动安装</>
-                     )}
-                   </button>
-                 </div>
-               </motion.div>
-             </div>
-           )}
-         </AnimatePresence>
       </section>
 
       {/* 2. Models Section */}
@@ -875,13 +403,30 @@ export default function ModelsPage() {
       <AnimatePresence>
         {editingProvider && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     className="w-full max-w-md bg-popover border border-border rounded-2xl p-6 shadow-2xl"
                 >
-                    <h2 className="text-lg font-bold mb-6 text-popover-foreground">{editingProvider.id ? t('models.providers.editTitle') : t('models.providers.newTitle')}</h2>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-lg font-bold text-popover-foreground">{editingProvider.id ? t('models.providers.editTitle') : t('models.providers.newTitle')}</h2>
+                      {editingProvider.type === 'LOCAL' && !editingProvider.id && (
+                        <button
+                          onClick={handleScanServices}
+                          disabled={scanning}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                          title="扫描本地服务"
+                        >
+                          {scanning ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Search className="w-4 h-4" />
+                          )}
+                          扫描
+                        </button>
+                      )}
+                    </div>
                     
                     <div className="space-y-4">
                         <div>
@@ -1003,6 +548,68 @@ export default function ModelsPage() {
                             {t('models.providers.localNoApiKey')}
                           </p>
                         )}
+
+                        {/* Service Selection List (for LOCAL type with multiple discovered services) */}
+                        {editingProvider.type === 'LOCAL' && !editingProvider.id && discoveredServices.length > 1 && (
+                          <div className="pt-4 border-t border-border">
+                            <h3 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-3 flex items-center gap-2">
+                              <Wifi className="w-4 h-4" />
+                              发现 {discoveredServices.length} 个服务，请选择一个：
+                            </h3>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {discoveredServices.map((service, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => handleSelectService(service)}
+                                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                                    selectedService?.url === service.url
+                                      ? 'border-emerald-500 bg-emerald-500/10'
+                                      : 'border-border hover:border-emerald-500/50 bg-card'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className={`w-2 h-2 rounded-full ${selectedService?.url === service.url ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
+                                    <div className="text-left">
+                                      <p className="text-sm font-medium text-foreground">{service.type}</p>
+                                      <p className="text-xs text-muted-foreground font-mono">{service.url}</p>
+                                    </div>
+                                  </div>
+                                  {selectedService?.url === service.url && (
+                                    <Check className="w-4 h-4 text-emerald-500" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No Services Found (for LOCAL type when scanned but nothing found) */}
+                        {editingProvider.type === 'LOCAL' && !editingProvider.id && !scanning && discoveredServices.length === 0 && selectedService === null && (
+                          <div className="pt-4 border-t border-border">
+                            <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                              <div className="flex items-start gap-3 mb-3">
+                                <WifiOff className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400 mb-1">
+                                    未发现本地推理服务
+                                  </h3>
+                                  <p className="text-xs text-muted-foreground">
+                                    请先安装并启动本地推理服务 (如 stable-diffusion.cpp 或 ComfyUI)
+                                  </p>
+                                </div>
+                              </div>
+                              <a
+                                href="https://github.com/Tongyi-MAI/Z-Image"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow-md"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                查看 Z-Image 安装指南
+                              </a>
+                            </div>
+                          </div>
+                        )}
                     </div>
 
                     <div className="mt-8 flex justify-end gap-3 border-t border-border pt-4">
@@ -1071,10 +678,11 @@ export default function ModelsPage() {
                             />
                         </div>
 
-                        {/* Parameter Configuration (for IMAGE models only) */}
-                        {editingModel.type === 'IMAGE' && (
+                        {/* Parameter Configuration (for user-created IMAGE models only, hidden for presets) */}
+                        {editingModel.type === 'IMAGE' && (!editingModel.id || !isPresetModel(editingModel.id)) && (
                             <div className="space-y-2 pt-4 border-t border-border">
                                 <label className="text-xs text-muted-foreground uppercase font-semibold">{t('models.models.paramConfigLabel')}</label>
+
                                 <select
                                     value={getPresetKeyFromConfig(editingModel.parameterConfig)}
                                     onChange={e => {
@@ -1098,7 +706,8 @@ export default function ModelsPage() {
                                     </optgroup>
                                     <optgroup label={t('models.models.optgroup.openrouter')}>
                                         <option value="GEMINI_OPENROUTER">{t('models.models.option.geminiOpenRouter')}</option>
-                                        <option value="GRSAI_NANO_BANANA">{t('models.models.option.grsaiNanaBanana')}</option>
+                                        <option value="GRSAI_NANO_BANANA_PRO">{t('models.models.option.grsaiNanaBananaPro')}</option>
+                                        <option value="GRSAI_NANO_BANANA_FAST">{t('models.models.option.grsaiNanaBananaFast')}</option>
                                         <option value="OPENAI_COMPATIBLE">{t('models.models.option.openaiCompatible')}</option>
                                     </optgroup>
                                     <optgroup label={t('models.models.optgroup.openai')}>

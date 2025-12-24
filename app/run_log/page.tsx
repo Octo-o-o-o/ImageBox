@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/components/LanguageProvider';
 import { ImagePreviewModal } from '@/components/ui';
+import { getImageUrl } from '@/lib/imageUrl';
+import { isDesktopApp } from '@/lib/env';
+import { getStorageConfig } from '@/app/actions';
 
 // Use a type that matches the Prisma model
 type RunLog = {
@@ -39,6 +42,8 @@ export default function RunLogPage() {
   const [logs, setLogs] = useState<RunLog[]>([]);
   const [loading, setLoading] = useState(true);
   const { t } = useLanguage();
+  const [isDesktopMode, setIsDesktopMode] = useState(() => isDesktopApp());
+  const [isCustomStoragePath, setIsCustomStoragePath] = useState(false);
   const typeLabels: Record<string, string> = { 
     PROMPT_GEN: t('runLog.filter.promptGen'), 
     IMAGE_GEN: t('runLog.filter.imageGen') 
@@ -59,6 +64,13 @@ export default function RunLogPage() {
   useEffect(() => {
     loadLogs();
   }, [filterType, filterStatus, timeRange]);
+
+  useEffect(() => {
+    setIsDesktopMode(isDesktopApp());
+    getStorageConfig()
+      .then((cfg) => setIsCustomStoragePath(!!cfg.path))
+      .catch(() => setIsCustomStoragePath(false));
+  }, []);
 
   const loadLogs = async () => {
     setLoading(true);
@@ -180,7 +192,15 @@ export default function RunLogPage() {
              </div>
         ) : (
           filteredLogs.map(log => (
-            <LogItem key={log.id} log={log} typeLabels={typeLabels} statusLabels={statusLabels} t={t} />
+            <LogItem
+              key={log.id}
+              log={log}
+              typeLabels={typeLabels}
+              statusLabels={statusLabels}
+              t={t}
+              isDesktopMode={isDesktopMode}
+              isCustomStoragePath={isCustomStoragePath}
+            />
           ))
         )}
       </div>
@@ -188,9 +208,24 @@ export default function RunLogPage() {
   );
 }
 
-function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels: Record<string, string>, statusLabels: Record<string, string>, t: (key: string) => string }) {
+function LogItem({
+  log,
+  typeLabels,
+  statusLabels,
+  t,
+  isDesktopMode,
+  isCustomStoragePath
+}: {
+  log: RunLog
+  typeLabels: Record<string, string>
+  statusLabels: Record<string, string>
+  t: (key: string) => string
+  isDesktopMode: boolean
+  isCustomStoragePath: boolean
+}) {
   const [expanded, setExpanded] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [deletedImages, setDeletedImages] = useState<Set<string>>(new Set());
 
   // Status Styles
   const statusColor = 
@@ -206,6 +241,16 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
   const isImage = log.type === 'IMAGE_GEN';
   const TypeIcon = isImage ? ImageIcon : FileCode;
   const typeText = typeLabels[log.type] || log.type;
+
+  // Check if all images are deleted
+  const imagePaths = log.output?.split(', ') || [];
+  const imageUrls = imagePaths.map((p) => getImageUrl(p, isCustomStoragePath, isDesktopMode));
+  const allImagesDeleted = imageUrls.length > 0 && imageUrls.every(url => deletedImages.has(url));
+
+  // Handler for image load error
+  const handleImageError = (url: string) => {
+    setDeletedImages(prev => new Set(prev).add(url));
+  };
 
   return (
     <motion.div
@@ -304,12 +349,12 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                         )}
                     </div>
 
-                    {/* Image Paths - Only show for successful image generation */}
-                    {isImage && log.status === 'SUCCESS' && log.output && (
+                    {/* Image Paths - Only show for successful image generation and when images exist */}
+                    {isImage && log.status === 'SUCCESS' && log.output && !allImagesDeleted && (
                         <div className="bg-secondary/20 p-3 rounded-lg border border-border">
                             <span className="text-muted-foreground text-xs block mb-2">{t('runLog.imagePaths')}</span>
                             <div className="space-y-1">
-                                {(log.output.split(', ') || []).map((path, idx) => (
+                                {imagePaths.map((path, idx) => (
                                     <div key={idx} className="text-foreground font-mono text-[10px] break-all bg-background/50 p-2 rounded">
                                         {path}
                                     </div>
@@ -332,18 +377,19 @@ function LogItem({ log, typeLabels, statusLabels, t }: { log: RunLog, typeLabels
                              </div>
                          ) : isImage ? (
                              <div className="space-y-4">
-                                {(log.output?.split(', ') || []).map((path, idx) => (
+                                {imageUrls.map((url, idx) => (
                                     <div
                                         key={idx}
                                         className="relative w-full bg-black/50 rounded-lg overflow-hidden"
                                     >
-                                        <div className="group/image cursor-pointer" onClick={() => setPreviewImage(path)}>
+                                        <div className="group/image cursor-pointer" onClick={() => setPreviewImage(url)}>
                                             <img
-                                                src={path}
+                                                src={url}
                                                 alt={t('runLog.imageAlt')}
                                                 className="w-full h-auto object-contain"
                                                 onError={(e) => {
                                                     const target = e.target as HTMLImageElement;
+                                                    handleImageError(url);
                                                     target.style.display = 'none';
                                                     target.parentElement?.classList.add('flex', 'items-center', 'justify-center', 'bg-destructive/10', 'min-h-[200px]');
                                                     const span = document.createElement('span');

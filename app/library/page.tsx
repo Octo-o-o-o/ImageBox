@@ -1,7 +1,8 @@
 'use client';
 
 import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder, getStorageConfig, openLocalFolder } from '@/app/actions';
-import { getImageUrl } from '@/lib/imageUrl';
+import { getImageUrl, getThumbnailUrl } from '@/lib/imageUrl';
+import { isDesktopApp } from '@/lib/env';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -109,10 +110,15 @@ export default function LibraryPage() {
 
   // Storage config state
   const [isCustomStoragePath, setIsCustomStoragePath] = useState(false);
+  // 重要：Electron 打包后 SSR 也能拿到 USER_DATA_PATH，因此这里用初始化函数，
+  // 避免首次渲染阶段先用 /generated（静态路径）导致 404。
+  const [isDesktopMode, setIsDesktopMode] = useState(() => isDesktopApp());
 
   useEffect(() => {
     loadFolders();
     loadStorageConfig();
+    // Detect desktop mode on client side
+    setIsDesktopMode(isDesktopApp());
   }, []);
 
   const loadStorageConfig = async () => {
@@ -411,7 +417,7 @@ export default function LibraryPage() {
     selectedImageIds.forEach(id => {
       const img = images.find(i => i.id === id);
       if (img) {
-        handleDownloadImage(getImageUrl(img.path, isCustomStoragePath), img.finalPrompt);
+        handleDownloadImage(getImageUrl(img.path, isCustomStoragePath, isDesktopMode), img.finalPrompt);
       }
     });
   };
@@ -419,7 +425,7 @@ export default function LibraryPage() {
   const openPreview = useCallback((img: ImageType) => {
     setPreviewImage({
       id: img.id,
-      url: getImageUrl(img.path, isCustomStoragePath),
+      url: getImageUrl(img.path, isCustomStoragePath, isDesktopMode),
       prompt: img.finalPrompt,
       createdAt: img.createdAt,
       isFavorite: img.isFavorite,
@@ -428,7 +434,7 @@ export default function LibraryPage() {
       templateName: img.template?.name,
       folderName: img.folder?.name
     });
-  }, [isCustomStoragePath]);
+  }, [isCustomStoragePath, isDesktopMode]);
 
   const handleContinueEdit = useCallback(() => {
     if (!previewImage) return;
@@ -813,13 +819,15 @@ export default function LibraryPage() {
                     index={i}
                     isSelectionMode={isSelectionMode}
                     isSelected={selectedImageIds.includes(img.id)}
+                    isDesktopMode={isDesktopMode}
+                    isCustomStoragePath={isCustomStoragePath}
                     onToggleSelection={() => toggleImageSelection(img.id)}
                     onOpenPreview={() => openPreview(img)}
                     onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
                     onDelete={(e) => handleDeleteImage(img.id, e)}
                     onMove={(e) => openMoveDialog(img.id, e)}
-                    onCopy={(e) => handleCopyImage(getImageUrl(img.path, isCustomStoragePath), e)}
-                    onDownload={(e) => handleDownloadImage(getImageUrl(img.path, isCustomStoragePath), img.finalPrompt, e)}
+                    onCopy={(e) => handleCopyImage(getImageUrl(img.path, isCustomStoragePath, isDesktopMode), e)}
+                    onDownload={(e) => handleDownloadImage(getImageUrl(img.path, isCustomStoragePath, isDesktopMode), img.finalPrompt, e)}
                     tr={tr}
                   />
                 ))}
@@ -862,6 +870,8 @@ export default function LibraryPage() {
                       index={i}
                       isSelectionMode={isSelectionMode}
                       isSelected={selectedImageIds.includes(img.id)}
+                      isDesktopMode={isDesktopMode}
+                      isCustomStoragePath={isCustomStoragePath}
                       onToggleSelection={() => toggleImageSelection(img.id)}
                       onOpenPreview={() => openPreview(img)}
                       onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
@@ -991,6 +1001,8 @@ interface ImageGridItemProps {
   index: number;
   isSelectionMode: boolean;
   isSelected: boolean;
+  isDesktopMode: boolean;
+  isCustomStoragePath: boolean;
   onToggleSelection: () => void;
   onOpenPreview: () => void;
   onToggleFavorite: (e: React.MouseEvent) => void;
@@ -1001,11 +1013,13 @@ interface ImageGridItemProps {
   tr: (key: string, vars?: Record<string, string | number>) => string;
 }
 
-function ImageGridItem({ 
-  img, 
-  index, 
-  isSelectionMode, 
+function ImageGridItem({
+  img,
+  index,
+  isSelectionMode,
   isSelected,
+  isDesktopMode,
+  isCustomStoragePath,
   onToggleSelection,
   onOpenPreview,
   onToggleFavorite,
@@ -1018,6 +1032,17 @@ function ImageGridItem({
   // Only apply animation delay for first MAX_ANIMATED_ITEMS items
   const shouldAnimate = index < MAX_ANIMATED_ITEMS;
   const animationDelay = shouldAnimate ? index * 0.03 : 0;
+
+  // Get the correct image URL for desktop/web mode
+  const imageUrl = useMemo(() => {
+    if (img.thumbnailPath) {
+      return getThumbnailUrl(img.thumbnailPath, isCustomStoragePath, isDesktopMode) || img.path;
+    }
+    return getImageUrl(img.path, isCustomStoragePath, isDesktopMode);
+  }, [img.thumbnailPath, img.path, isCustomStoragePath, isDesktopMode]);
+
+  // Use unoptimized for API-served images (desktop mode or custom storage path)
+  const useUnoptimized = isDesktopMode || isCustomStoragePath;
 
   return (
     <motion.div
@@ -1042,13 +1067,14 @@ function ImageGridItem({
       }}
     >
       <Image
-        src={img.thumbnailPath || img.path}
+        src={imageUrl}
         alt={img.finalPrompt || 'Generated image'}
         fill
         sizes="384px"
         className="object-cover transition-transform duration-500 group-hover:scale-110"
         loading="lazy"
         quality={75}
+        unoptimized={useUnoptimized}
       />
       
       {/* Selection Checkbox */}
@@ -1136,6 +1162,8 @@ interface ImageListItemProps {
   index: number;
   isSelectionMode: boolean;
   isSelected: boolean;
+  isDesktopMode: boolean;
+  isCustomStoragePath: boolean;
   onToggleSelection: () => void;
   onOpenPreview: () => void;
   onToggleFavorite: (e: React.MouseEvent) => void;
@@ -1151,6 +1179,8 @@ function ImageListItem({
   index,
   isSelectionMode,
   isSelected,
+  isDesktopMode,
+  isCustomStoragePath,
   onToggleSelection,
   onOpenPreview,
   onToggleFavorite,
@@ -1163,6 +1193,17 @@ function ImageListItem({
   // Only apply animation delay for first MAX_ANIMATED_ITEMS items
   const shouldAnimate = index < MAX_ANIMATED_ITEMS;
   const animationDelay = shouldAnimate ? index * 0.02 : 0;
+
+  // Get the correct image URL for desktop/web mode
+  const imageUrl = useMemo(() => {
+    if (img.thumbnailPath) {
+      return getThumbnailUrl(img.thumbnailPath, isCustomStoragePath, isDesktopMode) || img.path;
+    }
+    return getImageUrl(img.path, isCustomStoragePath, isDesktopMode);
+  }, [img.thumbnailPath, img.path, isCustomStoragePath, isDesktopMode]);
+
+  // Use unoptimized for API-served images (desktop mode or custom storage path)
+  const useUnoptimized = isDesktopMode || isCustomStoragePath;
 
   return (
     <motion.div
@@ -1209,14 +1250,15 @@ function ImageListItem({
         isSelectionMode ? "" : "col-span-6 md:col-span-5"
       )}>
         <div className="relative w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0 border border-border">
-          <Image 
-            src={img.thumbnailPath || img.path} 
-            alt="" 
+          <Image
+            src={imageUrl}
+            alt=""
             fill
             sizes="40px"
-            className="object-cover" 
+            className="object-cover"
             loading="lazy"
             quality={50}
+            unoptimized={useUnoptimized}
           />
           {img.fileMissing && (
              <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center">

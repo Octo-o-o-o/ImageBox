@@ -10,16 +10,23 @@ directories:
 
 # 文件打包规则
 files:
+  # Next.js standalone build (includes static files after prepare script)
   - .next/standalone/**/*
-  - .next/static/**/*
-  - public/**/*
+  # Electron main process
   - electron/**/*
-  - prisma/**/*
+  # Static assets
   - assets/**/*
+  # Prisma native bindings
   - node_modules/.prisma/**/*
   - node_modules/@prisma/**/*
+  # Native modules
   - node_modules/better-sqlite3/**/*
+  # Exclusions
   - "!**/*.map"
+  - "!**/*.md"
+  - "!**/dev.db"
+  - "!**/*.db-journal"
+  - "!**/dist-electron/**"
   - "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md}"
   - "!**/node_modules/*/{test,tests,__tests__}/**"
   - "!**/node_modules/**/*.d.ts"
@@ -79,9 +86,11 @@ linux:
   icon: assets/icon.png
   category: Graphics
   desktop:
-    Name: ImageBox
-    Comment: AI Image Generation Tool
-    Categories: Graphics;Photography;
+    entry: |
+      [Desktop Entry]
+      Name=ImageBox
+      Comment=AI Image Generation Tool
+      Categories=Graphics;Photography;
 
 # NSIS 安装程序配置
 nsis:
@@ -93,12 +102,8 @@ nsis:
   installerIcon: assets/icon.png
   uninstallerIcon: assets/icon.png
 
-# asar 配置
-asar: true
-asarUnpack:
-  - node_modules/better-sqlite3/**/*
-  - node_modules/sharp/**/*
-  - "**/*.node"
+# asar 配置（禁用以避免 standalone 目录过大导致的问题）
+asar: false
 
 # 发布配置（GitHub Releases）
 publish:
@@ -107,4 +112,4 @@ publish:
 
 # 构建钩子
 afterSign: null
-afterPack: null
+afterPack: scripts/afterPack.js

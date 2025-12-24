@@ -4,18 +4,14 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import sharp from 'sharp';
 import fs from 'fs/promises';
 import path from 'path';
 import { THUMBNAIL_SIZE, THUMBNAIL_QUALITY } from '../lib/imageConstants';
 
 async function main() {
-  const adapter = new PrismaBetterSqlite3(
-    { url: 'file:./dev.db' },
-    { timestampFormat: 'unixepoch-ms' }
-  );
-  const prisma = new PrismaClient({ adapter });
+  process.env.DATABASE_URL = 'file:./dev.db';
+  const prisma = new PrismaClient({ datasources: { db: { url: 'file:./dev.db' } } } as any);
 
   const publicDir = path.join(process.cwd(), 'public');
   const thumbnailDir = path.join(publicDir, 'generated', 'thumbnails');

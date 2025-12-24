@@ -86,7 +86,7 @@ export const PRESET_MODELS: PresetModel[] = [
   },
   {
     id: `${PRESET_ID_PREFIX}gemini-3-pro-image`,
-    name: 'Gemini 3 Pro Image',
+    name: 'Nano Banana Pro',
     modelIdentifier: 'models/gemini-3-pro-image-preview',
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}google-gemini`,
@@ -94,7 +94,7 @@ export const PRESET_MODELS: PresetModel[] = [
   },
   {
     id: `${PRESET_ID_PREFIX}gemini-2-5-flash-image`,
-    name: 'Gemini 2.5 Flash Image',
+    name: 'Nano Banana',
     modelIdentifier: 'gemini-2.5-flash-image',
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}google-gemini`,
@@ -104,7 +104,7 @@ export const PRESET_MODELS: PresetModel[] = [
   // --- OpenRouter Models ---
   {
     id: `${PRESET_ID_PREFIX}or-gemini-3-pro-image`,
-    name: 'Gemini 3 Pro Image (OpenRouter)',
+    name: 'Nano Banana Pro(OpenRouter)',
     modelIdentifier: 'google/gemini-3-pro-image-preview',
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}openrouter`,
@@ -112,7 +112,7 @@ export const PRESET_MODELS: PresetModel[] = [
   },
   {
     id: `${PRESET_ID_PREFIX}or-gemini-2-5-flash-image`,
-    name: 'Gemini 2.5 Flash Image (OpenRouter)',
+    name: 'Nano Banana(OpenRouter)',
     modelIdentifier: 'google/gemini-2.5-flash-image',
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}openrouter`,
@@ -122,19 +122,19 @@ export const PRESET_MODELS: PresetModel[] = [
   // --- GRSAI Models ---
   {
     id: `${PRESET_ID_PREFIX}grsai-nano-banana-pro`,
-    name: 'Nano Banana Pro',
+    name: 'Nano Banana Pro(GRSAI)',
     modelIdentifier: 'nano-banana-pro',
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}grsai`,
-    parameterConfig: JSON.stringify(MODEL_PRESETS.GRSAI_NANO_BANANA),
+    parameterConfig: JSON.stringify(MODEL_PRESETS.GRSAI_NANO_BANANA_PRO),
   },
   {
     id: `${PRESET_ID_PREFIX}grsai-nano-banana-fast`,
-    name: 'Nano Banana Fast',
+    name: 'Nano Banana(GRSAI)',
     modelIdentifier: 'nano-banana-fast',
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}grsai`,
-    parameterConfig: JSON.stringify(MODEL_PRESETS.GRSAI_NANO_BANANA),
+    parameterConfig: JSON.stringify(MODEL_PRESETS.GRSAI_NANO_BANANA_FAST),
   },
 ];
 
@@ -169,4 +169,3 @@ export function getPresetProvider(id: string): PresetProvider | undefined {
 export function getPresetModel(id: string): PresetModel | undefined {
   return PRESET_MODELS.find(m => m.id === id);
 }
-

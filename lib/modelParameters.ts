@@ -231,8 +231,8 @@ export const MODEL_PRESETS = {
     description: '通用OpenAI兼容接口'
   },
 
-  // Grsai Nano Banana (uses custom API endpoint)
-  GRSAI_NANO_BANANA: {
+  // Grsai Nano Banana Pro (uses custom API endpoint, supports imageSize)
+  GRSAI_NANO_BANANA_PRO: {
     supportedParams: ['aspectRatio', 'imageSize', 'refImagesEnabled'],
     defaults: {
       aspectRatio: 'auto',
@@ -240,7 +240,18 @@ export const MODEL_PRESETS = {
       refImagesEnabled: true,
     },
     maxRefImages: 10,  // 根据文档支持 urls 数组
-    description: 'Grsai Nano Banana (支持比例和分辨率，使用自定义API格式)'
+    description: 'Grsai Nano Banana Pro (支持比例和分辨率，使用自定义API格式)'
+  },
+
+  // Grsai Nano Banana Fast (uses custom API endpoint, imageSize NOT supported)
+  GRSAI_NANO_BANANA_FAST: {
+    supportedParams: ['aspectRatio', 'refImagesEnabled'],  // imageSize only supported by Pro model
+    defaults: {
+      aspectRatio: 'auto',
+      refImagesEnabled: true,
+    },
+    maxRefImages: 10,  // 根据文档支持 urls 数组
+    description: 'Grsai Nano Banana Fast (仅支持比例，不支持分辨率)'
   },
 
   // === Local Models ===
@@ -356,7 +367,11 @@ export function mapParametersForAPI(
   if (parameterConfig) {
     try {
       const config = JSON.parse(parameterConfig);
-      isGrsai = !!(config.description && config.description.includes('Grsai Nano Banana'));
+      // Check for both Pro and Fast variants
+      isGrsai = !!(config.description && (
+        config.description.includes('Grsai Nano Banana Pro') ||
+        config.description.includes('Grsai Nano Banana Fast')
+      ));
     } catch (e) {
       // Fallback to baseUrl check if config parsing fails
       isGrsai = !!(baseUrl && (baseUrl.includes('grsai') || baseUrl.includes('dakka.com.cn')));

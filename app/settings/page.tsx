@@ -2,14 +2,14 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { 
-  Settings, 
-  Globe, 
-  Key, 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Check, 
+import {
+  Settings,
+  Globe,
+  Key,
+  Plus,
+  Trash2,
+  Copy,
+  Check,
   Clock,
   Shield,
   ExternalLink,
@@ -22,7 +22,8 @@ import {
   FolderOpen,
   AlertTriangle,
   CheckCircle2,
-  FolderSearch
+  FolderSearch,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/components/LanguageProvider';
@@ -42,6 +43,8 @@ import {
 } from '@/app/actions';
 import { replaceTemplate } from '@/lib/i18n';
 import { FolderBrowser } from '@/components/FolderBrowser';
+import { isDesktopApp } from '@/lib/env';
+import { DataManagement } from '@/components/DataManagement';
 
 type AccessTokenDisplay = {
   id: string;
@@ -95,6 +98,9 @@ function SettingsContent() {
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
+  // Refresh IP state
+  const [refreshingIp, setRefreshingIp] = useState(false);
+
   // Storage settings states
   const [storageConfig, setStorageConfig] = useState<{ type: string; path: string; defaultPath: string } | null>(null);
   const [storageStats, setStorageStats] = useState<{ imageCount: number; storagePath: string; isCustomPath: boolean } | null>(null);
@@ -105,6 +111,7 @@ function SettingsContent() {
   const [showMigrateModal, setShowMigrateModal] = useState(false);
   const [pendingStoragePath, setPendingStoragePath] = useState('');
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  const [isDesktopMode, setIsDesktopMode] = useState(() => isDesktopApp());
 
   // Helper for i18n with variables
   const tr = (key: string, vars?: Record<string, string | number>) =>
@@ -135,7 +142,43 @@ function SettingsContent() {
 
   useEffect(() => {
     loadData();
+    // Detect desktop mode on client side (Electron preload will exist)
+    setIsDesktopMode(isDesktopApp());
   }, []);
+
+  const applyStoragePath = async (newPath: string) => {
+    setStoragePathInput(newPath);
+    setPathValidation(null);
+
+    // 选完路径后自动校验，避免“看起来改了但实际无法保存”的困惑
+    try {
+      setValidatingPath(true);
+      const result = await validateStoragePath(newPath);
+      setPathValidation(result);
+    } catch {
+      setPathValidation({ valid: false, error: 'Validation failed' });
+    } finally {
+      setValidatingPath(false);
+    }
+  };
+
+  const handleBrowseStoragePath = async () => {
+    // Desktop app: use native folder picker via Electron
+    if (isDesktopMode && typeof window !== 'undefined' && window.electronAPI?.selectFolder) {
+      try {
+        const selected = await window.electronAPI.selectFolder();
+        if (selected) {
+          await applyStoragePath(selected);
+        }
+        return;
+      } catch (e) {
+        console.error('Native folder picker failed, falling back to web browser:', e);
+      }
+    }
+
+    // Web fallback: use in-app folder browser
+    setShowFolderBrowser(true);
+  };
 
   const handleToggleRemote = async () => {
     const newValue = !remoteEnabled;
@@ -264,8 +307,19 @@ function SettingsContent() {
   };
 
   const finishSetup = () => {
-    // 移除 URL 参数并跳转到主页
-    router.push('/library');
+    // Setup mode (remote web, no cookie yet):
+    // Use login link with token so middleware can allow access afterwards.
+    if (isSetupMode && setupToken?.token) {
+      const params = new URLSearchParams({
+        token: setupToken.token,
+        redirect: '/create'
+      });
+      router.push(`/auth/login?${params.toString()}`);
+      return;
+    }
+
+    // Default: go to generation page
+    router.push('/create');
   };
 
   // Storage settings handlers
@@ -322,6 +376,18 @@ function SettingsContent() {
   const handleUseDefaultPath = () => {
     setStoragePathInput('');
     setPathValidation(null);
+  };
+
+  const handleRefreshIp = async () => {
+    setRefreshingIp(true);
+    try {
+      const ip = await getLocalIpAddress();
+      setLocalIp(ip);
+    } catch (error) {
+      console.error('Failed to refresh IP:', error);
+    } finally {
+      setRefreshingIp(false);
+    }
   };
 
   if (loading) {
@@ -505,13 +571,87 @@ function SettingsContent() {
         <p className="text-muted-foreground mt-1">{t('settings.subtitle')}</p>
       </div>
 
+      {/* Storage Settings Section */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <HardDrive className="w-5 h-5 text-primary" />
+          {t('settings.storage.title')}
+        </h2>
+
+        <div className="p-6 rounded-2xl bg-card border border-border">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground uppercase mb-2">
+              {t('settings.storage.pathLabel')}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={storagePathInput}
+                onChange={(e) => {
+                  setStoragePathInput(e.target.value);
+                  setPathValidation(null);
+                }}
+                readOnly={isDesktopApp()}
+                placeholder={t('settings.storage.pathPlaceholder')}
+                className={`flex-1 bg-secondary/50 border border-border rounded-lg p-3 focus:ring-2 focus:ring-primary/50 outline-none text-foreground text-sm font-mono ${
+                  isDesktopApp() ? 'cursor-pointer' : ''
+                }`}
+                onClick={isDesktopApp() ? handleBrowseStoragePath : undefined}
+              />
+              <button
+                onClick={handleBrowseStoragePath}
+                className="px-4 py-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                title={t('settings.storage.browse')}
+              >
+                <FolderSearch className="w-4 h-4" />
+                {t('settings.storage.browse')}
+              </button>
+              <button
+                onClick={handleSaveStoragePath}
+                disabled={savingStorage}
+                className="px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {savingStorage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {t('settings.storage.saving')}
+                  </>
+                ) : (
+                  t('settings.storage.save')
+                )}
+              </button>
+            </div>
+
+            {/* Path validation result */}
+            {pathValidation && (
+              <div className={`mt-2 p-2 rounded-lg flex items-center gap-2 text-sm ${
+                pathValidation.valid
+                  ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                  : 'bg-red-500/10 text-red-600 dark:text-red-400'
+              }`}>
+                {pathValidation.valid ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4" />
+                )}
+                {pathValidation.valid
+                  ? t('settings.storage.validSuccess')
+                  : (pathValidation.error || t('settings.storage.validError'))
+                }
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Remote Access Section */}
       <section className="space-y-4">
         <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Globe className="w-5 h-5 text-primary" />
           {t('settings.remoteAccess.title')}
         </h2>
-        
+
+        {/* Enable Remote Access Card */}
         <div className="p-6 rounded-2xl bg-card border border-border">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
@@ -520,7 +660,7 @@ function SettingsContent() {
                 {t('settings.remoteAccess.description')}
               </p>
             </div>
-            
+
             {/* Toggle Switch */}
             <button
               onClick={handleToggleRemote}
@@ -535,15 +675,25 @@ function SettingsContent() {
               />
             </button>
           </div>
-          
-          {/* Status hint - same height for both states */}
+
+          {/* Status hint */}
           <div className="mt-4 p-3 bg-muted/50 rounded-lg flex items-start gap-2">
             {remoteEnabled ? (
               <>
-                <ExternalLink className="w-4 h-4 text-primary mt-0.5" />
-                <div className="text-sm">
-                  <span className="text-foreground font-medium">{t('settings.remoteAccess.enabledHint')}</span>
-                  <span className="text-muted-foreground ml-1">{getExternalUrl()}</span>
+                <ExternalLink className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                <div className="text-sm flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-foreground font-medium">{t('settings.remoteAccess.enabledHint')}</span>
+                    <span className="text-muted-foreground">{getExternalUrl()}</span>
+                    <button
+                      onClick={handleRefreshIp}
+                      disabled={refreshingIp}
+                      className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                      title={t('settings.remoteAccess.refreshIp')}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refreshingIp ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
@@ -556,55 +706,54 @@ function SettingsContent() {
             )}
           </div>
         </div>
-      </section>
 
-      {/* Access Tokens Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Key className="w-5 h-5 text-primary" />
-            {t('settings.tokens.title')}
-          </h2>
-          
-          {/* Create Token Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowCreateMenu(!showCreateMenu)}
-              disabled={creating}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {creating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Plus className="w-4 h-4" />
-              )}
-              {t('settings.tokens.create')}
-            </button>
-            
-            <AnimatePresence>
-              {showCreateMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 top-full mt-2 w-48 bg-popover border border-border rounded-xl shadow-xl z-10 overflow-hidden"
-                >
-                  {EXPIRY_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleCreateToken(opt.value)}
-                      className="w-full px-4 py-3 text-left text-sm hover:bg-secondary/50 transition-colors text-foreground"
-                    >
-                      {t(opt.label)}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-        
+        {/* Access Tokens Card */}
         <div className="p-6 rounded-2xl bg-card border border-border">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-semibold text-foreground">{t('settings.tokens.title')}</h3>
+            </div>
+
+            {/* Create Token Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowCreateMenu(!showCreateMenu)}
+                disabled={creating}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                {t('settings.tokens.create')}
+              </button>
+
+              <AnimatePresence>
+                {showCreateMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 top-full mt-2 w-48 bg-popover border border-border rounded-xl shadow-xl z-10 overflow-hidden"
+                  >
+                    {EXPIRY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleCreateToken(opt.value)}
+                        className="w-full px-4 py-3 text-left text-sm hover:bg-secondary/50 transition-colors text-foreground"
+                      >
+                        {t(opt.label)}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Tokens List */}
           {tokens.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Key className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -642,7 +791,7 @@ function SettingsContent() {
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <button
                         onClick={(e) => {
@@ -676,120 +825,8 @@ function SettingsContent() {
         </div>
       </section>
 
-      {/* Storage Settings Section */}
-      <section className="space-y-4">
-        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <HardDrive className="w-5 h-5 text-primary" />
-          {t('settings.storage.title')}
-        </h2>
-        
-        <div className="p-6 rounded-2xl bg-card border border-border">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground uppercase mb-2">
-                {t('settings.storage.pathLabel')}
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={storagePathInput}
-                  onChange={(e) => {
-                    setStoragePathInput(e.target.value);
-                    setPathValidation(null);
-                  }}
-                  placeholder={t('settings.storage.pathPlaceholder')}
-                  className="flex-1 bg-secondary/50 border border-border rounded-lg p-3 focus:ring-2 focus:ring-primary/50 outline-none text-foreground text-sm font-mono"
-                />
-                <button
-                  onClick={() => setShowFolderBrowser(true)}
-                  className="px-4 py-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-                  title={t('settings.storage.browse')}
-                >
-                  <FolderSearch className="w-4 h-4" />
-                  {t('settings.storage.browse')}
-                </button>
-                <button
-                  onClick={handleValidatePath}
-                  disabled={validatingPath || !storagePathInput}
-                  className="px-4 py-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors disabled:opacity-50 text-sm font-medium"
-                >
-                  {validatingPath ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    t('settings.storage.validate')
-                  )}
-                </button>
-              </div>
-              
-              <p className="text-xs text-muted-foreground">
-                {t('settings.storage.pathHint')}
-              </p>
-              
-              {/* Path validation result */}
-              {pathValidation && (
-                <div className={`mt-2 p-2 rounded-lg flex items-center gap-2 text-sm ${
-                  pathValidation.valid 
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400' 
-                    : 'bg-red-500/10 text-red-600 dark:text-red-400'
-                }`}>
-                  {pathValidation.valid ? (
-                    <CheckCircle2 className="w-4 h-4" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4" />
-                  )}
-                  {pathValidation.valid 
-                    ? t('settings.storage.validSuccess')
-                    : (pathValidation.error || t('settings.storage.validError'))
-                  }
-                </div>
-              )}
-              
-            </div>
-            
-            {/* Stats */}
-            {storageStats && (
-              <div className="p-3 bg-muted/50 rounded-lg flex items-center gap-2">
-                <FolderOpen className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {storagePathInput ? t('settings.storage.customPath') : t('settings.storage.defaultPath')}:
-                </span>
-                <span className="text-sm font-mono text-foreground truncate flex-1">
-                  {storagePathInput || storageConfig?.defaultPath}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  ({tr('settings.storage.currentStats', { count: storageStats.imageCount })})
-                </span>
-              </div>
-            )}
-            
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2">
-              {storagePathInput && (
-                <button
-                  onClick={handleUseDefaultPath}
-                  className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {t('settings.storage.useDefault')}
-                </button>
-              )}
-              <button
-                onClick={handleSaveStoragePath}
-                disabled={savingStorage || !!(storagePathInput && !pathValidation?.valid && storagePathInput !== storageConfig?.path)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {savingStorage ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('settings.storage.saving')}
-                  </span>
-                ) : (
-                  t('settings.storage.save')
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Data Management Section */}
+      <DataManagement />
 
       {/* Migration Modal */}
       <AnimatePresence>
@@ -1071,8 +1108,8 @@ function SettingsContent() {
         isOpen={showFolderBrowser}
         onClose={() => setShowFolderBrowser(false)}
         onSelect={(path) => {
-          setStoragePathInput(path);
-          setPathValidation(null);
+          // Web 模式：从自带浏览器选择后也自动校验
+          void applyStoragePath(path);
         }}
         initialPath={storagePathInput || undefined}
       />

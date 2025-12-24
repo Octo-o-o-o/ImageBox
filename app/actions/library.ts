@@ -200,8 +200,8 @@ export async function saveGeneratedImage(
   const storagePath = await getActualStoragePath();
   const targetDir = subDir ? path.join(storagePath, subDir) : storagePath;
 
-  // Thumbnails always go to project's public directory
-  const thumbnailDir = path.join(process.cwd(), 'public', 'generated', 'thumbnails');
+  // Thumbnails go next to the storage root (desktop: USER_DATA_PATH/generated/thumbnails; web: public/generated/thumbnails)
+  const thumbnailDir = path.join(storagePath, 'thumbnails');
 
   // Ensure directories exist
   try { await fs.access(targetDir); } catch { await fs.mkdir(targetDir, { recursive: true }); }

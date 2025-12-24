@@ -1,6 +1,5 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, utilityProcess } from 'electron';
 import path from 'path';
-import { spawn, ChildProcess } from 'child_process';
 import fs from 'fs';
 import log from 'electron-log';
 import { ensureDatabase } from './database';
@@ -20,7 +19,7 @@ log.transports.console.level = 'debug';
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
-let serverProcess: ChildProcess | null = null;
+let serverProcess: ReturnType<typeof utilityProcess.fork> | null = null;
 
 const isDev = !app.isPackaged;
 // 开发模式使用 3000 端口（外部 next dev 启动），生产模式使用 3333 端口
@@ -80,7 +79,7 @@ function createSplashWindow(): void {
  */
 async function waitForServer(url: string, timeout = 30000): Promise<boolean> {
   const startTime = Date.now();
-  
+
   while (Date.now() - startTime < timeout) {
     try {
       const response = await fetch(url, { method: 'HEAD' });
@@ -92,7 +91,7 @@ async function waitForServer(url: string, timeout = 30000): Promise<boolean> {
     }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
-  
+
   return false;
 }
 
@@ -106,7 +105,7 @@ async function startNextServer(): Promise<void> {
   if (isDev) {
     log.info('Development mode: waiting for external Next.js server...');
     log.info(`Waiting for server at http://localhost:${PORT}`);
-    
+
     const isReady = await waitForServer(`http://localhost:${PORT}`);
     if (isReady) {
       log.info('External Next.js server is ready');
@@ -116,26 +115,29 @@ async function startNextServer(): Promise<void> {
     return;
   }
 
-  // 生产模式：启动 standalone 服务器
+  // 生产模式：使用 utility process 启动 Next.js 服务器
   return new Promise((resolve) => {
-    // 设置环境变量（供 Next.js 服务端使用）
-    const env = {
-      ...process.env,
-      NODE_ENV: 'production' as const,
-      PORT: String(PORT),
-      USER_DATA_PATH: userDataPath,
-      DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db')}`
-    };
-
-    const serverPath = path.join(getAppPath(), '.next', 'standalone', 'server.js');
+    const appPath = getAppPath();
+    const standalonePath = path.join(appPath, '.next', 'standalone');
+    const serverPath = path.join(standalonePath, 'server.js');
 
     log.info(`Starting server from: ${serverPath}`);
     log.info(`User data path: ${userDataPath}`);
 
-    serverProcess = spawn('node', [serverPath], {
-      env,
-      cwd: getAppPath(),
-      stdio: ['pipe', 'pipe', 'pipe']
+    // 启动 utility process
+    serverProcess = utilityProcess.fork(serverPath, [], {
+      cwd: standalonePath,
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        PORT: String(PORT),
+        // 允许局域网设备访问（远程访问由 middleware + token 开关保护）
+        // 注意：BrowserWindow 仍然加载 localhost，不受影响
+        HOSTNAME: '0.0.0.0',
+        USER_DATA_PATH: userDataPath,
+        DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db')}`
+      },
+      stdio: 'pipe'
     });
 
     serverProcess.stdout?.on('data', (data) => {
@@ -148,10 +150,6 @@ async function startNextServer(): Promise<void> {
 
     serverProcess.stderr?.on('data', (data) => {
       log.error(`Server Error: ${data.toString()}`);
-    });
-
-    serverProcess.on('error', (err) => {
-      log.error('Failed to start server:', err);
     });
 
     serverProcess.on('exit', (code) => {
@@ -218,6 +216,11 @@ async function createWindow(): Promise<void> {
     mainWindow.webContents.openDevTools();
   }
 
+  // 生产模式默认不打开 DevTools；如需排查线上问题可临时设置环境变量 IMAGEBOX_DEVTOOLS=1
+  if (!isDev && process.env.IMAGEBOX_DEVTOOLS === '1') {
+    mainWindow.webContents.openDevTools();
+  }
+
   // 加载页面
   try {
     log.info(`Loading URL: http://localhost:${PORT}`);
@@ -260,6 +263,15 @@ function setupIPC(): void {
   // 打开外部链接
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
     await shell.openExternal(url);
+  });
+
+  // 获取默认路径
+  ipcMain.handle('app:getDefaultPaths', () => {
+    return {
+      documents: app.getPath('documents'),
+      downloads: app.getPath('downloads'),
+      userData: app.getPath('userData')
+    };
   });
 }
 
@@ -309,10 +321,10 @@ app.whenReady().then(async () => {
     createTray(mainWindow);
     registerShortcuts(mainWindow);
 
-    // 生产模式检查更新
-    if (!isDev) {
-      initAutoUpdater(mainWindow);
-    }
+    // 生产模式检查更新（暂时注释掉，测试完成后再启用）
+    // if (!isDev) {
+    //   initAutoUpdater(mainWindow);
+    // }
   }
 
   // macOS: 点击 dock 图标时显示窗口

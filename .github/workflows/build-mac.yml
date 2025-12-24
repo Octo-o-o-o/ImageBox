@@ -1,0 +1,89 @@
+name: Build macOS (x64 + arm64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - "dist-electron/**"
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Intel runner to build x64
+          - runner: macos-13
+            arch: x64
+          # Apple Silicon runner to build arm64
+          - runner: macos-14
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-cache-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-${{ matrix.arch }}-
+            electron-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (prepare)
+        env:
+          CI: "true"
+        run: |
+          npm run electron:compile
+          npm run db:generate
+          npm run db:template
+          npm run build
+          npm run electron:prepare
+
+      - name: Package macOS (${{ matrix.arch }})
+        env:
+          CI: "true"
+        run: npx --yes electron-builder --mac --${{ matrix.arch }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImageBox-macos-${{ matrix.arch }}-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist-electron/*.dmg
+            dist-electron/*.zip
+            dist-electron/latest-mac*.yml
+            dist-electron/*.blockmap
+
+

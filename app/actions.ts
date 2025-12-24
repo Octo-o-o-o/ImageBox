@@ -15,6 +15,7 @@
  * - library.ts: Image + Folder management
  * - tokens.ts: Access tokens + Remote access
  * - installation.ts: Local model installation
+ * - dataManagement.ts: Backup, Restore, and Reset operations
  */
 
 // --- Settings & Storage ---
@@ -94,9 +95,12 @@ export {
   checkLocalServiceAction,
   quickSetupLocalModelAction,
   checkLocalProviderStatusAction,
-  checkInstallPrerequisitesAction,
-  installPrerequisiteAction,
-  getInstallCommandsAction,
-  runInstallCommandAction,
-  runAutoInstallStepAction,
 } from './actions/installation';
+
+// --- Data Management (Backup/Restore/Reset) ---
+export {
+  createBackup,
+  restoreBackup,
+  resetDatabase,
+  getGeneratedImagesPath,
+} from './actions/dataManagement';

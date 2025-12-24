@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import fs from 'fs/promises';
 import path from 'path';
+import { getGeneratedPath } from '@/lib/paths';
 
 // --- Settings ---
 
@@ -25,7 +26,9 @@ export async function saveSetting(key: string, value: string) {
  * Get default storage path
  */
 function getDefaultStoragePath() {
-  return path.join(process.cwd(), 'public', 'generated');
+  // 桌面模式：USER_DATA_PATH/generated
+  // Web 模式：<cwd>/public/generated
+  return getGeneratedPath();
 }
 
 /**
