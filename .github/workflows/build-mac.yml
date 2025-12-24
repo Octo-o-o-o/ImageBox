@@ -72,7 +72,7 @@ jobs:
       - name: Package macOS (${{ matrix.arch }})
         env:
           CI: "true"
-        run: npx --yes electron-builder --mac --${{ matrix.arch }}
+        run: npx --yes electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
