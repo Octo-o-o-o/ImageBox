@@ -56,7 +56,7 @@ jobs:
           # Avoid build-time tooling accidentally globbing the real user profile (contains protected junctions like "Application Data")
           HOME: ${{ github.workspace }}
           USERPROFILE: ${{ github.workspace }}
-          HOMEDRIVE: D:
+          HOMEDRIVE: "D:"
           HOMEPATH: ${{ github.workspace }}
         run: npm run electron:build:win
 
