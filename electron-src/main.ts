@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import log from 'electron-log';
 import { ensureDatabase } from './database';
-import { createTray, setTrayLanguage } from './tray';
+import { createTray, destroyTray, setTrayLanguage } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { initAutoUpdater } from './updater';
 
@@ -25,10 +25,28 @@ try {
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
 let serverProcess: ReturnType<typeof utilityProcess.fork> | null = null;
+let headerHookInstalled = false;
+let serverReady = false;
+let serverStartupError: string | null = null;
 
 const isDev = !app.isPackaged;
 // 开发模式使用 3000 端口（外部 next dev 启动），生产模式使用 3333 端口
 const PORT = isDev ? 3000 : 3333;
+
+function isWindowAlive(win: BrowserWindow | null): win is BrowserWindow {
+  return !!win && !win.isDestroyed();
+}
+
+function closeSplashWindow(): void {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    try {
+      splashWindow.close();
+    } catch {
+      // ignore
+    }
+  }
+  splashWindow = null;
+}
 
 /**
  * 获取应用路径（开发/生产环境不同）
@@ -62,7 +80,14 @@ function createSplashWindow(): void {
     : path.join(app.getAppPath(), 'assets', 'splash.html');
 
   if (fs.existsSync(splashPath)) {
-    splashWindow.loadFile(splashPath);
+    // Inject app version into splash html to avoid hardcoding
+    try {
+      const raw = fs.readFileSync(splashPath, 'utf8');
+      const html = raw.replace(/__APP_VERSION__/g, app.getVersion());
+      splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    } catch {
+      splashWindow.loadFile(splashPath);
+    }
   } else {
     // 如果没有 splash.html，显示简单的加载页面
     splashWindow.loadURL(`data:text/html,
@@ -129,36 +154,59 @@ async function startNextServer(): Promise<void> {
     log.info(`Starting server from: ${serverPath}`);
     log.info(`User data path: ${userDataPath}`);
 
+    if (!fs.existsSync(serverPath)) {
+      serverStartupError = `server.js not found at ${serverPath}`;
+      log.error(serverStartupError);
+      resolve();
+      return;
+    }
+
     // 启动 utility process
-    serverProcess = utilityProcess.fork(serverPath, [], {
-      cwd: standalonePath,
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
-        PORT: String(PORT),
-        // 允许局域网设备访问（远程访问由 middleware + token 开关保护）
-        // 注意：BrowserWindow 仍然加载 localhost，不受影响
-        HOSTNAME: '0.0.0.0',
-        USER_DATA_PATH: userDataPath,
-        DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db')}`
-      },
-      stdio: 'pipe'
-    });
+    try {
+      serverProcess = utilityProcess.fork(serverPath, [], {
+        cwd: standalonePath,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          PORT: String(PORT),
+          // 允许局域网设备访问（远程访问由 middleware + token 开关保护）
+          // 注意：BrowserWindow 仍然加载 localhost，不受影响
+          HOSTNAME: '0.0.0.0',
+          USER_DATA_PATH: userDataPath,
+          DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db')}`
+        },
+        stdio: 'pipe'
+      });
+    } catch (err) {
+      serverStartupError = `Failed to fork server.js: ${String((err as Error)?.message ?? err)}`;
+      log.error(serverStartupError);
+      resolve();
+      return;
+    }
 
     serverProcess.stdout?.on('data', (data) => {
       const output = data.toString();
       log.info(`Server: ${output}`);
       if (output.includes('Ready') || output.includes('started server') || output.includes('localhost')) {
+        serverReady = true;
         resolve();
       }
     });
 
     serverProcess.stderr?.on('data', (data) => {
-      log.error(`Server Error: ${data.toString()}`);
+      const msg = data.toString();
+      log.error(`Server Error: ${msg}`);
+      // 有些情况下 stdout 不会出现 Ready，这里先记录最近一次错误，便于 fallback 展示
+      if (!serverReady && !serverStartupError) {
+        serverStartupError = msg.trim().slice(0, 500);
+      }
     });
 
     serverProcess.on('exit', (code) => {
       log.info(`Server exited with code ${code}`);
+      if (!serverReady && code !== 0) {
+        serverStartupError = `Server exited with code ${code ?? 'unknown'}`;
+      }
     });
 
     // 超时处理（10秒）
@@ -173,7 +221,7 @@ async function startNextServer(): Promise<void> {
  * 创建主窗口
  */
 async function createWindow(): Promise<void> {
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1024,
@@ -196,19 +244,20 @@ async function createWindow(): Promise<void> {
       height: 35
     } : undefined
   });
+  mainWindow = win;
 
   // 记录渲染进程日志/崩溃信息，便于排查“白屏”
-  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     // level: 0=log,1=warn,2=error,3=debug (Electron)
     const tag = level === 2 ? 'console.error' : level === 1 ? 'console.warn' : 'console.log';
     log.info(`[renderer:${tag}] ${message} (${sourceId}:${line})`);
   });
 
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  win.webContents.on('render-process-gone', (_event, details) => {
     log.error('Renderer process gone:', details);
   });
 
-  mainWindow.webContents.on('unresponsive', () => {
+  win.webContents.on('unresponsive', () => {
     log.warn('Renderer became unresponsive');
   });
 
@@ -217,6 +266,7 @@ async function createWindow(): Promise<void> {
     const url = `http://localhost:${PORT}`;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        if (win.isDestroyed() || win.webContents.isDestroyed()) return;
         log.info(`Attempt ${attempt}/${maxRetries}: waiting for server ${url}`);
         const ready = await waitForServer(url, 30000);
         if (!ready) {
@@ -224,11 +274,14 @@ async function createWindow(): Promise<void> {
         }
 
         log.info(`Attempt ${attempt}/${maxRetries}: loading URL ${url}`);
-        await mainWindow?.loadURL(url);
+        if (win.isDestroyed()) return;
+        await win.loadURL(url);
         log.info('URL loaded successfully');
         return;
       } catch (err) {
         log.error(`Attempt ${attempt}/${maxRetries} failed to load URL:`, err);
+        // 如果服务器明确启动失败，减少无意义重试，尽快给用户反馈
+        if (serverStartupError && attempt >= 2) break;
         // small backoff
         await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 8000)));
       }
@@ -236,7 +289,21 @@ async function createWindow(): Promise<void> {
 
     log.error('All attempts failed. Showing fallback error page.');
     try {
-      await mainWindow?.loadURL(`data:text/html,
+      if (win.isDestroyed()) return;
+      const logPath = (() => {
+        try {
+          return log.transports.file.getFile().path;
+        } catch {
+          return '';
+        }
+      })();
+
+      const detail = [
+        serverStartupError ? `Server: ${serverStartupError}` : '',
+        logPath ? `Log: ${logPath}` : ''
+      ].filter(Boolean).join('<br/>');
+
+      await win.loadURL(`data:text/html,
         <html>
           <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;
             font-family:system-ui;background:#0b1020;color:#fff">
@@ -245,6 +312,7 @@ async function createWindow(): Promise<void> {
               <p style="margin:0 0 16px 0;opacity:.85;line-height:1.5">
                 本地服务未能启动或页面加载失败。请稍后重试，或查看日志文件以定位原因。
               </p>
+              ${detail ? `<div style="margin:0 0 16px 0;opacity:.85;line-height:1.5;font-size:12px;word-break:break-all">${detail}</div>` : ''}
               <button onclick="location.reload()" style="padding:10px 14px;border-radius:10px;border:0;
                 background:#4f46e5;color:#fff;font-weight:600;cursor:pointer">
                 重试
@@ -253,34 +321,36 @@ async function createWindow(): Promise<void> {
           </body>
         </html>
       `);
-      mainWindow?.show();
+      win.show();
+      closeSplashWindow();
     } catch {
       // ignore
     }
   };
 
   // 添加 Electron 标识 header
-  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
-    { urls: ['http://localhost:*/*'] },
-    (details, callback) => {
-      details.requestHeaders['x-electron-app'] = 'true';
-      callback({ requestHeaders: details.requestHeaders });
-    }
-  );
+  if (!headerHookInstalled) {
+    headerHookInstalled = true;
+    win.webContents.session.webRequest.onBeforeSendHeaders(
+      { urls: ['http://localhost:*/*'] },
+      (details, callback) => {
+        details.requestHeaders['x-electron-app'] = 'true';
+        callback({ requestHeaders: details.requestHeaders });
+      }
+    );
+  }
 
   // 页面加载完成后显示窗口，关闭启动画面（必须在 loadURL 之前注册）
-  mainWindow.webContents.on('did-finish-load', () => {
+  win.webContents.on('did-finish-load', () => {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return;
     log.info('Page loaded, showing main window');
-    if (splashWindow) {
-      splashWindow.close();
-      splashWindow = null;
-    }
-    mainWindow?.show();
+    closeSplashWindow();
+    win.show();
 
     // 尝试从渲染进程 localStorage 读取用户选择的语言（与前端保持一致）
     // 注意：如果读取失败，托盘会保持系统默认语言，随后 LanguageProvider 也会通过 IPC 再同步一次。
     try {
-      void mainWindow?.webContents
+      void win.webContents
         .executeJavaScript("localStorage.getItem('imagebox-language')", true)
         .then((lang) => {
           if (typeof lang === 'string' && lang) {
@@ -295,12 +365,30 @@ async function createWindow(): Promise<void> {
 
   // 开发模式打开 DevTools
   if (isDev) {
-    mainWindow.webContents.openDevTools();
+    win.webContents.openDevTools();
   }
 
   // 生产模式默认不打开 DevTools；如需排查线上问题可临时设置环境变量 IMAGEBOX_DEVTOOLS=1
   if (!isDev && process.env.IMAGEBOX_DEVTOOLS === '1') {
-    mainWindow.webContents.openDevTools();
+    win.webContents.openDevTools();
+  }
+
+  // 先加载一个轻量的“启动中”页面，避免 splash 在服务启动失败/变慢时一直转圈
+  try {
+    await win.loadURL(`data:text/html;charset=utf-8,
+      <html>
+        <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;
+          font-family:system-ui;background:linear-gradient(135deg,#0b1020 0%,#111827 100%);color:#fff">
+          <div style="text-align:center;max-width:720px;padding:24px">
+            <div style="font-size:28px;font-weight:700;margin-bottom:10px">ImageBox</div>
+            <div style="opacity:.85;line-height:1.6;margin-bottom:12px">正在启动本地服务，请稍候…</div>
+            <div style="opacity:.7;font-size:12px;word-break:break-all">端口：${PORT}</div>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch {
+    // ignore
   }
 
   // 加载页面
@@ -308,15 +396,19 @@ async function createWindow(): Promise<void> {
   await loadMainUrlWithRetry();
 
   // macOS：点击关闭按钮时隐藏而不是退出
-  mainWindow.on('close', (e) => {
+  win.on('close', (e) => {
     if (process.platform === 'darwin' && !extApp.isQuitting) {
       e.preventDefault();
-      mainWindow?.hide();
+      win.hide();
     }
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+    destroyTray();
+    unregisterShortcuts();
   });
 }
 
@@ -430,6 +522,7 @@ extApp.isQuitting = false;
 app.on('before-quit', () => {
   extApp.isQuitting = true;
   unregisterShortcuts();
+  destroyTray();
 
   // 清理服务器进程
   if (serverProcess) {

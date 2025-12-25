@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const pkg = require("./package.json");
 
 const nextConfig: NextConfig = {
   // 启用独立构建模式，用于 Docker 部署
@@ -24,6 +28,10 @@ const nextConfig: NextConfig = {
     // Smaller sizes for grid thumbnails, larger for previews
     imageSizes: [64, 96, 128, 192, 256, 384],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+  },
+  env: {
+    // Expose app version to client components (used for in-app version display)
+    NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version ?? pkg.version ?? "0.0.0",
   },
 };
 

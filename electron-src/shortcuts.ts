@@ -7,6 +7,7 @@ import log from 'electron-log';
 export function registerShortcuts(mainWindow: BrowserWindow): void {
   // Cmd/Ctrl + Shift + I: 快速显示/隐藏窗口
   const toggleResult = globalShortcut.register('CommandOrControl+Shift+I', () => {
+    if (mainWindow.isDestroyed()) return;
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
@@ -21,9 +22,14 @@ export function registerShortcuts(mainWindow: BrowserWindow): void {
 
   // Cmd/Ctrl + Shift + G: 快速进入生成页面
   const createResult = globalShortcut.register('CommandOrControl+Shift+G', () => {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     mainWindow.show();
     mainWindow.focus();
-    mainWindow.webContents.send('navigate', '/create');
+    try {
+      mainWindow.webContents.send('navigate', '/create');
+    } catch {
+      // ignore
+    }
   });
 
   if (!createResult) {

@@ -6,6 +6,7 @@
   "author": "wangyixiao <wangyixiao@users.noreply.github.com>",
   "main": "electron/main.js",
   "scripts": {
+    "version:sync": "node scripts/sync-version.mjs --from-env",
     "dev": "node scripts/dev.js",
     "build": "next build --webpack",
     "start": "next start",

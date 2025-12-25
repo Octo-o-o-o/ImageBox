@@ -52,6 +52,9 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Sync app version from release tag
+        run: node scripts/sync-version.mjs --tag "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -111,6 +114,9 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Sync app version from release tag
+        run: node scripts/sync-version.mjs --tag "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -161,6 +167,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Sync app version from release tag
+        run: node scripts/sync-version.mjs --tag "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

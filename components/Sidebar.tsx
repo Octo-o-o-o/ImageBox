@@ -138,7 +138,7 @@ export function Sidebar() {
                 ImageBox
               </span>
               <span className="text-xs text-muted-foreground/40 font-mono leading-tight">
-                v0.1.0
+                v{process.env.NEXT_PUBLIC_APP_VERSION ?? '0.0.0'}
               </span>
             </div>
           </>

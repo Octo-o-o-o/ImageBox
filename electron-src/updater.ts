@@ -6,6 +6,26 @@ import log from 'electron-log';
  * 初始化自动更新
  */
 export function initAutoUpdater(mainWindow: BrowserWindow): void {
+  const canUseWindow = (): boolean => {
+    return !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed();
+  };
+  const safeSend = (channel: string, ...args: unknown[]): void => {
+    if (!canUseWindow()) return;
+    try {
+      mainWindow.webContents.send(channel, ...args);
+    } catch {
+      // ignore
+    }
+  };
+  const safeSetTitle = (title: string): void => {
+    if (mainWindow.isDestroyed()) return;
+    try {
+      mainWindow.setTitle(title);
+    } catch {
+      // ignore
+    }
+  };
+
   // 配置日志
   autoUpdater.logger = log;
   (autoUpdater.logger as typeof log).transports.file.level = 'info';
@@ -25,6 +45,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.on('update-available', (info) => {
     log.info('Update available:', info.version);
 
+    if (mainWindow.isDestroyed()) return;
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '发现新版本',
@@ -51,10 +72,10 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     log.info(`Download progress: ${percent}%`);
 
     // 发送进度到渲染进程
-    mainWindow.webContents.send('update-progress', progress.percent);
+    safeSend('update-progress', progress.percent);
 
     // 更新窗口标题显示进度
-    mainWindow.setTitle(`ImageBox - 下载更新 ${percent}%`);
+    safeSetTitle(`ImageBox - 下载更新 ${percent}%`);
   });
 
   // 下载完成
@@ -62,8 +83,9 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     log.info('Update downloaded');
 
     // 恢复窗口标题
-    mainWindow.setTitle('ImageBox');
+    safeSetTitle('ImageBox');
 
+    if (mainWindow.isDestroyed()) return;
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '更新已下载',
@@ -83,7 +105,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     log.error('Update error:', err);
 
     // 恢复窗口标题
-    mainWindow.setTitle('ImageBox');
+    safeSetTitle('ImageBox');
 
     // 静默忽略网络相关错误（断网、超时、连接失败等）
     const networkErrors = [

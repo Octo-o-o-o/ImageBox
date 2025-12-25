@@ -19,6 +19,7 @@ function getAssetPath(...segments: string[]): string {
 }
 
 function showMainWindow(mainWindow: BrowserWindow): void {
+  if (mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) {
     mainWindow.restore();
   }
