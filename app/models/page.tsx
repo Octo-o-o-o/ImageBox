@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { getModels, saveModel, deleteModel, getProviders, saveProvider, deleteProvider, discoverLocalServicesAction, checkLocalServiceAction, checkLocalProviderStatusAction } from '@/app/actions';
-import { Save, Loader2, Key, Plus, Trash2, Cpu, Server, Check, RefreshCw, AlertTriangle, HardDrive, Search, Wifi, WifiOff, ExternalLink, Sparkles } from 'lucide-react';
+import { getModels, saveModel, deleteModel, getProviders, saveProvider, deleteProvider, discoverLocalServicesAction, checkLocalServiceAction, checkLocalProviderStatusAction, testProviderApiKey } from '@/app/actions';
+import { Save, Loader2, Key, Plus, Trash2, Cpu, Server, Check, RefreshCw, AlertTriangle, HardDrive, Search, Wifi, WifiOff, ExternalLink, Sparkles, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MODEL_PRESETS, PARAMETER_DEFINITIONS } from '@/lib/modelParameters';
 import { isPresetProvider, isPresetModel, getApiKeyApplyUrl } from '@/lib/presetProviders';
@@ -34,6 +34,10 @@ export default function ModelsPage() {
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [selectedService, setSelectedService] = useState<any | null>(null);
+
+  // API Key Test States
+  const [apiKeyTestStatus, setApiKeyTestStatus] = useState<Record<string, 'testing' | 'success' | 'error'>>({});
+  const [apiKeyTestResults, setApiKeyTestResults] = useState<Record<string, { success: boolean; message: string; details?: string }>>({});
 
   const refreshInfo = async () => {
     setLoading(true);
@@ -173,6 +177,28 @@ export default function ModelsPage() {
     setTestingConnection(false);
   };
 
+  // Test API key for a provider
+  const handleTestApiKey = async (providerId: string) => {
+    setApiKeyTestStatus(prev => ({ ...prev, [providerId]: 'testing' }));
+    setApiKeyTestResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[providerId];
+      return newResults;
+    });
+
+    try {
+      const result = await testProviderApiKey(providerId);
+      setApiKeyTestResults(prev => ({ ...prev, [providerId]: result }));
+      setApiKeyTestStatus(prev => ({ ...prev, [providerId]: result.success ? 'success' : 'error' }));
+    } catch (e) {
+      setApiKeyTestResults(prev => ({
+        ...prev,
+        [providerId]: { success: false, message: t('models.providers.testFailed') }
+      }));
+      setApiKeyTestStatus(prev => ({ ...prev, [providerId]: 'error' }));
+    }
+  };
+
   // --- Model Handlers ---
   const handleSaveModel = async () => {
     const data = editingModel;
@@ -243,6 +269,8 @@ export default function ModelsPage() {
           <button
             onClick={() => setAddProviderModalOpen(true)}
             className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+            title={t('models.providers.add')}
+            aria-label={t('models.providers.add')}
           >
             <Plus className="w-4 h-4" /> {t('models.providers.add')}
           </button>
@@ -263,6 +291,8 @@ export default function ModelsPage() {
             <button
               onClick={() => setAddProviderModalOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors"
+              title={t('models.providers.addFirst') || '添加第一个服务商'}
+              aria-label={t('models.providers.addFirst') || '添加第一个服务商'}
             >
               <Plus className="w-4 h-4" />
               {t('models.providers.addFirst') || '添加第一个服务商'}
@@ -287,11 +317,6 @@ export default function ModelsPage() {
                   <div className="flex items-center gap-2">
                     {p.type === 'LOCAL' && <HardDrive className="w-4 h-4 text-emerald-500" />}
                     <span className="text-lg font-bold text-card-foreground">{p.name}</span>
-                    {isPreset && (
-                      <span className="px-1.5 py-0.5 text-[10px] bg-orange-500/10 text-orange-500 rounded">
-                        {t('models.providers.preset') || '内置'}
-                      </span>
-                    )}
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {p.type === 'LOCAL' && (
@@ -299,12 +324,42 @@ export default function ModelsPage() {
                         onClick={() => checkLocalProvidersStatus([p])}
                         className="p-2 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
                         title={t('models.providers.refreshStatus')}
+                        aria-label={t('models.providers.refreshStatus')}
                       >
                         <RefreshCw className={`w-4 h-4 ${localProviderStatus[p.id] === 'checking' ? 'animate-spin' : ''}`} />
                       </button>
                     )}
-                    <button onClick={() => setEditingProvider(p)} className="p-2 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"><SettingsIcon className="w-4 h-4" /></button>
-                    <button onClick={() => setDeleteProviderId(p.id)} className="p-2 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
+                    {p.type !== 'LOCAL' && p.apiKey && (
+                      <button
+                        onClick={() => handleTestApiKey(p.id)}
+                        disabled={apiKeyTestStatus[p.id] === 'testing'}
+                        className="p-2 hover:bg-secondary rounded text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        title={t('models.providers.testApiKey')}
+                        aria-label={t('models.providers.testApiKey')}
+                      >
+                        {apiKeyTestStatus[p.id] === 'testing' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Zap className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setEditingProvider(p)}
+                      className="p-2 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
+                      title={t('common.edit')}
+                      aria-label={t('common.edit')}
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteProviderId(p.id)}
+                      className="p-2 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                      title={t('common.delete')}
+                      aria-label={t('common.delete')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -318,6 +373,8 @@ export default function ModelsPage() {
                     <button
                       onClick={() => setEditingProvider(p)}
                       className="mt-2 w-full px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                      title={t('models.providers.configureApiKey') || '配置 API Key'}
+                      aria-label={t('models.providers.configureApiKey') || '配置 API Key'}
                     >
                       <Key className="w-3 h-3" />
                       {t('models.providers.configureApiKey') || '配置 API Key'}
@@ -363,6 +420,22 @@ export default function ModelsPage() {
                       </span>
                     </div>
                   )}
+                  {/* API Key Test Result */}
+                  {p.type !== 'LOCAL' && apiKeyTestResults[p.id] && (
+                    <div className={`flex justify-between items-center pt-2 border-t border-border ${apiKeyTestResults[p.id].success ? 'text-emerald-500' : 'text-red-500'}`}>
+                      <span className="flex items-center gap-1.5">
+                        {apiKeyTestResults[p.id].success ? (
+                          <Check className="w-3 h-3" />
+                        ) : (
+                          <AlertTriangle className="w-3 h-3" />
+                        )}
+                        <span>{t('models.providers.testResult')}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5" title={apiKeyTestResults[p.id].details || ''}>
+                        {apiKeyTestResults[p.id].message}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -383,6 +456,8 @@ export default function ModelsPage() {
           <button
             onClick={openNewModel}
             className="flex items-center gap-2 bg-white text-black px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-zinc-200 transition-colors"
+            title={t('models.models.add')}
+            aria-label={t('models.models.add')}
           >
             <Plus className="w-4 h-4" /> {t('models.models.add')}
           </button>
@@ -406,8 +481,22 @@ export default function ModelsPage() {
                 </p>
               </div>
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => setEditingModel(m)} className="p-2 bg-secondary rounded hover:bg-secondary/80 text-muted-foreground hover:text-foreground"><SettingsIcon className="w-4 h-4" /></button>
-                <button onClick={() => setDeleteModelId(m.id)} className="p-2 bg-destructive/10 rounded hover:bg-destructive/20 text-destructive/80 hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
+                <button
+                  onClick={() => setEditingModel(m)}
+                  className="p-2 bg-secondary rounded hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                  title={t('common.edit')}
+                  aria-label={t('common.edit')}
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setDeleteModelId(m.id)}
+                  className="p-2 bg-destructive/10 rounded hover:bg-destructive/20 text-destructive/80 hover:text-destructive"
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}

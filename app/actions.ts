@@ -42,6 +42,7 @@ export {
   saveModel,
   deleteModel,
   hasImageGenerationModel,
+  testProviderApiKey,
 } from './actions/providers';
 
 // --- Templates ---

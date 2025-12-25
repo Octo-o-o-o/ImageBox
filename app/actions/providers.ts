@@ -218,3 +218,111 @@ export async function hasImageGenerationModel() {
   });
   return count > 0;
 }
+
+/**
+ * Test if a provider's API key is valid by making a simple API call.
+ *
+ * Supported provider types:
+ * - GEMINI: Tests by calling /v1beta/models endpoint
+ * - OPENAI: Tests by calling /v1/models endpoint
+ * - LOCAL: Not supported (no API key required)
+ *
+ * @param providerId - The provider ID to test
+ * @returns Test result with success status and message
+ */
+export async function testProviderApiKey(providerId: string): Promise<{
+  success: boolean;
+  message: string;
+  details?: string;
+}> {
+  const provider = await prisma.provider.findUnique({
+    where: { id: providerId }
+  });
+
+  if (!provider) {
+    return { success: false, message: 'Provider not found' };
+  }
+
+  if (provider.type === 'LOCAL') {
+    return { success: false, message: 'LOCAL providers do not require API key testing' };
+  }
+
+  if (!provider.apiKey) {
+    return { success: false, message: 'API key not configured' };
+  }
+
+  const startTime = Date.now();
+
+  try {
+    if (provider.type === 'GEMINI') {
+      // Gemini API: Test by listing models
+      const baseUrl = provider.baseUrl || 'https://generativelanguage.googleapis.com';
+      const url = `${baseUrl}/v1beta/models?key=${provider.apiKey}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const latency = Date.now() - startTime;
+
+      if (response.ok) {
+        const data = await response.json();
+        const modelCount = data.models?.length || 0;
+        return {
+          success: true,
+          message: `OK (${latency}ms)`,
+          details: `${modelCount} models available`
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData?.error?.message || response.statusText;
+        return {
+          success: false,
+          message: `Error ${response.status}`,
+          details: errorMessage
+        };
+      }
+    } else if (provider.type === 'OPENAI') {
+      // OpenAI-compatible API: Test by listing models
+      const baseUrl = provider.baseUrl || 'https://api.openai.com/v1';
+      const url = `${baseUrl}/models`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${provider.apiKey}`
+        }
+      });
+
+      const latency = Date.now() - startTime;
+
+      if (response.ok) {
+        const data = await response.json();
+        const modelCount = data.data?.length || 0;
+        return {
+          success: true,
+          message: `OK (${latency}ms)`,
+          details: `${modelCount} models available`
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData?.error?.message || response.statusText;
+        return {
+          success: false,
+          message: `Error ${response.status}`,
+          details: errorMessage
+        };
+      }
+    } else {
+      return { success: false, message: `Unknown provider type: ${provider.type}` };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Connection failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}

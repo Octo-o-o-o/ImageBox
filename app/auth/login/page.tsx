@@ -155,6 +155,8 @@ function LoginForm() {
               type="submit"
               disabled={loading || success || !token.trim()}
               className="w-full py-4 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              title={t('auth.login.submit')}
+              aria-label={t('auth.login.submit')}
             >
               {loading ? (
                 <>

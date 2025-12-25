@@ -85,6 +85,8 @@ function ImageModelDropdown({ models, selectedId, onSelect, placeholder, apiKeyN
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between bg-secondary/30 hover:bg-secondary/50 transition-colors rounded-xl px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+        title={selectedModel ? selectedModel.name : placeholder}
+        aria-label={selectedModel ? selectedModel.name : placeholder}
       >
         <span className={!selectedId ? 'text-muted-foreground' : ''}>
           {selectedModel ? selectedModel.name : placeholder}
@@ -108,6 +110,8 @@ function ImageModelDropdown({ models, selectedId, onSelect, placeholder, apiKeyN
                 type="button"
                 onClick={() => { onSelect(''); setIsOpen(false); }}
                 className="w-full px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-secondary/50 transition-colors"
+                title={placeholder}
+                aria-label={placeholder}
               >
                 {placeholder}
               </button>
@@ -941,6 +945,8 @@ function StudioPageContent() {
                     ? 'bg-primary/5 border-primary/20 text-primary shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]'
                     : 'bg-secondary/30 border-transparent hover:bg-secondary/50 text-muted-foreground hover:text-foreground'
                   }`}
+                title={tr('create.aspectRatio.original')}
+                aria-label={tr('create.aspectRatio.original')}
               >
                 <span className="truncate">{tr('create.aspectRatio.original')}</span>
                 {aspectRatio === ASPECT_RATIO_ORIGINAL && refImages.length > 0 && (
@@ -966,6 +972,8 @@ function StudioPageContent() {
                           ? 'bg-primary/5 border-primary/20 text-primary shadow-sm'
                           : 'bg-secondary/30 border-transparent hover:bg-secondary/50 text-muted-foreground hover:text-foreground'
                         }`}
+                      title={tr(`params.aspectRatio.option.${ratio.value}.desc`)}
+                      aria-label={ratio.label}
                     >
                       <div className="flex flex-col items-center gap-1">
                         <span className="truncate w-full text-center">{ratio.label}</span>
@@ -1095,6 +1103,8 @@ function StudioPageContent() {
                           onClick={() => handleOptimizePrompt(availableTemplates[0].id)}
                           disabled={generatingPrompt || !finalImagePrompt.trim()}
                           className="py-2 px-4 bg-primary/90 hover:bg-primary text-primary-foreground rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
+                          title={generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
+                          aria-label={generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
                         >
                           {generatingPrompt ? (
                             <LoaderSpin />
@@ -1110,6 +1120,8 @@ function StudioPageContent() {
                             onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
                             disabled={generatingPrompt || !finalImagePrompt.trim()}
                             className="py-2 px-4 bg-primary/90 hover:bg-primary text-primary-foreground rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 backdrop-blur-sm"
+                            title={generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
+                            aria-label={generatingPrompt ? tr('create.optimizeLoading') : tr('create.optimize')}
                           >
                             {generatingPrompt ? (
                               <LoaderSpin />
@@ -1135,6 +1147,8 @@ function StudioPageContent() {
                                     key={template.id}
                                     onClick={() => handleOptimizePrompt(template.id)}
                                     className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-secondary/50 transition-colors flex items-center gap-2"
+                                    title={`${tr('create.optimize')}: ${template.name}`}
+                                    aria-label={`${tr('create.optimize')}: ${template.name}`}
                                   >
                                     <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
                                     <span className="flex-1">{template.name}</span>
@@ -1179,6 +1193,8 @@ function StudioPageContent() {
                   <button
                     onClick={(e) => { e.stopPropagation(); removeImage(index); }}
                     className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-destructive/80 transition-all opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 z-10"
+                    title={tr('common.delete')}
+                    aria-label={tr('common.delete')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -1220,6 +1236,8 @@ function StudioPageContent() {
             onClick={handleGenerateImage}
             disabled={generatingImage || !finalImagePrompt || !selectedImageModelId}
             className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-bold shadow-lg shadow-orange-500/25 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2 group active:scale-[0.98]"
+            title={generatingImage ? tr('create.generating') : results.length > 0 ? tr('create.regenerate') : tr('create.generate')}
+            aria-label={generatingImage ? tr('create.generating') : results.length > 0 ? tr('create.regenerate') : tr('create.generate')}
           >
             {generatingImage ? (
               <>
@@ -1379,6 +1397,8 @@ function StudioPageContent() {
               <button
                 onClick={() => setPreviewImage(null)}
                 className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors backdrop-blur-md md:hidden"
+                title={tr('common.close')}
+                aria-label={tr('common.close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1404,6 +1424,8 @@ function StudioPageContent() {
                     <button
                       onClick={() => handleDownloadImage(previewImage.url, previewImage.prompt)}
                       className="group/download relative p-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+                      title={tr('library.downloadImage')}
+                      aria-label={tr('library.downloadImage')}
                     >
                       <Download className="w-4 h-4" />
                       <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/download:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
@@ -1415,6 +1437,8 @@ function StudioPageContent() {
                     <button
                       onClick={() => setPreviewImage(null)}
                       className="group/close relative p-2 rounded-lg hover:bg-secondary text-muted-foreground transition-colors hidden md:block ml-1"
+                      title={tr('common.close')}
+                      aria-label={tr('common.close')}
                     >
                       <X className="w-5 h-5" />
                       <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/close:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">

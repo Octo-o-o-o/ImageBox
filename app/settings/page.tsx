@@ -432,6 +432,8 @@ function SettingsContent() {
               <button
                 onClick={() => setSetupStep('create')}
                 className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                title={t('settings.setup.createNow')}
+                aria-label={t('settings.setup.createNow')}
               >
                 <Key className="w-5 h-5" />
                 {t('settings.setup.createNow')}
@@ -461,6 +463,8 @@ function SettingsContent() {
                     onClick={() => handleCreateToken(opt.value)}
                     disabled={creating}
                     className="w-full px-4 py-3 text-left rounded-xl border border-border hover:border-primary/50 hover:bg-secondary/30 transition-all text-foreground disabled:opacity-50 flex items-center justify-between"
+                    title={t(opt.label)}
+                    aria-label={t(opt.label)}
                   >
                     <span>{t(opt.label)}</span>
                     {creating && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -471,6 +475,8 @@ function SettingsContent() {
               <button
                 onClick={() => setSetupStep('welcome')}
                 className="w-full px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                title={t('common.back')}
+                aria-label={t('common.back')}
               >
                 {t('common.back')}
               </button>
@@ -507,6 +513,8 @@ function SettingsContent() {
                     <button
                       onClick={() => copyToClipboard(setupToken.token, 'token', setupToken.id)}
                       className="p-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                      title={t('settings.tokens.copyToken')}
+                      aria-label={t('settings.tokens.copyToken')}
                     >
                       {copiedTokenId === setupToken.id ? (
                         <Check className="w-4 h-4 text-green-500" />
@@ -531,6 +539,8 @@ function SettingsContent() {
                     <button
                       onClick={() => copyToClipboard(getLoginLink(setupToken.token), 'link', setupToken.id)}
                       className="p-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                      title={t('settings.tokens.copyLink')}
+                      aria-label={t('settings.tokens.copyLink')}
                     >
                       {copiedLinkId === setupToken.id ? (
                         <Check className="w-4 h-4 text-green-500" />
@@ -548,6 +558,8 @@ function SettingsContent() {
               <button
                 onClick={finishSetup}
                 className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                title={t('settings.setup.startUsing')}
+                aria-label={t('settings.setup.startUsing')}
               >
                 <Rocket className="w-5 h-5" />
                 {t('settings.setup.startUsing')}
@@ -610,6 +622,8 @@ function SettingsContent() {
                 onClick={handleSaveStoragePath}
                 disabled={savingStorage}
                 className="px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                title={savingStorage ? t('settings.storage.saving') : t('settings.storage.save')}
+                aria-label={savingStorage ? t('settings.storage.saving') : t('settings.storage.save')}
               >
                 {savingStorage ? (
                   <>
@@ -667,6 +681,8 @@ function SettingsContent() {
               className={`relative w-14 h-8 rounded-full transition-colors duration-200 ${
                 remoteEnabled ? 'bg-primary' : 'bg-secondary'
               }`}
+              title={t('settings.remoteAccess.enable')}
+              aria-label={t('settings.remoteAccess.enable')}
             >
               <motion.div
                 className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
@@ -690,6 +706,7 @@ function SettingsContent() {
                       disabled={refreshingIp}
                       className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                       title={t('settings.remoteAccess.refreshIp')}
+                      aria-label={t('settings.remoteAccess.refreshIp')}
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${refreshingIp ? 'animate-spin' : ''}`} />
                     </button>
@@ -721,6 +738,8 @@ function SettingsContent() {
                 onClick={() => setShowCreateMenu(!showCreateMenu)}
                 disabled={creating}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                title={t('settings.tokens.create')}
+                aria-label={t('settings.tokens.create')}
               >
                 {creating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -743,6 +762,8 @@ function SettingsContent() {
                         key={opt.value}
                         onClick={() => handleCreateToken(opt.value)}
                         className="w-full px-4 py-3 text-left text-sm hover:bg-secondary/50 transition-colors text-foreground"
+                        title={t(opt.label)}
+                        aria-label={t(opt.label)}
                       >
                         {t(opt.label)}
                       </button>
@@ -800,6 +821,7 @@ function SettingsContent() {
                         }}
                         className="p-2 text-muted-foreground hover:text-foreground transition-colors"
                         title={t('settings.tokens.copyToken')}
+                        aria-label={t('settings.tokens.copyToken')}
                       >
                         {copiedTokenId === token.id ? (
                           <Check className="w-4 h-4 text-green-500" />
@@ -813,6 +835,8 @@ function SettingsContent() {
                           setShowDeleteConfirm(token.id);
                         }}
                         className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                        title={t('common.delete')}
+                        aria-label={t('common.delete')}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -869,6 +893,8 @@ function SettingsContent() {
                   onClick={() => doSaveStoragePath(pendingStoragePath, false)}
                   disabled={savingStorage}
                   className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  title={t('settings.storage.migrateNo')}
+                  aria-label={t('settings.storage.migrateNo')}
                 >
                   {t('settings.storage.migrateNo')}
                 </button>
@@ -876,6 +902,8 @@ function SettingsContent() {
                   onClick={() => doSaveStoragePath(pendingStoragePath, true)}
                   disabled={savingStorage}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  title={t('settings.storage.migrateYes')}
+                  aria-label={t('settings.storage.migrateYes')}
                 >
                   {savingStorage && <Loader2 className="w-4 h-4 animate-spin" />}
                   {t('settings.storage.migrateYes')}
@@ -928,6 +956,8 @@ function SettingsContent() {
                 <button
                   onClick={() => setSelectedToken(null)}
                   className="p-1 text-muted-foreground hover:text-foreground"
+                  title={t('common.close')}
+                  aria-label={t('common.close')}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -949,6 +979,8 @@ function SettingsContent() {
                     <button
                       onClick={() => copyToClipboard(selectedToken.token, 'token', selectedToken.id)}
                       className="p-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                      title={t('settings.tokens.copyToken')}
+                      aria-label={t('settings.tokens.copyToken')}
                     >
                       {copiedTokenId === selectedToken.id ? (
                         <Check className="w-4 h-4 text-green-500" />
@@ -974,6 +1006,8 @@ function SettingsContent() {
                     <button
                       onClick={() => copyToClipboard(getLoginLink(selectedToken.token), 'link', selectedToken.id)}
                       className="p-3 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+                      title={t('settings.tokens.copyLink')}
+                      aria-label={t('settings.tokens.copyLink')}
                     >
                       {copiedLinkId === selectedToken.id ? (
                         <Check className="w-4 h-4 text-green-500" />
@@ -1000,6 +1034,8 @@ function SettingsContent() {
                           setEditingDescription(true);
                         }}
                         className="text-xs text-primary hover:underline flex items-center gap-1"
+                        title={t('common.edit')}
+                        aria-label={t('common.edit')}
                       >
                         <Edit3 className="w-3 h-3" />
                         {t('common.edit')}
@@ -1021,6 +1057,8 @@ function SettingsContent() {
                         <button
                           onClick={() => setEditingDescription(false)}
                           className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                          title={t('common.cancel')}
+                          aria-label={t('common.cancel')}
                         >
                           {t('common.cancel')}
                         </button>
@@ -1028,6 +1066,8 @@ function SettingsContent() {
                           onClick={handleSaveDescription}
                           disabled={savingDescription}
                           className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                          title={savingDescription ? t('common.saving') : t('common.save')}
+                          aria-label={savingDescription ? t('common.saving') : t('common.save')}
                         >
                           {savingDescription ? t('common.saving') : t('common.save')}
                         </button>
@@ -1045,6 +1085,8 @@ function SettingsContent() {
                 <button
                   onClick={() => setShowDeleteConfirm(selectedToken.id)}
                   className="px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors flex items-center gap-2"
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
                 >
                   <Trash2 className="w-4 h-4" />
                   {t('common.delete')}
@@ -1052,6 +1094,8 @@ function SettingsContent() {
                 <button
                   onClick={() => setSelectedToken(null)}
                   className="px-4 py-2 bg-secondary text-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
+                  title={t('common.close')}
+                  aria-label={t('common.close')}
                 >
                   {t('common.close')}
                 </button>
@@ -1088,12 +1132,16 @@ function SettingsContent() {
                 <button
                   onClick={() => setShowDeleteConfirm(null)}
                   className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                  title={t('common.cancel')}
+                  aria-label={t('common.cancel')}
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   onClick={() => handleDeleteToken(showDeleteConfirm)}
                   className="px-4 py-2 bg-destructive text-white rounded-lg font-medium hover:bg-destructive/90 transition-colors"
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
                 >
                   {t('common.delete')}
                 </button>

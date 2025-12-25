@@ -189,6 +189,8 @@ export function Sidebar() {
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors border border-transparent",
                 isThemeOpen ? "bg-secondary text-foreground border-border" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
               )}
+              title={currentTheme.label}
+              aria-label={currentTheme.label}
             >
               <currentTheme.icon className="w-5 h-5 shrink-0" />
               <span className="font-medium text-sm">{currentTheme.label}</span>
@@ -213,6 +215,8 @@ export function Sidebar() {
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                         )}
+                        title={opt.label}
+                        aria-label={opt.label}
                       >
                         <opt.icon className="w-4 h-4 shrink-0" />
                         <span>{opt.label}</span>
@@ -236,6 +240,7 @@ export function Sidebar() {
             }}
             className="flex items-center justify-center px-2 py-2.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
             title={currentTheme.label}
+            aria-label={currentTheme.label}
           >
             <currentTheme.icon className="w-5 h-5 shrink-0" />
           </button>
@@ -251,6 +256,7 @@ export function Sidebar() {
             }}
             className="flex items-center justify-center px-2 py-2.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
             title={currentLang.label}
+            aria-label={currentLang.label}
           >
             <Languages className="w-5 h-5 shrink-0" />
           </button>
@@ -265,6 +271,8 @@ export function Sidebar() {
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors border border-transparent",
                 isLangOpen ? "bg-secondary text-foreground border-border" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
               )}
+              title={currentLang.label}
+              aria-label={currentLang.label}
             >
               <currentLang.icon className="w-5 h-5 shrink-0" />
               <span className="font-medium text-sm">{currentLang.label}</span>
@@ -290,6 +298,8 @@ export function Sidebar() {
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                         )}
+                        title={opt.label}
+                        aria-label={opt.label}
                       >
                         {opt.label}
                       </button>
@@ -322,7 +332,8 @@ export function Sidebar() {
             "flex items-center gap-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors group cursor-pointer",
             isCollapsed ? "px-2 py-2.5 justify-center" : "px-3 py-2.5"
           )}
-          title={isCollapsed ? t('common.github') : undefined}
+          title={t('common.github')}
+          aria-label={t('common.github')}
         >
           <Github className="w-5 h-5 shrink-0" />
           {!isCollapsed && <span className="font-medium text-sm group-hover:underline decoration-border underline-offset-4 whitespace-nowrap">{t('common.github')}</span>}

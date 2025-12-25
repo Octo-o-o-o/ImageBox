@@ -490,8 +490,22 @@ export default function LibraryPage() {
                     className="flex-1 bg-transparent border-none outline-none text-sm min-w-0 placeholder:text-muted-foreground/50"
                     placeholder={tr('library.enterName')}
                   />
-                  <button onClick={handleCreateFolder} className="text-green-500 hover:text-green-600"><Check className="w-4 h-4" /></button>
-                  <button onClick={() => setIsCreating(false)} className="text-red-500 hover:text-red-600"><X className="w-4 h-4" /></button>
+                  <button
+                    onClick={handleCreateFolder}
+                    className="text-green-500 hover:text-green-600"
+                    title={tr('common.done')}
+                    aria-label={tr('common.done')}
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setIsCreating(false)}
+                    className="text-red-500 hover:text-red-600"
+                    title={tr('common.cancel')}
+                    aria-label={tr('common.cancel')}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -576,8 +590,22 @@ export default function LibraryPage() {
                       }}
                       className="flex-1 bg-transparent border-none outline-none text-sm min-w-0"
                     />
-                    <button onClick={(e) => handleUpdateFolder(folder.id, e)} className="text-green-500 hover:text-green-600"><Check className="w-4 h-4" /></button>
-                    <button onClick={() => setEditingFolderId(null)} className="text-red-500 hover:text-red-600"><X className="w-4 h-4" /></button>
+                    <button
+                      onClick={(e) => handleUpdateFolder(folder.id, e)}
+                      className="text-green-500 hover:text-green-600"
+                      title={tr('common.save')}
+                      aria-label={tr('common.save')}
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingFolderId(null)}
+                      className="text-red-500 hover:text-red-600"
+                      title={tr('common.cancel')}
+                      aria-label={tr('common.cancel')}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 );
               }
@@ -848,6 +876,8 @@ export default function LibraryPage() {
                           selectedImageIds.length === displayedImages.length ? clearSelection() : selectAllImages();
                         }}
                         className="w-5 h-5 rounded border-2 border-border hover:border-primary transition-colors flex items-center justify-center"
+                        title={selectedImageIds.length === displayedImages.length ? tr('library.selection.clear') : tr('library.selection.selectAll')}
+                        aria-label={selectedImageIds.length === displayedImages.length ? tr('library.selection.clear') : tr('library.selection.selectAll')}
                       >
                         {selectedImageIds.length > 0 && selectedImageIds.length === displayedImages.length && (
                           <Check className="w-3 h-3 text-primary" />
@@ -907,6 +937,8 @@ export default function LibraryPage() {
                 <button
                   onClick={() => setMovingImageId(null)}
                   className="p-1 rounded-lg hover:bg-secondary text-muted-foreground transition-colors"
+                  title={tr('common.close')}
+                  aria-label={tr('common.close')}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1236,6 +1268,8 @@ function ImageListItem({
                 ? "bg-primary border-primary"
                 : "border-border hover:border-primary"
             )}
+            title={isSelected ? tr('common.deselect') : tr('common.select')}
+            aria-label={isSelected ? tr('common.deselect') : tr('common.select')}
           >
             {isSelected && (
               <Check className="w-3 h-3 text-white" />

@@ -7,10 +7,27 @@ import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
-import sharp from 'sharp';
 import { getActualStoragePath } from './settings';
 import { E } from '@/lib/errors';
 import { THUMBNAIL_SIZE, THUMBNAIL_QUALITY } from '@/lib/imageConstants';
+
+// Dynamic import for sharp to avoid crashes in Electron environment
+// Sharp has native bindings that may not be compatible with Electron's Node.js ABI
+type SharpModule = typeof import('sharp');
+let sharpModule: SharpModule | null | undefined = null;
+
+async function getSharp(): Promise<SharpModule | null> {
+  if (sharpModule === null) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      sharpModule = require('sharp') as SharpModule;
+    } catch (e) {
+      console.warn('Sharp module not available, thumbnail generation will be skipped:', e);
+      sharpModule = undefined; // Mark as failed, don't retry
+    }
+  }
+  return sharpModule || null;
+}
 
 // --- Folders ---
 
@@ -227,6 +244,11 @@ export async function saveGeneratedImage(
   // This happens in the background and won't delay the response
   setImmediate(async () => {
     try {
+      const sharp = await getSharp();
+      if (!sharp) {
+        // Sharp not available (e.g., in Electron), skip thumbnail generation
+        return;
+      }
       await sharp(buffer)
         .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
           fit: 'cover',

@@ -160,6 +160,8 @@ export default function TemplatesPage() {
                         setIsCreating(true);
                     }}
                     className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                    title={t('templates.createButton')}
+                    aria-label={t('templates.createButton')}
                 >
                     <Plus className="w-4 h-4" />
                     {t('templates.createButton')}
@@ -189,7 +191,7 @@ export default function TemplatesPage() {
                                         <div
                                             className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-600 dark:text-amber-400 font-medium cursor-pointer hover:bg-amber-500/20 transition-colors"
                                             onClick={() => handleEdit(template)}
-                                            title="Click to configure model"
+                                            title={t('templates.card.configureTooltip')}
                                         >
                                             {t('templates.card.notConfigured')}
                                         </div>
@@ -211,12 +213,16 @@ export default function TemplatesPage() {
                                     <button
                                         onClick={() => handleEdit(template)}
                                         className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                                        title={t('common.edit')}
+                                        aria-label={t('common.edit')}
                                     >
                                         <Pencil className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => setDeleteId(template.id)}
                                         className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                                        title={t('common.delete')}
+                                        aria-label={t('common.delete')}
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
@@ -258,7 +264,13 @@ export default function TemplatesPage() {
                         >
                             <div className="flex items-center justify-between p-6 border-b border-border">
                                 <h2 className="text-xl font-bold text-popover-foreground">{editingId ? t('templates.editTemplateTitle') : t('templates.newTemplateTitle')}</h2>
-                                <button onClick={handleModalClose}><X className="w-5 h-5 text-muted-foreground hover:text-foreground" /></button>
+                                <button
+                                  onClick={handleModalClose}
+                                  title={t('common.close')}
+                                  aria-label={t('common.close')}
+                                >
+                                  <X className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+                                </button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -280,6 +292,8 @@ export default function TemplatesPage() {
                                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                                             isEnabled ? 'bg-primary' : 'bg-muted'
                                         }`}
+                                        title={isEnabled ? t('templates.enabledLabel') : t('templates.disabledLabel')}
+                                        aria-label={isEnabled ? t('templates.enabledLabel') : t('templates.disabledLabel')}
                                     >
                                         <span
                                             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
