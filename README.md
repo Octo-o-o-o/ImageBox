@@ -64,6 +64,13 @@ Download the latest pre-built desktop application for your platform:
 **📦 [Download from GitHub Releases](https://github.com/Octo-o-o-o/ImageBox/releases/latest)**
 
 - **macOS**: `ImageBox-{version}-mac-{arch}.dmg` (Intel: x64, Apple Silicon: arm64)
+
+  > **⚠️ macOS Note:**
+  > The Apple Developer Certificate is pending. If you see "App is damaged", follow these steps:
+  > 1. Open **Terminal**.
+  > 2. Copy command: `sudo xattr -r -d com.apple.quarantine ` (Keep the space at the end).
+  > 3. Drag the `ImageBox.app` (from Applications) into Terminal.
+  > 4. Press Enter, type password, and Enter again.
 - **Windows**: `ImageBox-{version}-win-x64.exe` (NSIS installer)
 - **Linux**: `ImageBox-{version}-linux-x64.AppImage` or `.deb`
 

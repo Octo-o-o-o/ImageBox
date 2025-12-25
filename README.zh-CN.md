@@ -64,6 +64,13 @@
 **📦 [从 GitHub Releases 下载](https://github.com/Octo-o-o-o/ImageBox/releases/latest)**
 
 - **macOS**：`ImageBox-{版本号}-mac-{架构}.dmg`（Intel: x64，Apple Silicon: arm64）
+  
+  > **⚠️ macOS 用户提示：**
+  > 由于 Apple 开发者证书正在申请中，首次打开可能会遇到“应用已损坏”的提示。请按以下步骤绕过公证：
+  > 1. 打开 **终端 (Terminal)**。
+  > 2. 复制指令：`sudo xattr -r -d com.apple.quarantine ` (注意命令末尾有一个空格)。
+  > 3. 将安装好的 `ImageBox.app` (通常在应用程序文件夹) 拖入终端窗口，路径会自动补全。
+  > 4. 按回车，输入电脑密码，再次回车即可。
 - **Windows**：`ImageBox-{版本号}-win-x64.exe`（NSIS 安装程序）
 - **Linux**：`ImageBox-{版本号}-linux-x64.AppImage` 或 `.deb`
 
