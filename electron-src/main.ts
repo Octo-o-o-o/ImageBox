@@ -267,10 +267,9 @@ function setupIPC(): void {
     setTrayLanguage(String(language ?? ''));
   });
 
-  // 获取系统语言（用于前端初始化）
-  ipcMain.on('i18n:getSystemLanguage', (event) => {
-    const systemLocale = app.getLocale();
-    event.returnValue = systemLocale;
+  // 获取系统语言（异步，避免阻塞渲染进程）
+  ipcMain.handle('i18n:getSystemLanguage', () => {
+    return app.getLocale();
   });
 
   // 文件夹选择对话框

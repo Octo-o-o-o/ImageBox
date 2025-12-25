@@ -23,12 +23,12 @@ const initialState: LanguageProviderState = {
 
 const LanguageContext = createContext<LanguageProviderState>(initialState);
 
-// Helper function to detect system language
-const detectSystemLanguage = (): Language => {
+// Helper function to detect system language (async to avoid blocking)
+const detectSystemLanguage = async (): Promise<Language> => {
   // Try to get language from Electron API first (for desktop app)
   if (typeof window !== 'undefined' && window.electronAPI?.getSystemLanguage) {
     try {
-      const electronLang = window.electronAPI.getSystemLanguage();
+      const electronLang = await window.electronAPI.getSystemLanguage();
       if (electronLang && languages.some(l => l.code === electronLang)) {
         return electronLang as Language;
       }
@@ -84,11 +84,15 @@ export function LanguageProvider({
     if (savedLanguage && languages.some(l => l.code === savedLanguage)) {
       setLanguageState(savedLanguage);
     } else {
-      // No saved preference, detect system language
-      const systemLang = detectSystemLanguage();
-      setLanguageState(systemLang);
-      // Save detected language to localStorage for next time
-      localStorage.setItem(storageKey, systemLang);
+      // No saved preference, detect system language (async)
+      detectSystemLanguage().then((systemLang) => {
+        setLanguageState(systemLang);
+        // Save detected language to localStorage for next time
+        localStorage.setItem(storageKey, systemLang);
+      }).catch(() => {
+        // On error, use English as fallback
+        setLanguageState('en');
+      });
     }
   }, [storageKey]);
 

@@ -64,10 +64,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   /**
-   * 获取系统语言
+   * 获取系统语言（异步，避免阻塞渲染进程）
    */
-  getSystemLanguage: (): string => {
-    return ipcRenderer.sendSync('i18n:getSystemLanguage');
+  getSystemLanguage: (): Promise<string> => {
+    return ipcRenderer.invoke('i18n:getSystemLanguage');
   }
 });
 
@@ -84,7 +84,7 @@ declare global {
       isDesktop: boolean;
       platform: string;
       setLanguage?: (language: string) => void;
-      getSystemLanguage?: () => string;
+      getSystemLanguage?: () => Promise<string>;
     };
   }
 }
