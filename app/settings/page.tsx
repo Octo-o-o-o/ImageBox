@@ -146,6 +146,41 @@ function SettingsContent() {
     setIsDesktopMode(isDesktopApp());
   }, []);
 
+  // ESC key handler for modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close delete confirm modal first (highest z-index)
+        if (showDeleteConfirm) {
+          setShowDeleteConfirm(null);
+          return;
+        }
+        // Close token detail modal
+        if (selectedToken) {
+          setSelectedToken(null);
+          return;
+        }
+        // Close migrate modal
+        if (showMigrateModal && !savingStorage) {
+          setShowMigrateModal(false);
+          return;
+        }
+        // Close folder browser
+        if (showFolderBrowser) {
+          setShowFolderBrowser(false);
+          return;
+        }
+        // Close create menu
+        if (showCreateMenu) {
+          setShowCreateMenu(false);
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showDeleteConfirm, selectedToken, showMigrateModal, savingStorage, showFolderBrowser, showCreateMenu]);
+
   const applyStoragePath = async (newPath: string) => {
     setStoragePathInput(newPath);
     setPathValidation(null);

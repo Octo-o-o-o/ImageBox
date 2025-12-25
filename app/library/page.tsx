@@ -130,6 +130,19 @@ export default function LibraryPage() {
     }
   };
 
+  // ESC key handler for Move Image Modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && movingImageId) {
+        setMovingImageId(null);
+      }
+    };
+    if (movingImageId) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [movingImageId]);
+
   useEffect(() => {
     if (selectedFolderId !== null) {
       loadImages(selectedFolderId);
@@ -1430,6 +1443,17 @@ function PreviewModal({
 }: PreviewModalProps) {
   const [copySuccess, setCopySuccess] = useState(false);
   const [promptCopySuccess, setPromptCopySuccess] = useState(false);
+
+  // ESC key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleCopy = async () => {
     try {

@@ -271,6 +271,26 @@ function StudioPageContent() {
   const [previousPrompt, setPreviousPrompt] = useState<string | null>(null);
   const [lastPromptRunId, setLastPromptRunId] = useState<string | undefined>(undefined);
 
+  // ESC key handler for modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close preview image modal first (highest priority)
+        if (previewImage) {
+          setPreviewImage(null);
+          return;
+        }
+        // Close confirm dialog
+        if (confirmDialog.isOpen) {
+          setConfirmDialog({ ...confirmDialog, isOpen: false });
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [previewImage, confirmDialog]);
+
   const showToast = (message: string) => {
     setToast({ message });
     setTimeout(() => setToast(null), 3000);

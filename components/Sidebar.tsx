@@ -10,6 +10,7 @@ import { useGeneration } from './GenerationProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
 import { useLanguage } from './LanguageProvider';
@@ -26,8 +27,10 @@ export function Sidebar() {
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [platform, setPlatform] = useState<string>('');
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (window.electronAPI?.platform) {
       setPlatform(window.electronAPI.platform);
     }
@@ -360,50 +363,54 @@ export function Sidebar() {
       </div>
 
       {/* Navigation Confirmation Dialog */}
-      <AnimatePresence>
-        {pendingNavigation && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-            onClick={cancelNavigation}
-          >
+      {/* Navigation Confirmation Dialog */}
+      {mounted && createPortal(
+        <AnimatePresence>
+          {pendingNavigation && (
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative max-w-md w-full bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              onClick={cancelNavigation}
             >
-              <div className="p-6 pb-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground">{t('navigation.confirmLeave.title')}</h3>
-              </div>
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative max-w-md w-full bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6 pb-4 border-b border-border">
+                  <h3 className="text-lg font-bold text-foreground">{t('navigation.confirmLeave.title')}</h3>
+                </div>
 
-              <div className="p-6">
-                <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
-                  {t('navigation.confirmLeave.message')}
-                </p>
-              </div>
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
+                    {t('navigation.confirmLeave.message')}
+                  </p>
+                </div>
 
-              <div className="p-6 pt-4 flex gap-3">
-                <button
-                  onClick={confirmNavigation}
-                  className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors"
-                >
-                  {t('navigation.confirmLeave.confirm')}
-                </button>
-                <button
-                  onClick={cancelNavigation}
-                  className="flex-1 py-3 px-4 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors"
-                >
-                  {t('navigation.confirmLeave.cancel')}
-                </button>
-              </div>
+                <div className="p-6 pt-4 flex gap-3">
+                  <button
+                    onClick={confirmNavigation}
+                    className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors"
+                  >
+                    {t('navigation.confirmLeave.confirm')}
+                  </button>
+                  <button
+                    onClick={cancelNavigation}
+                    className="flex-1 py-3 px-4 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors"
+                  >
+                    {t('navigation.confirmLeave.cancel')}
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

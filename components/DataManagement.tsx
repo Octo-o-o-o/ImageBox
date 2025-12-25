@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Database,
   Download,
@@ -60,6 +60,36 @@ export function DataManagement() {
     setAlertOnClose(onClose || null);
     setShowAlert(true);
   };
+
+  // ESC key handler for modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close alert modal (allow closing only if no callback)
+        if (showAlert && !alertOnClose) {
+          setShowAlert(false);
+          return;
+        }
+        // Close backup modal (if not creating)
+        if (showBackupModal && !backupCreating) {
+          setShowBackupModal(false);
+          return;
+        }
+        // Close restore modal (if not restoring)
+        if (showRestoreModal && !restoreRestoring) {
+          setShowRestoreModal(false);
+          return;
+        }
+        // Close reset modal (if not resetting)
+        if (showResetModal && !resetResetting) {
+          setShowResetModal(false);
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showAlert, alertOnClose, showBackupModal, backupCreating, showRestoreModal, restoreRestoring, showResetModal, resetResetting]);
 
   // Handle backup creation
   const handleCreateBackup = async () => {

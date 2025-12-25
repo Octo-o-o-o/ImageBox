@@ -50,6 +50,19 @@ export function AddProviderModal({
         }
     }, [isOpen]);
 
+    // ESC key handler
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen && !submitting) {
+                handleClose();
+            }
+        };
+        if (isOpen) {
+            document.addEventListener('keydown', handleKeyDown);
+            return () => document.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [isOpen, submitting]);
+
     // Load models when preset is selected
     useEffect(() => {
         if (selectedPreset) {

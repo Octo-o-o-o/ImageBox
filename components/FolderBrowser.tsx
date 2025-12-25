@@ -89,6 +89,19 @@ export function FolderBrowser({ isOpen, onClose, onSelect, initialPath }: Folder
     }
   }, [isOpen, initialPath]);
 
+  // ESC key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose]);
+
   const handleFolderClick = (folder: FolderInfo) => {
     fetchFolders(folder.path);
   };

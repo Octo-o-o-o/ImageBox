@@ -77,6 +77,31 @@ export default function ModelsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ESC key handler for modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close model modal first (higher priority)
+        if (editingModel) {
+          setEditingModel(null);
+          return;
+        }
+        // Close provider modal
+        if (editingProvider) {
+          setEditingProvider(null);
+          return;
+        }
+        // Close add provider modal
+        if (addProviderModalOpen) {
+          setAddProviderModalOpen(false);
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [editingModel, editingProvider, addProviderModalOpen]);
+
   // --- Provider Handlers ---
   const handleSaveProvider = async () => {
     const data = editingProvider || newProvider;
