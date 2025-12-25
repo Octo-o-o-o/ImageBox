@@ -31,8 +31,11 @@ export {
 
 // --- Providers & Models ---
 export {
-  ensurePresetProvidersAndModels,
+  migratePresetProviders,
+  activatePresetProvider,
   getProviders,
+  getAvailablePresetProviders,
+  getPresetModelsForProvider,
   saveProvider,
   deleteProvider,
   getModels,

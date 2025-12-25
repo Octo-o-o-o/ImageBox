@@ -118,7 +118,8 @@
 - **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
 - **💻 Native Desktop App** - Cross-platform desktop application built with Electron:
   - macOS (Intel & Apple Silicon), Windows (x64), Linux (AppImage & deb)
-  - Native system tray integration and global shortcuts
+  - Native system tray integration with multi-language support (13 languages)
+  - System language auto-detection with intelligent fallback
   - Automatic updates and offline support
   - Standalone builds with no external dependencies
 - **🌐 Cross-Platform Access** - Use via localhost or LAN from any device with secure remote access
@@ -172,7 +173,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 **Docker Notes:**
 - Multi-arch support: amd64 (Intel/AMD) and arm64 (Apple Silicon, Raspberry Pi)
 - Data persisted in `imagebox-data` volume (database + generated images)
-- Available tags: `latest`, `v0.1.10`, etc.
+- Available tags: `latest`, `v0.1.3`, etc.
 
 ### Option 3: Web Application (Development/Self-Hosted)
 
@@ -460,8 +461,10 @@ imagebox/
 - [x] **Custom Storage Paths** - Configurable image storage directory with validation
 - [x] **Folder Organization** - Folder-based image management system
 - [x] **Image Favorites** - Star/favorite functionality for quick access
-- [x] **Native Desktop App** - Cross-platform Electron wrapper with system tray, shortcuts, and auto-updates
+- [x] **Native Desktop App** - Cross-platform Electron wrapper with system tray (i18n), shortcuts, and auto-updates
 - [x] **Setup Wizard** - First-time configuration guide for seamless onboarding
+- [x] **System Tray i18n** - System tray menu supports 13 languages with auto-detection
+- [x] **Cross-Platform Stability** - Improved Windows support with async IPC for language detection
 - [x] **Thumbnail Generation** - Optimized image thumbnails for faster gallery loading
 - [x] **Advanced Image Preview** - Full-featured modal with zoom, pan, and quick actions
 - [x] **Performance Optimization** - Buffer-based image processing and async thumbnail generation

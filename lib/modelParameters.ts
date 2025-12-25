@@ -288,6 +288,72 @@ export const MODEL_PRESETS = {
     description: 'Z-Image 本地模型 (ComfyUI)'
   },
 
+  // === Volcengine Ark Models ===
+
+  // Volcengine Ark Seedream 4.5 (OpenAI-compatible image generation)
+  ARK_SEEDREAM_4_5: {
+    supportedParams: ['aspectRatio', 'imageSize', 'refImagesEnabled'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      refImagesEnabled: true,
+    },
+    maxRefImages: 1,  // Seedream 4.5 supports single reference image
+    description: 'Volcengine Ark Seedream 4.5 (支持比例和分辨率，最多1张参考图)'
+  },
+
+  // === OpenAI Official Models ===
+
+  // OpenAI GPT-Image-1 (Image generation API)
+  OPENAI_GPT_IMAGE_1: {
+    supportedParams: ['aspectRatio', 'imageSize', 'quality'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      quality: 'medium',
+    },
+    maxRefImages: 0,  // GPT-Image-1 doesn't support reference images
+    description: 'OpenAI GPT-Image-1 (支持多种尺寸和质量设置)'
+  },
+
+  // === xAI Grok Models ===
+
+  // xAI Grok-2-Image (Image generation)
+  GROK_2_IMAGE: {
+    supportedParams: ['numberOfImages'],
+    defaults: {
+      numberOfImages: 1,
+    },
+    maxRefImages: 0,  // Grok-2-Image doesn't support reference images
+    description: 'xAI Grok-2-Image (固定尺寸1024x768，不支持参考图)'
+  },
+
+  // === DeepSeek Models ===
+
+  // DeepSeek Janus Pro (Multimodal image generation)
+  DEEPSEEK_JANUS_PRO: {
+    supportedParams: ['aspectRatio', 'imageSize'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+    },
+    maxRefImages: 0,  // Janus Pro primarily text-to-image
+    description: 'DeepSeek Janus Pro 7B (多模态图片生成)'
+  },
+
+  // === SiliconFlow Models ===
+
+  // SiliconFlow Qwen-Image (Image generation)
+  SILICONFLOW_QWEN_IMAGE: {
+    supportedParams: ['aspectRatio', 'imageSize'],
+    defaults: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+    },
+    maxRefImages: 0,
+    description: 'SiliconFlow Qwen-Image (支持多种比例和尺寸)'
+  },
+
   // Custom local model (minimal params)
   LOCAL_CUSTOM: {
     supportedParams: ['aspectRatio', 'imageSize', 'numberOfImages'],
@@ -381,6 +447,21 @@ export function mapParametersForAPI(
     isGrsai = !!(baseUrl && (baseUrl.includes('grsai') || baseUrl.includes('dakka.com.cn')));
   }
 
+  // Check if model uses Ark Seedream preset
+  let isArkSeedream = false;
+  if (parameterConfig) {
+    try {
+      const config = JSON.parse(parameterConfig);
+      isArkSeedream = !!(config.description && config.description.includes('Ark Seedream'));
+    } catch (e) {
+      // Fallback to baseUrl check if config parsing fails
+      isArkSeedream = !!(baseUrl && baseUrl.includes('ark.cn-beijing.volces.com'));
+    }
+  } else {
+    // Fallback to baseUrl check if no config provided
+    isArkSeedream = !!(baseUrl && baseUrl.includes('ark.cn-beijing.volces.com'));
+  }
+
   const isOpenRouter = baseUrl && baseUrl.includes('openrouter.ai');
   const isOfficialOpenAI = providerType === 'OPENAI' && !baseUrl;
 
@@ -430,6 +511,46 @@ export function mapParametersForAPI(
     }
     if (params.refImages) {
       mappedParams.refImages = params.refImages;
+    }
+  } else if (isArkSeedream) {
+    // Volcengine Ark Seedream - uses images.generate API (OpenAI-compatible)
+    // Special flag for custom API handling in generation.ts
+    mappedParams._useArkSeedreamAPI = true;
+
+    if (params.aspectRatio) {
+      // Convert aspectRatio format (e.g., "16:9" -> "16:9")
+      mappedParams.aspect_ratio = params.aspectRatio;
+    }
+    if (params.imageSize) {
+      // Map our imageSize to Seedream size format
+      const sizeMap: Record<string, string> = {
+        '1K': '1024x1024',
+        '2K': '2048x2048',
+        '4K': '4096x4096',
+      };
+      // If aspectRatio is specified, we need to calculate the actual dimensions
+      if (params.aspectRatio && params.aspectRatio !== '1:1') {
+        const [w, h] = params.aspectRatio.split(':').map(Number);
+        const baseSize = params.imageSize === '2K' ? 2048 : params.imageSize === '4K' ? 4096 : 1024;
+        let width: number, height: number;
+        if (w > h) {
+          width = baseSize;
+          height = Math.round(baseSize * h / w);
+        } else {
+          height = baseSize;
+          width = Math.round(baseSize * w / h);
+        }
+        // Round to nearest 64 (common requirement for image generation)
+        width = Math.round(width / 64) * 64;
+        height = Math.round(height / 64) * 64;
+        mappedParams.size = `${width}x${height}`;
+      } else {
+        mappedParams.size = sizeMap[params.imageSize] || '1024x1024';
+      }
+    }
+    if (params.refImages && Array.isArray(params.refImages) && params.refImages.length > 0) {
+      // Seedream uses image_urls for reference images
+      mappedParams.image_urls = params.refImages;
     }
   } else if (isOpenRouter || (providerType === 'GEMINI' && baseUrl)) {
     // OpenRouter or other OpenAI-compatible Gemini endpoints

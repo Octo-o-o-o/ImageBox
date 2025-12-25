@@ -1,17 +1,17 @@
 
-export type Language = 
-  | 'en' 
-  | 'zh' 
-  | 'zh-TW' 
-  | 'ja' 
-  | 'de' 
-  | 'fr' 
-  | 'ru' 
-  | 'pt' 
-  | 'es' 
-  | 'it' 
-  | 'ar' 
-  | 'no' 
+export type Language =
+  | 'en'
+  | 'zh'
+  | 'zh-TW'
+  | 'ja'
+  | 'de'
+  | 'fr'
+  | 'ru'
+  | 'pt'
+  | 'es'
+  | 'it'
+  | 'ar'
+  | 'no'
   | 'sv';
 
 export const languages: { code: Language; label: string; flag?: string }[] = [
@@ -521,6 +521,29 @@ export const translations: Record<Language, Record<string, string>> = {
     'models.models.option.localZImageSdCpp': 'Z-Image (stable-diffusion.cpp)',
     'models.models.option.localZImageComfyUI': 'Z-Image (ComfyUI)',
     'models.models.option.localCustom': 'Custom Local Model',
+    // === Add Provider Modal ===
+    'models.addProvider.title': 'Add Provider',
+    'models.addProvider.selectPreset': 'Select Built-in Provider',
+    'models.addProvider.configurePreset': 'Configure Provider',
+    'models.addProvider.selectTypeDesc': 'Choose the type of provider to add',
+    'models.addProvider.presetOption': 'Built-in Provider',
+    'models.addProvider.presetDesc': 'Select from preset list, just enter API Key',
+    'models.addProvider.customOption': 'Custom Provider',
+    'models.addProvider.customDesc': 'Fully customize provider configuration',
+    'models.addProvider.localOption': 'Local Service',
+    'models.addProvider.localDesc': 'Connect to local inference service (ComfyUI, stable-diffusion.cpp)',
+    'models.addProvider.back': 'Back',
+    'models.addProvider.backToList': 'Back to list',
+    'models.addProvider.alreadyAdded': 'Added',
+    'models.addProvider.apiKeyPlaceholder': 'Enter API Key',
+    'models.addProvider.getApiKey': 'Get API Key',
+    'models.addProvider.selectModels': 'Select Models',
+    'models.addProvider.selectAll': 'Select All',
+    'models.addProvider.deselectAll': 'Deselect All',
+    'models.addProvider.activate': 'Add Provider',
+    'models.providers.emptyTitle': 'Get Started',
+    'models.providers.emptyDesc': 'Add a provider to start using AI image generation',
+    'models.providers.addFirst': 'Add First Provider',
     // === Wizard - Local Model ===
     'wizard.local': 'Local Model',
     'wizard.localDesc': 'Run completely offline',
@@ -662,6 +685,11 @@ export const translations: Record<Language, Record<string, string>> = {
     'setup.provider.desc.gemini': 'Official Google Gemini API. API Key required.',
     'setup.provider.desc.openrouter': 'OpenRouter API proxy supporting multiple models. API Key required.',
     'setup.provider.desc.grsai': 'GRSAI Nano Banana image generation service. API Key required.',
+    'setup.provider.desc.ark': 'Volcengine Ark platform, OpenAI SDK compatible. API Key required.',
+    'setup.provider.image.title': 'Image Generation Provider',
+    'setup.provider.prompt.title': 'Prompt Optimization Provider',
+    'setup.provider.prompt.sameAsImage': 'Use same provider as Image Generation',
+    'setup.provider.prompt.optional': '(Optional)',
   },
   zh: {
     'sidebar.library': '资料库',
@@ -686,6 +714,10 @@ export const translations: Record<Language, Record<string, string>> = {
     'setup.api.getKey': '获取 {{provider}} 的 API Key',
     'setup.cta.getStarted': '开始使用',
     'setup.cta.skipForNow': '暂时跳过',
+    'setup.provider.image.title': '生成图片的服务商',
+    'setup.provider.prompt.title': '优化提示词的服务商',
+    'setup.provider.prompt.sameAsImage': '使用和生成图片相同的服务商',
+    'setup.provider.prompt.optional': '（选填）',
     'common.cancel': '取消',
     'common.create': '创建',
     'common.creating': '创建中...',
@@ -979,6 +1011,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.defaultParams.note': '使用模板时会自动应用这些默认值。',
     'templates.card.promptModelPrefix': '提示词模型：',
     'templates.card.imageModelPrefix': '出图模型：',
+    'templates.card.notConfigured': '未配置',
     'templates.card.manualInput': '手动填写',
     'templates.card.default': '默认',
     'templates.cancel': '取消',
@@ -1156,6 +1189,29 @@ export const translations: Record<Language, Record<string, string>> = {
     'models.models.option.localZImageSdCpp': 'Z-Image（stable-diffusion.cpp）',
     'models.models.option.localZImageComfyUI': 'Z-Image（ComfyUI）',
     'models.models.option.localCustom': '自定义本地模型',
+    // === 新增服务商弹窗 ===
+    'models.addProvider.title': '新增服务商',
+    'models.addProvider.selectPreset': '选择内置服务商',
+    'models.addProvider.configurePreset': '配置服务商',
+    'models.addProvider.selectTypeDesc': '选择要添加的服务商类型',
+    'models.addProvider.presetOption': '内置服务商',
+    'models.addProvider.presetDesc': '从预置列表中选择，只需填写 API Key',
+    'models.addProvider.customOption': '手动添加',
+    'models.addProvider.customDesc': '完全自定义服务商配置',
+    'models.addProvider.localOption': '本地服务',
+    'models.addProvider.localDesc': '连接本地推理服务（ComfyUI、stable-diffusion.cpp）',
+    'models.addProvider.back': '返回',
+    'models.addProvider.backToList': '返回列表',
+    'models.addProvider.alreadyAdded': '已添加',
+    'models.addProvider.apiKeyPlaceholder': '输入 API Key',
+    'models.addProvider.getApiKey': '获取 API Key',
+    'models.addProvider.selectModels': '选择模型',
+    'models.addProvider.selectAll': '全选',
+    'models.addProvider.deselectAll': '全不选',
+    'models.addProvider.activate': '添加服务商',
+    'models.providers.emptyTitle': '开始添加服务商',
+    'models.providers.emptyDesc': '添加一个服务商以开始使用 AI 图像生成功能',
+    'models.providers.addFirst': '添加第一个服务商',
     // === 向导页面 - 本地模型 ===
     'wizard.local': '本地模型',
     'wizard.localDesc': '完全离线运行',
@@ -1286,6 +1342,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'setup.provider.desc.gemini': 'Google 官方 Gemini API，需要配置 API Key',
     'setup.provider.desc.openrouter': 'OpenRouter API 代理，支持多种模型，需要配置 API Key',
     'setup.provider.desc.grsai': 'GRSAI Nano Banana 图像生成服务，需要配置 API Key',
+    'setup.provider.desc.ark': '火山引擎 Ark 平台，OpenAI SDK 同构，需要配置 API Key',
   },
   'zh-TW': {
     'sidebar.library': '資料庫',
@@ -1588,6 +1645,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.defaultParams.note': '使用模板時會自動應用這些默認值。',
     'templates.card.promptModelPrefix': '提示詞模型：',
     'templates.card.imageModelPrefix': '出圖模型：',
+    'templates.card.notConfigured': '未配置',
     'templates.card.manualInput': '手動填寫',
     'templates.card.default': '默認',
     'templates.cancel': '取消',
@@ -1812,6 +1870,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'setup.cta.getStarted': '開始使用',
     'setup.cta.skipForNow': '稍後再說',
     'setup.provider.desc.grsai': 'GRSAI Nano Banana 影像生成服務，需要設定 API Key',
+    'setup.provider.desc.ark': '火山引擎 Ark 平台，OpenAI SDK 同構，需要設定 API Key',
   },
   ja: {
     'sidebar.library': 'ライブラリ',
@@ -1998,6 +2057,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -2396,6 +2456,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -2794,6 +2855,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -3192,6 +3254,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -3590,6 +3653,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -3988,6 +4052,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -4385,6 +4450,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -4782,6 +4848,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -5179,6 +5246,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',
@@ -5576,6 +5644,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'templates.imageModelDefault': 'Default',
     'templates.card.promptModelPrefix': 'Prompt Model:',
     'templates.card.imageModelPrefix': 'Image Model:',
+    'templates.card.notConfigured': 'Not configured',
     'templates.card.manualInput': 'Manual',
     'templates.card.default': 'Default',
     'templates.cancel': 'Cancel',

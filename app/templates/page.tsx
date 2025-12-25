@@ -27,9 +27,6 @@ export default function TemplatesPage() {
     // Track validation errors
     const [promptModelError, setPromptModelError] = useState(false);
 
-    // Track if modal was opened due to missing model
-    const [openedForMissingModel, setOpenedForMissingModel] = useState(false);
-
     const { t } = useLanguage();
 
     const load = () => {
@@ -133,7 +130,6 @@ export default function TemplatesPage() {
         setIsEnabled(true);
         setInitialFormState(null);
         setPromptModelError(false);
-        setOpenedForMissingModel(false);
     }
 
     const handleModalClose = () => {
@@ -145,16 +141,6 @@ export default function TemplatesPage() {
     };
 
     const handleToggleEnabled = async (templateId: string, currentState: boolean) => {
-        const template = templates.find(t => t.id === templateId);
-
-        // If trying to enable and no model is configured, open edit modal with error
-        if (!currentState && template && !template.promptGeneratorId) {
-            handleEdit(template);
-            setOpenedForMissingModel(true);
-            setPromptModelError(true);
-            return;
-        }
-
         await toggleTemplateEnabled(templateId, !currentState);
         load();
     };
@@ -198,30 +184,30 @@ export default function TemplatesPage() {
                                     <LayoutTemplate className="w-6 h-6 text-primary" />
                                 </div>
                                 <div className="flex gap-2 items-center">
-                                    {/* Enable/Disable Switch */}
-                                    <button
-                                        onClick={() => handleToggleEnabled(template.id, template.isEnabled)}
-                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                            template.isEnabled
-                                                ? 'bg-primary'
-                                                : template.promptGeneratorId
-                                                    ? 'bg-muted'
-                                                    : 'bg-muted opacity-50 cursor-not-allowed'
-                                        }`}
-                                        title={
-                                            !template.promptGeneratorId
-                                                ? 'Please configure a model first'
-                                                : template.isEnabled
-                                                    ? t('templates.enabledLabel')
-                                                    : t('templates.disabledLabel')
-                                        }
-                                    >
-                                        <span
-                                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                                                template.isEnabled ? 'translate-x-5' : 'translate-x-1'
+                                    {/* Model Configuration Status or Enable/Disable Switch */}
+                                    {!template.promptGeneratorId ? (
+                                        <div
+                                            className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-600 dark:text-amber-400 font-medium cursor-pointer hover:bg-amber-500/20 transition-colors"
+                                            onClick={() => handleEdit(template)}
+                                            title="Click to configure model"
+                                        >
+                                            {t('templates.card.notConfigured')}
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleToggleEnabled(template.id, template.isEnabled)}
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                                template.isEnabled ? 'bg-primary' : 'bg-muted'
                                             }`}
-                                        />
-                                    </button>
+                                            title={template.isEnabled ? t('templates.enabledLabel') : t('templates.disabledLabel')}
+                                        >
+                                            <span
+                                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                                    template.isEnabled ? 'translate-x-5' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleEdit(template)}
                                         className="p-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -318,7 +304,6 @@ export default function TemplatesPage() {
                                             onChange={e => {
                                                 setSelectedPromptModel(e.target.value);
                                                 setPromptModelError(false); // Clear error when user selects
-                                                setOpenedForMissingModel(false); // Clear missing model flag
                                             }}
                                             className={`w-full bg-secondary/50 border rounded-lg p-2 mt-1 text-sm outline-none text-foreground ${
                                                 promptModelError ? 'border-red-500' : 'border-border'
@@ -327,13 +312,7 @@ export default function TemplatesPage() {
                                             <option value="">Select a model...</option>
                                             {promptModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                         </select>
-                                        {promptModelError && openedForMissingModel && (
-                                            <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
-                                                <AlertTriangle className="w-3 h-3" />
-                                                Please configure a model before enabling this template
-                                            </p>
-                                        )}
-                                        {promptModelError && !openedForMissingModel && (
+                                        {promptModelError && (
                                             <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
                                                 <AlertTriangle className="w-3 h-3" />
                                                 Please select a model

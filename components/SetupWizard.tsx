@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { BaseModal } from '@/components/ui/BaseModal';
-import { Folder, Key, ArrowRight, CheckCircle2, ChevronRight, Settings2, Globe, ExternalLink } from 'lucide-react';
+import { Folder, Key, ArrowRight, CheckCircle2, ChevronRight, Settings2, ExternalLink, CheckSquare, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { saveProvider, updateStoragePath } from '@/app/actions';
+import { activatePresetProvider, updateStoragePath } from '@/app/actions';
 import { PRESET_PROVIDERS, type PresetProvider } from '@/lib/presetProviders';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
@@ -13,6 +13,8 @@ const STORAGE_KEY_SETUP = 'imagebox_setup_completed';
 const STORAGE_KEY_PATH = 'imagebox_storage_path';
 const STORAGE_KEY_API = 'imagebox_api_key';
 const STORAGE_KEY_PROVIDER = 'imagebox_provider_id';
+const STORAGE_KEY_PROMPT_PROVIDER = 'imagebox_prompt_provider_id';
+const STORAGE_KEY_PROMPT_API = 'imagebox_prompt_api_key';
 
 export function SetupWizard() {
     const { t } = useLanguage();
@@ -20,9 +22,15 @@ export function SetupWizard() {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [storagePath, setStoragePath] = useState('');
-    const [selectedProviderId, setSelectedProviderId] = useState<string>(PRESET_PROVIDERS[0]?.id || '');
-    const [apiKey, setApiKey] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
+
+    // Image Provider State (Required)
+    const [imageProviderId, setImageProviderId] = useState<string>(PRESET_PROVIDERS[0]?.id || '');
+    const [imageApiKey, setImageApiKey] = useState('');
+
+    // Prompt Provider State (Optional)
+    const [sameProvider, setSameProvider] = useState(true);
+    const [promptProviderId, setPromptProviderId] = useState<string>(PRESET_PROVIDERS[0]?.id || '');
+    const [promptApiKey, setPromptApiKey] = useState('');
 
     const loadDefaultsAndOpen = async () => {
         try {
@@ -36,7 +44,6 @@ export function SetupWizard() {
         } catch (e) {
             console.error('Failed to load default paths', e);
         } finally {
-            setIsLoading(false);
             setIsOpen(true);
         }
     };
@@ -65,7 +72,6 @@ export function SetupWizard() {
             try {
                 const isSetup = localStorage.getItem(STORAGE_KEY_SETUP);
                 if (isSetup) return;
-                setIsLoading(true);
                 void loadDefaultsAndOpen();
             } catch (e) {
                 console.error('Failed to re-open SetupWizard', e);
@@ -90,28 +96,53 @@ export function SetupWizard() {
     };
 
     const handleFinish = async () => {
-        // Keep existing UX: instant close + reload. Only the provider OPTIONS are changed.
+        const effectivePromptProviderId = sameProvider ? imageProviderId : promptProviderId;
+        const effectivePromptApiKey = sameProvider ? imageApiKey : promptApiKey;
+
+        // Save to localStorage
         localStorage.setItem(STORAGE_KEY_PATH, storagePath);
-        localStorage.setItem(STORAGE_KEY_PROVIDER, selectedProviderId);
-        localStorage.setItem(STORAGE_KEY_API, apiKey);
+        localStorage.setItem(STORAGE_KEY_PROVIDER, imageProviderId);
+        localStorage.setItem(STORAGE_KEY_API, imageApiKey);
+        localStorage.setItem(STORAGE_KEY_PROMPT_PROVIDER, effectivePromptProviderId);
+        localStorage.setItem(STORAGE_KEY_PROMPT_API, effectivePromptApiKey);
         localStorage.setItem(STORAGE_KEY_SETUP, 'true');
+
         setIsOpen(false);
 
-        // Persist to DB silently (no UI/interaction changes)
+        // Persist to DB silently
         try {
-            const preset: PresetProvider | undefined = PRESET_PROVIDERS.find(p => p.id === selectedProviderId);
-            if (preset) {
-                await Promise.allSettled([
-                    storagePath ? updateStoragePath(storagePath, { migrate: false }) : Promise.resolve(null),
-                    saveProvider({
-                        id: preset.id,
-                        name: preset.name,
-                        type: preset.type,
-                        baseUrl: preset.baseUrl,
-                        apiKey,
-                    }),
-                ]);
+            const promises: Promise<unknown>[] = [];
+
+            // 1. Save Path
+            if (storagePath) {
+                promises.push(updateStoragePath(storagePath, { migrate: false }));
             }
+
+            // 2. Activate Image Provider (creates provider + all preset models)
+            const imagePreset = PRESET_PROVIDERS.find(p => p.id === imageProviderId);
+            if (imagePreset) {
+                promises.push(activatePresetProvider(
+                    imagePreset.id,
+                    imageApiKey,
+                    // undefined = all preset models for this provider
+                ));
+            }
+
+            // 3. Activate Prompt Provider if different
+            // If same provider ID, we already activated it above.
+            // If different provider ID, activate it.
+            if (!sameProvider && promptProviderId !== imageProviderId) {
+                const promptPreset = PRESET_PROVIDERS.find(p => p.id === promptProviderId);
+                if (promptPreset) {
+                    promises.push(activatePresetProvider(
+                        promptPreset.id,
+                        promptApiKey,
+                        // undefined = all preset models for this provider
+                    ));
+                }
+            }
+
+            await Promise.allSettled(promises);
         } catch (e) {
             console.error('Setup wizard persistence failed:', e);
         }
@@ -124,9 +155,6 @@ export function SetupWizard() {
     };
 
     const handleSkip = () => {
-        // Just mark as setup but don't save any specific configs usually?
-        // User requested "Skip". I'll save the fact they skipped so it doesn't pop up again.
-        // They can configure later.
         localStorage.setItem(STORAGE_KEY_SETUP, 'true');
         setIsOpen(false);
         router.push('/create');
@@ -141,16 +169,21 @@ export function SetupWizard() {
         }
     };
 
-    const selectedProvider = PRESET_PROVIDERS.find(p => p.id === selectedProviderId) || PRESET_PROVIDERS[0];
+    const selectedImageProvider = PRESET_PROVIDERS.find(p => p.id === imageProviderId) || PRESET_PROVIDERS[0];
+    const selectedPromptProvider = PRESET_PROVIDERS.find(p => p.id === promptProviderId) || PRESET_PROVIDERS[0];
 
-    // Localized description for provider section
-    const providerDescKeyMap: Record<string, string> = {
-        'preset-google-gemini': 'setup.provider.desc.gemini',
-        'preset-openrouter': 'setup.provider.desc.openrouter',
-        'preset-grsai': 'setup.provider.desc.grsai',
+    // Helper to get description
+    const getProviderDesc = (provider: PresetProvider | undefined) => {
+        if (!provider) return '';
+        const providerDescKeyMap: Record<string, string> = {
+            'preset-google-gemini': 'setup.provider.desc.gemini',
+            'preset-openrouter': 'setup.provider.desc.openrouter',
+            'preset-grsai': 'setup.provider.desc.grsai',
+            'preset-ark': 'setup.provider.desc.ark',
+        };
+        const key = providerDescKeyMap[provider.id];
+        return key ? t(key) : (provider.description || '');
     };
-    const providerDescKey = selectedProvider ? providerDescKeyMap[selectedProvider.id] : undefined;
-    const providerDescription = providerDescKey ? t(providerDescKey) : (selectedProvider?.description || '');
 
     if (!isOpen) return null;
 
@@ -162,7 +195,7 @@ export function SetupWizard() {
             closeOnBackdrop={false}
             closeOnEscape={false}
             maxWidth="max-w-2xl"
-            zIndex="z-[100]" // Highest z-index to cover sidebar
+            zIndex="z-[100]"
         >
             <div className="space-y-8">
                 {/* Header */}
@@ -175,7 +208,7 @@ export function SetupWizard() {
                 </div>
 
                 {/* Content */}
-                <div className="space-y-6">
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
 
                     {/* Storage Location */}
                     <div className="space-y-3">
@@ -199,19 +232,21 @@ export function SetupWizard() {
                         </div>
                     </div>
 
-                    {/* API Key Configuration */}
+                    <div className="w-full h-px bg-gray-100 my-2" />
+
+                    {/* Image Provider (Required) */}
                     <div className="space-y-3">
                         <label className="text-sm font-bold text-gray-900 flex items-center gap-2">
                             <Key size={16} className="text-orange-500" />
-                            {tr('setup.provider.title')}
+                            {tr('setup.provider.image.title')}
+                            <span className="text-orange-500 text-xs font-normal ml-auto">* Required</span>
                         </label>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Provider Selection */}
                             <div className="relative group">
                                 <select
-                                    value={selectedProviderId}
-                                    onChange={(e) => setSelectedProviderId(e.target.value)}
+                                    value={imageProviderId}
+                                    onChange={(e) => setImageProviderId(e.target.value)}
                                     className="w-full appearance-none px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 shadow-sm transition-all pr-10 font-medium text-gray-700"
                                 >
                                     {PRESET_PROVIDERS.map(p => (
@@ -222,17 +257,15 @@ export function SetupWizard() {
                                     <ChevronRight size={16} className="rotate-90" />
                                 </div>
                             </div>
-
-                            {/* API Key Input */}
                             <div className="relative">
                                 <input
                                     type="password"
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder={tr('setup.api.placeholder', { provider: selectedProvider?.name || 'Provider' })}
+                                    value={imageApiKey}
+                                    onChange={(e) => setImageApiKey(e.target.value)}
+                                    placeholder={tr('setup.api.placeholder', { provider: selectedImageProvider?.name || 'Provider' })}
                                     className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 shadow-sm transition-all pr-10 font-mono"
                                 />
-                                {apiKey && (
+                                {imageApiKey && (
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
                                         <CheckCircle2 size={18} />
                                     </div>
@@ -240,28 +273,99 @@ export function SetupWizard() {
                             </div>
                         </div>
 
-                        {/* Provider Info & Get Key Link */}
                         <div className="flex items-center justify-between px-1">
-                            <p className="text-xs text-gray-400">
-                                {providerDescription}
-                            </p>
+                            <p className="text-xs text-gray-400 line-clamp-1">{getProviderDesc(selectedImageProvider)}</p>
                             <button
-                                onClick={() => selectedProvider?.apiKeyApplyUrl && openProviderUrl(selectedProvider.apiKeyApplyUrl)}
-                                className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
+                                onClick={() => selectedImageProvider?.apiKeyApplyUrl && openProviderUrl(selectedImageProvider.apiKeyApplyUrl)}
+                                className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline shrink-0"
                             >
                                 <ExternalLink size={12} />
-                                {tr('setup.api.getKey', { provider: selectedProvider?.name || '' })}
+                                {tr('setup.api.getKey', { provider: selectedImageProvider?.name || '' })}
                             </button>
                         </div>
-
                     </div>
+
+                    {/* Prompt Provider (Optional) */}
+                    <div className="space-y-3 pt-2">
+                        <label className="text-sm font-bold text-gray-900 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <Key size={16} className="text-gray-400" />
+                                <span>
+                                    {tr('setup.provider.prompt.title')}
+                                    <span className="text-gray-400 font-normal ml-1">{tr('setup.provider.prompt.optional')}</span>
+                                </span>
+                            </div>
+                        </label>
+
+                        {/* Toggle Checkbox */}
+                        <div
+                            className="flex items-center gap-2 cursor-pointer group"
+                            onClick={() => setSameProvider(!sameProvider)}
+                        >
+                            {sameProvider ? (
+                                <CheckSquare size={18} className="text-orange-500" />
+                            ) : (
+                                <Square size={18} className="text-gray-300 group-hover:text-gray-400" />
+                            )}
+                            <span className="text-sm text-gray-600 select-none group-hover:text-gray-800">
+                                {tr('setup.provider.prompt.sameAsImage')}
+                            </span>
+                        </div>
+
+                        {/* Separate Config */}
+                        {!sameProvider && (
+                            <div className="space-y-3 pl-0 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="relative group">
+                                        <select
+                                            value={promptProviderId}
+                                            onChange={(e) => setPromptProviderId(e.target.value)}
+                                            className="w-full appearance-none px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 shadow-sm transition-all pr-10 font-medium text-gray-700"
+                                        >
+                                            {PRESET_PROVIDERS.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronRight size={16} className="rotate-90" />
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            type="password"
+                                            value={promptApiKey}
+                                            onChange={(e) => setPromptApiKey(e.target.value)}
+                                            placeholder={tr('setup.api.placeholder', { provider: selectedPromptProvider?.name || 'Provider' })}
+                                            className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 shadow-sm transition-all pr-10 font-mono"
+                                        />
+                                        {promptApiKey && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
+                                                <CheckCircle2 size={18} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between px-1">
+                                    <p className="text-xs text-gray-400 line-clamp-1">{getProviderDesc(selectedPromptProvider)}</p>
+                                    <button
+                                        onClick={() => selectedPromptProvider?.apiKeyApplyUrl && openProviderUrl(selectedPromptProvider.apiKeyApplyUrl)}
+                                        className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline shrink-0"
+                                    >
+                                        <ExternalLink size={12} />
+                                        {tr('setup.api.getKey', { provider: selectedPromptProvider?.name || '' })}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                 </div>
 
                 {/* Footer */}
                 <div className="pt-2 flex flex-col gap-3">
                     <button
                         onClick={handleFinish}
-                        disabled={!apiKey}
+                        disabled={!imageApiKey}
                         className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-bold shadow-lg shadow-orange-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                     >
                         {tr('setup.cta.getStarted')}

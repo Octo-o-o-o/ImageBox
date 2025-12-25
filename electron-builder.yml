@@ -58,6 +58,7 @@ mac:
 dmg:
   title: ImageBox
   icon: assets/icon.png
+  background: null
   contents:
     - x: 130
       y: 220
