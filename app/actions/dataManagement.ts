@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import path from 'path';
+import { PRESET_TEMPLATE_NAMES } from '@/lib/presetTemplates';
 
 // Encryption configuration
 const ALGORITHM = 'aes-256-gcm';
@@ -423,9 +424,6 @@ export async function resetDatabase(): Promise<{
   error?: string;
 }> {
   try {
-    // Define preset template names (from app/actions/templates.ts)
-    const presetTemplateNames = ['Universal Optimizer', 'Presentation Graphics'];
-
     // Use transaction for atomic reset
     await prisma.$transaction(async (tx) => {
       // 0. Delete remote access tokens
@@ -440,7 +438,7 @@ export async function resetDatabase(): Promise<{
       await tx.template.deleteMany({
         where: {
           name: {
-            notIn: presetTemplateNames
+            notIn: PRESET_TEMPLATE_NAMES
           }
         }
       });

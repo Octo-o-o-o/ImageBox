@@ -137,9 +137,7 @@ export function Sidebar() {
               <span className="text-xl font-bold leading-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600 dark:from-white dark:to-white/70">
                 ImageBox
               </span>
-              <span className="text-xs text-muted-foreground/40 font-mono leading-tight">
-                v{process.env.NEXT_PUBLIC_APP_VERSION ?? '0.0.0'}
-              </span>
+
             </div>
           </>
         )}

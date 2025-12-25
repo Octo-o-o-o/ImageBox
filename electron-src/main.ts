@@ -32,6 +32,10 @@ let serverStartupError: string | null = null;
 const isDev = !app.isPackaged;
 // 开发模式使用 3000 端口（外部 next dev 启动），生产模式使用 3333 端口
 const PORT = isDev ? 3000 : 3333;
+// 默认不常驻：关闭主窗口即退出。若你确实需要 macOS “关闭=隐藏后台” 行为，可设置 IMAGEBOX_ALLOW_BACKGROUND=1
+const ALLOW_BACKGROUND = process.env.IMAGEBOX_ALLOW_BACKGROUND === '1';
+// 若你不希望出现托盘/快捷键（更“干净”），可设置 IMAGEBOX_DISABLE_TRAY=1
+const DISABLE_TRAY = process.env.IMAGEBOX_DISABLE_TRAY === '1';
 
 function isWindowAlive(win: BrowserWindow | null): win is BrowserWindow {
   return !!win && !win.isDestroyed();
@@ -173,7 +177,8 @@ async function startNextServer(): Promise<void> {
           // 注意：BrowserWindow 仍然加载 localhost，不受影响
           HOSTNAME: '0.0.0.0',
           USER_DATA_PATH: userDataPath,
-          DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db')}`
+          // Windows 路径使用反斜杠，但 SQLite file URL 必须使用正斜杠
+          DATABASE_URL: `file:${path.join(userDataPath, 'imagebox.db').replace(/\\/g, '/')}`
         },
         stdio: 'pipe'
       });
@@ -397,7 +402,7 @@ async function createWindow(): Promise<void> {
 
   // macOS：点击关闭按钮时隐藏而不是退出
   win.on('close', (e) => {
-    if (process.platform === 'darwin' && !extApp.isQuitting) {
+    if (process.platform === 'darwin' && ALLOW_BACKGROUND && !extApp.isQuitting) {
       e.preventDefault();
       win.hide();
     }
@@ -497,8 +502,10 @@ app.whenReady().then(async () => {
 
   // 创建托盘
   if (mainWindow) {
-    createTray(mainWindow);
-    registerShortcuts(mainWindow);
+    if (!DISABLE_TRAY) {
+      createTray(mainWindow);
+      registerShortcuts(mainWindow);
+    }
 
     // 生产模式检查更新（暂时注释掉，测试完成后再启用）
     // if (!isDev) {
@@ -532,8 +539,8 @@ app.on('before-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // 默认“关闭即退出”，避免 macOS 常驻后台。若需要常驻，设置 IMAGEBOX_ALLOW_BACKGROUND=1
+  if (process.platform === 'darwin' && ALLOW_BACKGROUND) return;
+  app.quit();
 });
 

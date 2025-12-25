@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { saveSetting } from './settings';
+import { PRESET_TEMPLATES } from '@/lib/presetTemplates';
 
 // --- Templates ---
 
@@ -44,24 +45,8 @@ export async function ensurePresetTemplates() {
     return; // Already initialized
   }
 
-  // Define preset templates
-  const presetTemplates = [
-    {
-      name: 'Universal Optimizer',
-      promptTemplate: '{{user_input}}',
-      systemPrompt: 'You are a creative AI prompt optimization expert. Enhance the user\'s prompt to be more detailed, vivid, and effective for AI image generation while maintaining their core intent. Add appropriate details about composition, lighting, style, and atmosphere that would improve the final image quality.',
-      promptGeneratorId: null, // Will be manually selected by user
-    },
-    {
-      name: 'Presentation Graphics',
-      promptTemplate: '{{user_input}}',
-      systemPrompt: 'You are a professional presentation designer. Transform the user\'s concept into a clear, professional prompt optimized for creating business presentation graphics. Focus on clarity, professionalism, and visual impact suitable for slides. Emphasize clean layouts, corporate aesthetics, and information clarity.',
-      promptGeneratorId: null, // Will be manually selected by user
-    },
-  ];
-
   // Create templates
-  for (const template of presetTemplates) {
+  for (const template of PRESET_TEMPLATES) {
     // Check if template already exists by name to avoid duplicates
     const existing = await prisma.template.findFirst({
       where: { name: template.name }

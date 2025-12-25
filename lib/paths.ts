@@ -37,12 +37,18 @@ export function getUserDataPath(): string {
 
 /**
  * 获取数据库 URL
+ *
+ * 注意：SQLite file URL 必须使用正斜杠，即使在 Windows 上也是如此
+ * 例如：file:C:/Users/xxx/AppData/Roaming/ImageBox/imagebox.db
  */
 export function getDatabaseUrl(): string {
   const dataPath = getUserDataPath();
   // 桌面应用使用 imagebox.db，Web 模式使用 dev.db
   const dbName = process.env.USER_DATA_PATH ? 'imagebox.db' : 'dev.db';
-  return `file:${path.join(dataPath, dbName)}`;
+  const fullPath = path.join(dataPath, dbName);
+  // Windows 路径使用反斜杠，但 SQLite file URL 必须使用正斜杠
+  const normalizedPath = fullPath.replace(/\\/g, '/');
+  return `file:${normalizedPath}`;
 }
 
 /**

@@ -211,7 +211,7 @@ export function AddProviderModal({
                 </div>
 
                 {/* Content */}
-                <div className="p-6 max-h-[70vh] overflow-y-auto">
+                <div className="p-6 max-h-[70vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-200 dark:[&::-webkit-scrollbar-thumb]:bg-gray-800 hover:[&::-webkit-scrollbar-thumb]:bg-gray-300 dark:hover:[&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-track]:bg-transparent">
                     <AnimatePresence mode="wait">
                         {/* Provider List */}
                         {mode === 'list' && (
@@ -385,7 +385,7 @@ export function AddProviderModal({
                                         </div>
                                     </div>
 
-                                    <div className="max-h-40 overflow-y-auto space-y-1 p-2 bg-secondary/30 rounded-lg border border-border">
+                                    <div className="max-h-40 overflow-y-auto space-y-1 p-2 bg-secondary/30 rounded-lg border border-border [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-200 dark:[&::-webkit-scrollbar-thumb]:bg-gray-800 hover:[&::-webkit-scrollbar-thumb]:bg-gray-300 dark:hover:[&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-track]:bg-transparent">
                                         {presetModels.map(model => (
                                             <button
                                                 key={model.id}
