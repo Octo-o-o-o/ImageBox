@@ -33,9 +33,13 @@ export function ThemeProvider({
 
   useEffect(() => {
     setMounted(true);
-    const savedTheme = localStorage.getItem(storageKey) as Theme;
-    if (savedTheme) {
-      setTheme(savedTheme);
+    try {
+      const savedTheme = localStorage.getItem(storageKey) as Theme;
+      if (savedTheme) {
+        setTheme(savedTheme);
+      }
+    } catch (e) {
+      console.warn('Failed to read theme from localStorage:', e);
     }
   }, [storageKey]);
 
@@ -45,10 +49,12 @@ export function ThemeProvider({
     root.classList.remove('light', 'dark');
 
     if (theme === 'auto') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-        .matches
-        ? 'dark'
-        : 'light';
+      let systemTheme: 'dark' | 'light' = 'light';
+      try {
+        systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      } catch {
+        systemTheme = 'light';
+      }
 
       root.classList.add(systemTheme);
       return;
@@ -61,6 +67,7 @@ export function ThemeProvider({
   useEffect(() => {
     if (theme !== 'auto') return;
     
+    if (!window.matchMedia) return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
         const root = window.document.documentElement;
@@ -68,8 +75,13 @@ export function ThemeProvider({
         root.classList.add(mediaQuery.matches ? 'dark' : 'light');
     };
 
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    try {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } catch {
+      // ignore
+      return;
+    }
   }, [theme]);
 
   // Avoid hydration mismatch logic is simplified here; strict mode might complain but functionally ok.
@@ -78,7 +90,11 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
+      try {
+        localStorage.setItem(storageKey, theme);
+      } catch (e) {
+        console.warn('Failed to save theme to localStorage:', e);
+      }
       setTheme(theme);
     },
   };

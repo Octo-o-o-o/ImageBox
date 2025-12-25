@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { BaseModal } from '@/components/ui/BaseModal';
 import { Folder, Key, ArrowRight, CheckCircle2, ChevronRight, Settings2, ExternalLink, CheckSquare, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { activatePresetProvider, updateStoragePath } from '@/app/actions';
-import { PRESET_PROVIDERS, type PresetProvider } from '@/lib/presetProviders';
+import { activatePresetProvider, updateStoragePath, getTemplates, updateTemplate } from '@/app/actions';
+import { PRESET_PROVIDERS, PRESET_MODELS, type PresetProvider } from '@/lib/presetProviders';
 import { useLanguage } from '@/components/LanguageProvider';
 import { replaceTemplate } from '@/lib/i18n';
 
@@ -23,20 +23,31 @@ export function SetupWizard() {
     const [isOpen, setIsOpen] = useState(false);
     const [storagePath, setStoragePath] = useState('');
 
+    // Filter providers based on available models
+    // Image providers: only show providers that have at least one IMAGE model
+    const imageProviders = PRESET_PROVIDERS.filter(provider =>
+        PRESET_MODELS.some(model => model.providerId === provider.id && model.type === 'IMAGE')
+    );
+    // Text providers: only show providers that have at least one TEXT model
+    const textProviders = PRESET_PROVIDERS.filter(provider =>
+        PRESET_MODELS.some(model => model.providerId === provider.id && model.type === 'TEXT')
+    );
+
     // Image Provider State (Required)
-    const [imageProviderId, setImageProviderId] = useState<string>(PRESET_PROVIDERS[0]?.id || '');
+    const [imageProviderId, setImageProviderId] = useState<string>(imageProviders[0]?.id || '');
     const [imageApiKey, setImageApiKey] = useState('');
 
     // Prompt Provider State (Optional)
     const [sameProvider, setSameProvider] = useState(true);
-    const [promptProviderId, setPromptProviderId] = useState<string>(PRESET_PROVIDERS[0]?.id || '');
+    const [promptProviderId, setPromptProviderId] = useState<string>(textProviders[0]?.id || '');
     const [promptApiKey, setPromptApiKey] = useState('');
 
     const loadDefaultsAndOpen = async () => {
         try {
             if (window.electronAPI?.getDefaultPaths) {
                 const paths = await window.electronAPI.getDefaultPaths();
-                setStoragePath(paths.documents);
+                const separator = paths.documents.includes('\\') ? '\\' : '/';
+                setStoragePath(`${paths.documents}${separator}ImageBox`);
             } else {
                 // Fallback for web development
                 setStoragePath('/Users/guest/Documents/ImageBox');
@@ -60,7 +71,12 @@ export function SetupWizard() {
             // ignore
         }
 
-        const isSetup = localStorage.getItem(STORAGE_KEY_SETUP);
+        let isSetup: string | null = null;
+        try {
+            isSetup = localStorage.getItem(STORAGE_KEY_SETUP);
+        } catch (e) {
+            console.warn('Failed to read setup state from localStorage:', e);
+        }
         if (!isSetup) {
             void loadDefaultsAndOpen();
         }
@@ -99,13 +115,17 @@ export function SetupWizard() {
         const effectivePromptProviderId = sameProvider ? imageProviderId : promptProviderId;
         const effectivePromptApiKey = sameProvider ? imageApiKey : promptApiKey;
 
-        // Save to localStorage
-        localStorage.setItem(STORAGE_KEY_PATH, storagePath);
-        localStorage.setItem(STORAGE_KEY_PROVIDER, imageProviderId);
-        localStorage.setItem(STORAGE_KEY_API, imageApiKey);
-        localStorage.setItem(STORAGE_KEY_PROMPT_PROVIDER, effectivePromptProviderId);
-        localStorage.setItem(STORAGE_KEY_PROMPT_API, effectivePromptApiKey);
-        localStorage.setItem(STORAGE_KEY_SETUP, 'true');
+        // Save to localStorage (best-effort; must NOT block UI)
+        try {
+            localStorage.setItem(STORAGE_KEY_PATH, storagePath);
+            localStorage.setItem(STORAGE_KEY_PROVIDER, imageProviderId);
+            localStorage.setItem(STORAGE_KEY_API, imageApiKey);
+            localStorage.setItem(STORAGE_KEY_PROMPT_PROVIDER, effectivePromptProviderId);
+            localStorage.setItem(STORAGE_KEY_PROMPT_API, effectivePromptApiKey);
+            localStorage.setItem(STORAGE_KEY_SETUP, 'true');
+        } catch (e) {
+            console.warn('Failed to persist setup wizard config to localStorage:', e);
+        }
 
         setIsOpen(false);
 
@@ -143,6 +163,28 @@ export function SetupWizard() {
             }
 
             await Promise.allSettled(promises);
+
+            // 4. Auto-select first text model for Universal Optimizer
+            try {
+                const effectivePromptProviderId = sameProvider ? imageProviderId : promptProviderId;
+                // Find first TEXT model for this provider
+                const textModel = PRESET_MODELS.find(m => m.providerId === effectivePromptProviderId && m.type === 'TEXT');
+
+                if (textModel) {
+                    const templates = await getTemplates();
+                    const optimizer = templates.find(t => t.name === 'Universal Optimizer');
+                    if (optimizer) {
+                        await updateTemplate(optimizer.id, {
+                            name: optimizer.name,
+                            promptTemplate: optimizer.promptTemplate,
+                            systemPrompt: optimizer.systemPrompt || undefined,
+                            promptGeneratorId: textModel.id
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to auto-configure prompt template:', e);
+            }
         } catch (e) {
             console.error('Setup wizard persistence failed:', e);
         }
@@ -155,7 +197,11 @@ export function SetupWizard() {
     };
 
     const handleSkip = () => {
-        localStorage.setItem(STORAGE_KEY_SETUP, 'true');
+        try {
+            localStorage.setItem(STORAGE_KEY_SETUP, 'true');
+        } catch (e) {
+            console.warn('Failed to save setup skipped flag to localStorage:', e);
+        }
         setIsOpen(false);
         router.push('/create');
         router.refresh();
@@ -163,9 +209,14 @@ export function SetupWizard() {
 
     const openProviderUrl = async (url: string) => {
         if (window.electronAPI?.openExternal) {
-            await window.electronAPI.openExternal(url);
+            try {
+                await window.electronAPI.openExternal(url);
+            } catch (e) {
+                console.warn('Failed to open external url via Electron:', e);
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
         } else {
-            window.open(url, '_blank');
+            window.open(url, '_blank', 'noopener,noreferrer');
         }
     };
 
@@ -175,6 +226,7 @@ export function SetupWizard() {
     // Helper to get description
     const getProviderDesc = (provider: PresetProvider | undefined) => {
         if (!provider) return '';
+        if (provider.descriptionKey) return t(provider.descriptionKey);
         const providerDescKeyMap: Record<string, string> = {
             'preset-google-gemini': 'setup.provider.desc.gemini',
             'preset-openrouter': 'setup.provider.desc.openrouter',
@@ -249,7 +301,7 @@ export function SetupWizard() {
                                     onChange={(e) => setImageProviderId(e.target.value)}
                                     className="w-full appearance-none px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 shadow-sm transition-all pr-10 font-medium text-gray-700"
                                 >
-                                    {PRESET_PROVIDERS.map(p => (
+                                    {imageProviders.map(p => (
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
@@ -322,7 +374,7 @@ export function SetupWizard() {
                                             onChange={(e) => setPromptProviderId(e.target.value)}
                                             className="w-full appearance-none px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-500 shadow-sm transition-all pr-10 font-medium text-gray-700"
                                         >
-                                            {PRESET_PROVIDERS.map(p => (
+                                            {textProviders.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}
                                         </select>

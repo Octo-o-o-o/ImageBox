@@ -310,7 +310,12 @@ export function Sidebar() {
           onClick={() => {
             const url = 'https://github.com/Octo-o-o-o/ImageBox';
             if (window.electronAPI?.openExternal) {
-              window.electronAPI.openExternal(url);
+              try {
+                void window.electronAPI.openExternal(url);
+              } catch (e) {
+                console.warn('Failed to open external url via Electron:', e);
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }
             } else {
               window.open(url, '_blank', 'noopener,noreferrer');
             }

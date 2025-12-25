@@ -18,7 +18,8 @@ export interface PresetProvider {
   type: 'GEMINI' | 'OPENAI' | 'LOCAL';
   baseUrl?: string;
   // apiKey is intentionally omitted - users need to configure it
-  description?: string; // For UI display
+  description?: string; // For UI display (fallback)
+  descriptionKey?: string; // i18n key for UI display
   apiKeyApplyUrl?: string; // URL to apply for API key
 }
 
@@ -42,6 +43,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'GEMINI',
     baseUrl: 'https://generativelanguage.googleapis.com',
     description: 'Google 官方 Gemini API，需要配置 API Key',
+    descriptionKey: 'presets.provider.gemini.desc',
     apiKeyApplyUrl: 'https://aistudio.google.com/app/apikey',
   },
   {
@@ -50,6 +52,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://api.openai.com/v1',
     description: 'OpenAI 官方 API，支持 GPT 和图像生成模型',
+    descriptionKey: 'presets.provider.openai.desc',
     apiKeyApplyUrl: 'https://platform.openai.com/api-keys',
   },
   {
@@ -58,6 +61,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://api.anthropic.com/v1',
     description: 'Anthropic Claude 系列模型，需要配置 API Key',
+    descriptionKey: 'presets.provider.anthropic.desc',
     apiKeyApplyUrl: 'https://console.anthropic.com/settings/keys',
   },
   {
@@ -66,6 +70,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://api.x.ai/v1',
     description: 'xAI Grok 系列模型，支持文本和图像生成',
+    descriptionKey: 'presets.provider.grok.desc',
     apiKeyApplyUrl: 'https://console.x.ai/',
   },
   {
@@ -74,6 +79,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://api.deepseek.com/v1',
     description: 'DeepSeek 官方 API，支持文本和多模态模型',
+    descriptionKey: 'presets.provider.deepseek.desc',
     apiKeyApplyUrl: 'https://platform.deepseek.com/',
   },
   {
@@ -82,6 +88,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://api.siliconflow.cn/v1',
     description: '硅基流动 API，支持多种开源模型',
+    descriptionKey: 'presets.provider.siliconflow.desc',
     apiKeyApplyUrl: 'https://cloud.siliconflow.cn/account/ak',
   },
   {
@@ -90,6 +97,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://openrouter.ai/api/v1',
     description: 'OpenRouter API 代理，支持多种模型，需要配置 API Key',
+    descriptionKey: 'presets.provider.openrouter.desc',
     apiKeyApplyUrl: 'https://openrouter.ai/keys',
   },
   {
@@ -98,6 +106,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'GEMINI',
     baseUrl: 'https://grsai.dakka.com.cn',
     description: 'GRSAI Nano Banana 图像生成服务，需要配置 API Key',
+    descriptionKey: 'presets.provider.grsai.desc',
     apiKeyApplyUrl: 'https://grsai.dakka.com.cn',
   },
   {
@@ -106,6 +115,7 @@ export const PRESET_PROVIDERS: PresetProvider[] = [
     type: 'OPENAI',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     description: '火山引擎 Ark 平台，OpenAI SDK 同构，需要配置 API Key',
+    descriptionKey: 'presets.provider.ark.desc',
     apiKeyApplyUrl: 'https://console.volcengine.com/ark',
   },
 ];
@@ -165,6 +175,14 @@ export const PRESET_MODELS: PresetModel[] = [
     type: 'IMAGE',
     providerId: `${PRESET_ID_PREFIX}openrouter`,
     parameterConfig: JSON.stringify(MODEL_PRESETS.GEMINI_OPENROUTER),
+  },
+  {
+    id: `${PRESET_ID_PREFIX}or-claude-sonnet-4-5`,
+    name: 'Claude Sonnet 4.5',
+    modelIdentifier: 'anthropic/claude-sonnet-4.5',
+    type: 'TEXT',
+    providerId: `${PRESET_ID_PREFIX}openrouter`,
+    parameterConfig: JSON.stringify({}),
   },
 
   // --- GRSAI Models ---

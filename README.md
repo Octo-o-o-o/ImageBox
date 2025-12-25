@@ -20,119 +20,40 @@
 
 **ImageBox** is a completely free, local-first AI image generation tool built with Next.js 16. Generate stunning AI images using Google Gemini 3 Pro, manage reusable templates, and organize all your creations locally. Available as both a web application and a native desktop app (macOS, Windows, Linux). No cloud storage, no subscriptions, no data collection—just pure creative freedom on your machine.
 
-## Features
+## ✨ Feature Highlights
 
-### Core Capabilities
+### 1. 🚀 Effortless Initialization
+Get started in seconds. The Setup Wizard guides you through selecting your **Local Storage Path** and configuring your AI **Provider** in one click.
+![Setup Wizard](public/Readme_Image/SetupWizard.png)
 
-- **🎨 Multi-Model Support** - Seamlessly integrate multiple AI providers:
-  - Google Gemini Official API (Gemini 2.5 Flash, Gemini 3 Pro)
-  - OpenAI Official API (DALL-E 3)
-  - OpenAI-compatible endpoints (OpenRouter, custom providers)
-  - Built-in preset providers (Google Gemini, OpenRouter) auto-configured on first launch
-  - Auto-adaptive parameter configuration with built-in presets
-  - Smart parameter mapping for different API formats
-  - Intelligent model sorting (configured models first, unconfigured last)
+### 2. 🎨 Professional Generation Experience
+Supports both **Text-to-Image** and **Image-to-Image**. Built-in **Prompt Optimization** turns simple ideas into professional instructions. Supports **Continue Editing** to iterate on your creations step-by-step.
+![Create Image](public/Readme_Image/CreateImage.png)
 
-- **📝 Advanced Template System** - Powerful prompt management workflow:
-  - Create reusable templates with `{{variable}}` syntax
-  - Two-stage generation: Prompt optimization → Image generation
-  - Separate model selection for prompt enhancement and image creation
-  - Customizable system prompts for prompt optimization
-  - Dynamic form generation from template variables
-  - Built-in preset templates (Universal Optimizer, Presentation Graphics)
-  - Enable/disable templates for better organization
+### 3. 🔍 Precision Detail Control
+Inspect generation details and continue refining. Keep your parameters, tweak the prompt, and iterate until it's perfect.
+![Image Detail](public/Readme_Image/ImageDetail.png)
 
-- **🖼️ Image-to-Image Generation** - Reference-guided creation:
-  - Upload reference images to guide generation (supports 2-14 images per model)
-  - Smart validation for image size and aspect ratio
-  - Automatic image compression (max 2048px) for optimal API performance
-  - High-quality compression preserving transparency for PNG images
-  - Automatic adjustment based on model capabilities
-  - Visual feedback for image compatibility
-  - **Continue Editing**: One-click to add generated images as reference for further refinement
+### 4. 📂 Private Local Library
+All your creations are **stored locally**. No privacy concerns—manage your AI art just like local files. Browse and filter with ease.
+![Local Library](public/Readme_Image/Library.png)
 
-- **📁 Complete Asset Management** - Organize your creations:
-  - Folder-based organization system
-  - Masonry grid gallery with responsive layout
-  - Quick actions: Download, copy to clipboard, favorite, delete, continue editing
-  - Image metadata tracking (prompt, model, parameters, timestamp)
-  - Seamless workflow: Continue editing generated images by adding them as references
+### 5. 📝 Smart Template Management
+Stop repeating yourself. Save your favorite **Prompt Templates**, support variable substitution, and reuse high-quality Prompts with one click to boost workflow efficiency.
+![Template Management](public/Readme_Image/Templates.png)
 
-- **📊 Full Run Logs** - Complete generation history tracking:
-  - Detailed logs for every API call (prompt generation & image generation)
-  - Request/response timing and duration
-  - Success/failure status with error messages
-  - Configuration parameters for each generation
-  - Searchable history for debugging and analysis
+### 6. 📊 Comprehensive Run Logs
+Full **Run Logs** record generation parameters, timing, and results. Every spark of inspiration is worth recording for easy backtracking and review.
+![Run Log](public/Readme_Image/RunLog.png)
 
-### Privacy & Storage
+### 7. 🔌 Flexible Model Switching
+Built-in support for major providers—just configure your **API-Key**. Also supports local image generation services (in progress), giving you full control over your compute.
+![Model Management](public/Readme_Image/Models.png)
+![Add Provider](public/Readme_Image/AddProvider.png)
 
-- **🔒 Privacy First** - Your data stays yours:
-  - All images and metadata stored locally (SQLite database)
-  - API keys stored locally, never transmitted except to chosen providers
-  - Only necessary AI model API calls go to external services
-  - No telemetry, no analytics, no data collection
-  - Full control over your creative assets
-
-- **💾 Local-First Architecture**:
-  - SQLite database - Lightweight, portable, zero-configuration
-  - File-based image storage in `public/generated/`
-  - No cloud dependencies (except AI model APIs)
-  - Works offline for management and viewing
-
-### Remote Access & Security
-
-- **🔐 Token-Based Authentication** - Secure remote access with access tokens:
-  - Create multiple access tokens with custom names and descriptions
-  - Flexible expiration options (1 hour, 24 hours, 7 days, 30 days, or permanent)
-  - Revoke tokens instantly for security
-  - Track last usage time for each token
-  - Cookie and header-based authentication support
-
-- **🌐 Smart Access Control** - Intelligent middleware protection:
-  - Local access (localhost) requires no authentication
-  - Remote access requires valid token and enabled remote access setting
-  - First-time setup wizard guides initial configuration
-  - Public paths and static resources automatically allowed
-  - Real-time token validation with automatic expiration
-
-- **📂 Custom Storage Paths** - Flexible storage configuration:
-  - Configure custom image storage directory
-  - Path validation before saving
-  - Storage statistics and monitoring
-  - Visual folder browser for easy path selection
-  - Automatic fallback to default path if custom path fails
-
-### User Experience
-
-- **✨ Modern UI** - Beautiful dark glassmorphism design with smooth animations
-- **🔍 Advanced Image Preview** - Full-featured image preview modal:
-  - Zoom in/out with mouse wheel or buttons (50%-500%)
-  - Pan/drag zoomed images for detailed inspection
-  - Display model name and generation parameters
-  - Quick actions: Download, copy image, copy prompt
-  - Keyboard shortcuts (ESC to close)
-  - Preview reference images in Create page
-  - Preview generated images in Library and Run Log pages
-- **🌍 Multi-Language Support** - 13 languages: English, Chinese (Simplified & Traditional), Japanese, German, French, Russian, Portuguese, Spanish, Italian, Arabic (RTL), Norwegian, Swedish
-- **🎨 Theme System** - Dark/light/system theme modes with seamless transitions
-- **💻 Native Desktop App** - Cross-platform desktop application built with Electron:
-  - macOS (Intel & Apple Silicon), Windows (x64), Linux (AppImage & deb)
-  - Native system tray integration with multi-language support (13 languages)
-  - System language auto-detection with intelligent fallback
-  - Automatic updates and offline support
-  - Standalone builds with no external dependencies
-- **🌐 Cross-Platform Access** - Use via localhost or LAN from any device with secure remote access
-- **⚡ Fast & Secure** - Next.js Server Actions for optimized API calls
-- **⚙️ Performance Optimized** - Efficient image processing and storage:
-  - Direct Buffer-based image handling (faster than base64 string operations)
-  - Asynchronous thumbnail generation (non-blocking responses)
-  - Optimized memory usage for large image batches
-- **🆓 100% Free & Open Source** - No hidden fees, only your own API key costs
-
-## Screenshots
-
-> Coming soon - Screenshots will be added after UI refinement
+### 8. 🛡️ Powerful Settings Center
+Supports **Custom Storage Paths** and **Remote Access**. Provides password-protected **Data Backup/Restore** for worry-free resets and migrations.
+![Settings](public/Readme_Image/Settings.png)
 
 ## Quick Start
 

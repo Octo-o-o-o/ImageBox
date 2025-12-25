@@ -17,9 +17,13 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMounted(true);
     // Load saved state from localStorage
-    const saved = localStorage.getItem('sidebarCollapsed');
-    if (saved !== null) {
-      setIsCollapsed(saved === 'true');
+    try {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      if (saved !== null) {
+        setIsCollapsed(saved === 'true');
+      }
+    } catch (e) {
+      console.warn('Failed to read sidebarCollapsed from localStorage:', e);
     }
 
     // Auto-collapse on narrow screens
@@ -38,7 +42,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setIsCollapsed(prev => {
       const newValue = !prev;
       if (mounted) {
-        localStorage.setItem('sidebarCollapsed', String(newValue));
+        try {
+          localStorage.setItem('sidebarCollapsed', String(newValue));
+        } catch (e) {
+          console.warn('Failed to save sidebarCollapsed to localStorage:', e);
+        }
       }
       return newValue;
     });
@@ -47,7 +55,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const setSidebarCollapsed = (collapsed: boolean) => {
     setIsCollapsed(collapsed);
     if (mounted) {
-      localStorage.setItem('sidebarCollapsed', String(collapsed));
+      try {
+        localStorage.setItem('sidebarCollapsed', String(collapsed));
+      } catch (e) {
+        console.warn('Failed to save sidebarCollapsed to localStorage:', e);
+      }
     }
   };
 

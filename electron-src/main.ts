@@ -16,6 +16,11 @@ const extApp = app as ExtendedApp;
 // 配置日志
 log.transports.file.level = 'info';
 log.transports.console.level = 'debug';
+try {
+  log.info('Log file path:', log.transports.file.getFile().path);
+} catch {
+  // ignore
+}
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -192,6 +197,68 @@ async function createWindow(): Promise<void> {
     } : undefined
   });
 
+  // 记录渲染进程日志/崩溃信息，便于排查“白屏”
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    // level: 0=log,1=warn,2=error,3=debug (Electron)
+    const tag = level === 2 ? 'console.error' : level === 1 ? 'console.warn' : 'console.log';
+    log.info(`[renderer:${tag}] ${message} (${sourceId}:${line})`);
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    log.error('Renderer process gone:', details);
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    log.warn('Renderer became unresponsive');
+  });
+
+  // 页面加载失败时自动重试，避免打包后 Next 服务器启动慢导致白屏
+  const loadMainUrlWithRetry = async (maxRetries = 8): Promise<void> => {
+    const url = `http://localhost:${PORT}`;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        log.info(`Attempt ${attempt}/${maxRetries}: waiting for server ${url}`);
+        const ready = await waitForServer(url, 30000);
+        if (!ready) {
+          throw new Error('Server not ready (timeout)');
+        }
+
+        log.info(`Attempt ${attempt}/${maxRetries}: loading URL ${url}`);
+        await mainWindow?.loadURL(url);
+        log.info('URL loaded successfully');
+        return;
+      } catch (err) {
+        log.error(`Attempt ${attempt}/${maxRetries} failed to load URL:`, err);
+        // small backoff
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 8000)));
+      }
+    }
+
+    log.error('All attempts failed. Showing fallback error page.');
+    try {
+      await mainWindow?.loadURL(`data:text/html,
+        <html>
+          <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;
+            font-family:system-ui;background:#0b1020;color:#fff">
+            <div style="max-width:720px;padding:24px">
+              <h2 style="margin:0 0 12px 0;">ImageBox 启动失败</h2>
+              <p style="margin:0 0 16px 0;opacity:.85;line-height:1.5">
+                本地服务未能启动或页面加载失败。请稍后重试，或查看日志文件以定位原因。
+              </p>
+              <button onclick="location.reload()" style="padding:10px 14px;border-radius:10px;border:0;
+                background:#4f46e5;color:#fff;font-weight:600;cursor:pointer">
+                重试
+              </button>
+            </div>
+          </body>
+        </html>
+      `);
+      mainWindow?.show();
+    } catch {
+      // ignore
+    }
+  };
+
   // 添加 Electron 标识 header
   mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
     { urls: ['http://localhost:*/*'] },
@@ -237,13 +304,8 @@ async function createWindow(): Promise<void> {
   }
 
   // 加载页面
-  try {
-    log.info(`Loading URL: http://localhost:${PORT}`);
-    await mainWindow.loadURL(`http://localhost:${PORT}`);
-    log.info('URL loaded successfully');
-  } catch (err) {
-    log.error('Failed to load URL:', err);
-  }
+  // 注：生产环境 utilityProcess 启动 Next 服务器可能更慢（尤其是 Windows 首次启动/杀软扫描），这里做探活+重试兜底
+  await loadMainUrlWithRetry();
 
   // macOS：点击关闭按钮时隐藏而不是退出
   mainWindow.on('close', (e) => {

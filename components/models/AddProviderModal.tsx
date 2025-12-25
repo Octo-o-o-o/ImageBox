@@ -72,10 +72,8 @@ export function AddProviderModal({
         try {
             const models = await getPresetModelsForProvider(providerId);
             setPresetModels(models);
-            // Default: select all IMAGE models
-            const defaultSelected = new Set(
-                models.filter(m => m.type === 'IMAGE').map(m => m.id)
-            );
+            // Default: select all models
+            const defaultSelected = new Set(models.map(m => m.id));
             setSelectedModelIds(defaultSelected);
         } catch (e) {
             console.error('Failed to load preset models:', e);
@@ -161,9 +159,14 @@ export function AddProviderModal({
 
     const openExternalUrl = (url: string) => {
         if (window.electronAPI?.openExternal) {
-            window.electronAPI.openExternal(url);
+            try {
+                void window.electronAPI.openExternal(url);
+            } catch (e) {
+                console.warn('Failed to open external url via Electron:', e);
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
         } else {
-            window.open(url, '_blank');
+            window.open(url, '_blank', 'noopener,noreferrer');
         }
     };
 
@@ -303,7 +306,7 @@ export function AddProviderModal({
                                                                 )}
                                                             </div>
                                                             <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                                                                {preset.description}
+                                                                {preset.descriptionKey ? t(preset.descriptionKey) : (preset.description || '')}
                                                             </p>
                                                         </div>
                                                         {isActivated ? (
@@ -332,7 +335,7 @@ export function AddProviderModal({
                                 {/* Selected Provider Info */}
                                 <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
                                     <h3 className="font-semibold text-foreground">{selectedPreset.name}</h3>
-                                    <p className="text-xs text-muted-foreground mt-1">{selectedPreset.description}</p>
+                                    <p className="text-xs text-muted-foreground mt-1">{selectedPreset.descriptionKey ? t(selectedPreset.descriptionKey) : (selectedPreset.description || '')}</p>
                                 </div>
 
                                 {/* API Key Input */}

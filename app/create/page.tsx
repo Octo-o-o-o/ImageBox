@@ -503,7 +503,12 @@ function StudioPageContent() {
       // 3. No selection if no models have API key
       if (models.length > 0 && !selectedImageModelId) {
         // Try to get last used model from localStorage
-        const lastUsedModelId = localStorage.getItem(LAST_USED_IMAGE_MODEL_KEY);
+        let lastUsedModelId: string | null = null;
+        try {
+          lastUsedModelId = localStorage.getItem(LAST_USED_IMAGE_MODEL_KEY);
+        } catch (e) {
+          console.warn('Failed to read last used model from localStorage:', e);
+        }
 
         if (lastUsedModelId) {
           const lastUsedModel = models.find((m: any) => m.id === lastUsedModelId);
@@ -801,7 +806,11 @@ function StudioPageContent() {
         setResults(newImages);
 
         // Save the used model to localStorage for next time
-        localStorage.setItem(LAST_USED_IMAGE_MODEL_KEY, selectedImageModelId);
+        try {
+          localStorage.setItem(LAST_USED_IMAGE_MODEL_KEY, selectedImageModelId);
+        } catch (e) {
+          console.warn('Failed to save last used model to localStorage:', e);
+        }
       } else {
         setError(res.error || tr('create.error.unknown'));
       }

@@ -11,7 +11,7 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
       "min-h-screen transition-all duration-300",
       isCollapsed ? "pl-16" : "pl-64"
     )}>
-      <div className="w-full max-w-7xl p-8">
+      <div className="w-full max-w-7xl px-8 pb-8 pt-14">
         {children}
       </div>
     </main>

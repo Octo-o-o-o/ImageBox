@@ -431,14 +431,14 @@ export default function ModelsPage() {
                     onClick={handleScanServices}
                     disabled={scanning}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-                    title="扫描本地服务"
+                    title={t('models.providers.scanTooltip')}
                   >
                     {scanning ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Search className="w-4 h-4" />
                     )}
-                    扫描
+                    {scanning ? t('models.providers.scanning') : t('models.providers.scan')}
                   </button>
                 )}
               </div>
@@ -569,7 +569,7 @@ export default function ModelsPage() {
                   <div className="pt-4 border-t border-border">
                     <h3 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-3 flex items-center gap-2">
                       <Wifi className="w-4 h-4" />
-                      发现 {discoveredServices.length} 个服务，请选择一个：
+                      {t('models.providers.discoveredServices').replace('{{count}}', String(discoveredServices.length))}
                     </h3>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {discoveredServices.map((service, idx) => (
@@ -605,10 +605,10 @@ export default function ModelsPage() {
                         <WifiOff className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                         <div>
                           <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400 mb-1">
-                            未发现本地推理服务
+                            {t('models.providers.noLocalServiceFound')}
                           </h3>
                           <p className="text-xs text-muted-foreground">
-                            请先安装并启动本地推理服务 (如 stable-diffusion.cpp 或 ComfyUI)
+                            {t('models.providers.noLocalServiceHint')}
                           </p>
                         </div>
                       </div>
@@ -619,7 +619,7 @@ export default function ModelsPage() {
                         className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow-md"
                       >
                         <ExternalLink className="w-4 h-4" />
-                        查看 Z-Image 安装指南
+                        {t('models.providers.zimageGuide')}
                       </a>
                     </div>
                   </div>

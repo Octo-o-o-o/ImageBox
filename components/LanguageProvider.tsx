@@ -80,20 +80,34 @@ export function LanguageProvider({
     setMounted(true);
 
     // Priority: 1. Saved language > 2. System language > 3. Default (en)
-    const savedLanguage = localStorage.getItem(storageKey) as Language;
+    let savedLanguage: Language | null = null;
+    try {
+      savedLanguage = localStorage.getItem(storageKey) as Language;
+    } catch (e) {
+      console.warn('Failed to read language from localStorage:', e);
+    }
+
     if (savedLanguage && languages.some(l => l.code === savedLanguage)) {
       setLanguageState(savedLanguage);
-    } else {
-      // No saved preference, detect system language (async)
-      detectSystemLanguage().then((systemLang) => {
+      return;
+    }
+
+    // No saved preference, detect system language (async)
+    detectSystemLanguage()
+      .then((systemLang) => {
         setLanguageState(systemLang);
-        // Save detected language to localStorage for next time
-        localStorage.setItem(storageKey, systemLang);
-      }).catch(() => {
-        // On error, use English as fallback
+        // Save detected language to localStorage for next time (best-effort)
+        try {
+          localStorage.setItem(storageKey, systemLang);
+        } catch (e) {
+          console.warn('Failed to persist detected language to localStorage:', e);
+        }
+      })
+      .catch((e) => {
+        console.warn('Failed to detect system language:', e);
+        // On error, fallback to English
         setLanguageState('en');
       });
-    }
   }, [storageKey]);
 
   useEffect(() => {
@@ -113,7 +127,11 @@ export function LanguageProvider({
   }, [language]);
 
   const setLanguage = (lang: Language) => {
-    localStorage.setItem(storageKey, lang);
+    try {
+      localStorage.setItem(storageKey, lang);
+    } catch (e) {
+      console.warn('Failed to save language to localStorage:', e);
+    }
     setLanguageState(lang);
   };
 
