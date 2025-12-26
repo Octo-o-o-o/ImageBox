@@ -1,7 +1,7 @@
 {
   "name": "imagebox",
   "description": "ImageBox - AI image generation & prompt workflow (Next.js + Electron)",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "private": true,
   "author": "wangyixiao <wangyixiao@users.noreply.github.com>",
   "main": "electron/main.js",

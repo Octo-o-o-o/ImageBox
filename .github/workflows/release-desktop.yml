@@ -80,8 +80,7 @@ jobs:
           CI: "true"
         run: |
           npm run electron:compile
-          npm run db:generate
-          npm run db:template
+
           npm run build
           npm run electron:prepare
           npx --yes electron-builder --win --x64 --publish never
@@ -149,8 +148,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           npm run electron:compile
-          npm run db:generate
-          npm run db:template
+
           npm run build
           npm run electron:prepare
           npx --yes electron-builder --mac --${{ matrix.arch }} --publish never
@@ -215,8 +213,7 @@ jobs:
           CI: "true"
         run: |
           npm run electron:compile
-          npm run db:generate
-          npm run db:template
+
           npm run build
           npm run electron:prepare
           npx --yes electron-builder --linux --x64 --publish never
