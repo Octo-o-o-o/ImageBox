@@ -470,23 +470,25 @@ export default function ModelsPage() {
 
       {/* 2. Models Section */}
       <section className="space-y-6">
-        <div className="flex items-center justify-between border-b border-border/40 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-pink-500/10 rounded-lg text-pink-400"><Cpu className="w-5 h-5" /></div>
-            <div>
-              <h2 className="text-xl font-semibold">{t('models.models.title')}</h2>
-              <p className="text-xs text-muted-foreground">{t('models.models.desc')}</p>
+        {providers.length > 0 && (
+          <div className="flex items-center justify-between border-b border-border/40 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-pink-500/10 rounded-lg text-pink-400"><Cpu className="w-5 h-5" /></div>
+              <div>
+                <h2 className="text-xl font-semibold">{t('models.models.title')}</h2>
+                <p className="text-xs text-muted-foreground">{t('models.models.desc')}</p>
+              </div>
             </div>
+            <button
+              onClick={openNewModel}
+              className="flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              title={t('models.models.add')}
+              aria-label={t('models.models.add')}
+            >
+              <Plus className="w-4 h-4" /> {t('models.models.add')}
+            </button>
           </div>
-          <button
-            onClick={openNewModel}
-            className="flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-            title={t('models.models.add')}
-            aria-label={t('models.models.add')}
-          >
-            <Plus className="w-4 h-4" /> {t('models.models.add')}
-          </button>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {models.map(m => (

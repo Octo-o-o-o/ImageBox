@@ -89,17 +89,7 @@ export function Sidebar() {
   const currentTheme = themeOptions.find(t => t.value === theme) || themeOptions[0];
   const currentLang = langOptions.find(l => l.value === language) || langOptions[0];
 
-  // Handle navigation with generation check
-  const handleNavigation = (href: string, e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
 
-    // If currently on create page and generating, show confirmation
-    if (pathname === '/create' && isGenerating && href !== '/create') {
-      setPendingNavigation(href);
-    } else {
-      router.push(href);
-    }
-  };
 
   // Confirm navigation and proceed
   const confirmNavigation = () => {
@@ -153,10 +143,15 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
-            <a
+            <Link
               key={item.href}
               href={item.href}
-              onClick={(e) => handleNavigation(item.href, e)}
+              onClick={(e) => {
+                if (pathname === '/create' && isGenerating && item.href !== '/create') {
+                  e.preventDefault();
+                  setPendingNavigation(item.href);
+                }
+              }}
               className={clsx(
                 'relative flex items-center gap-3 rounded-lg transition-colors duration-200 group cursor-pointer',
                 isCollapsed ? 'px-2 py-2.5 justify-center' : 'px-3 py-2.5',
@@ -176,7 +171,7 @@ export function Sidebar() {
               )}
               <item.icon className="w-5 h-5 relative z-10 shrink-0" />
               {!isCollapsed && <span className="font-medium relative z-10 whitespace-nowrap">{item.name}</span>}
-            </a>
+            </Link>
           );
         })}
       </nav>

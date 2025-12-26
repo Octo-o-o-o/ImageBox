@@ -64,8 +64,6 @@ jobs:
           CI: "true"
         run: |
           npm run electron:compile
-          npm run db:generate
-          npm run db:template
           npm run build
           npm run electron:prepare
 

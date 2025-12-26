@@ -677,8 +677,8 @@ function SettingsContent() {
             {/* Path validation result */}
             {pathValidation && (
               <div className={`mt-2 p-2 rounded-lg flex items-center gap-2 text-sm ${pathValidation.valid
-                  ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-                  : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                : 'bg-red-500/10 text-red-600 dark:text-red-400'
                 }`}>
                 {pathValidation.valid ? (
                   <CheckCircle2 className="w-4 h-4" />
@@ -727,8 +727,9 @@ function SettingsContent() {
               exit={{ opacity: 0, height: 0 }}
               className="space-y-4 overflow-hidden"
             >
-              {/* Enable Remote Access Card (Description) */}
+              {/* Combined Remote Access Card */}
               <div className="p-6 rounded-2xl bg-card border border-border">
+                {/* Enable Remote Access Section */}
                 <div className="space-y-1">
                   <h3 className="font-semibold text-foreground">{t('settings.remoteAccess.enable')}</h3>
                   <p className="text-sm text-muted-foreground">
@@ -755,10 +756,11 @@ function SettingsContent() {
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Access Tokens Card */}
-              <div className="p-6 rounded-2xl bg-card border border-border">
+                {/* Divider */}
+                <div className="h-px bg-border my-6" />
+
+                {/* Access Tokens Section */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Key className="w-5 h-5 text-primary" />
@@ -820,8 +822,8 @@ function SettingsContent() {
                         key={token.id}
                         onClick={() => openTokenDetail(token)}
                         className={`p-4 rounded-xl border transition-all cursor-pointer ${token.isExpired || token.isRevoked
-                            ? 'bg-muted/30 border-border opacity-60'
-                            : 'bg-secondary/30 border-border hover:border-primary/30 hover:bg-secondary/50'
+                          ? 'bg-muted/30 border-border opacity-60'
+                          : 'bg-secondary/30 border-border hover:border-primary/30 hover:bg-secondary/50'
                           }`}
                       >
                         <div className="flex items-center justify-between">
@@ -885,59 +887,58 @@ function SettingsContent() {
       </section>
 
       {/* Keyboard Shortcuts Section */}
-      <section className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-border flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
-            <Key className="w-6 h-6 text-purple-500" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-              {t('settings.shortcuts.title')}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('settings.shortcuts.desc')}
-            </p>
-          </div>
-        </div>
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <Key className="w-5 h-5 text-primary" />
+          {t('settings.shortcuts.title')}
+        </h2>
 
-        <div className="p-6 space-y-4">
-          {/* Quick Generate Shortcut */}
-          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <kbd className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg shadow-sm">
-                  {getShortcutKeyDisplay()}
-                </kbd>
+        <div className="p-6 rounded-2xl bg-card border border-border">
+
+
+          <div className="space-y-4">
+            {/* Quick Generate Shortcut */}
+            <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl transition-colors hover:bg-secondary/50">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg shadow-sm min-w-[2rem] text-center">
+                    {getShortcutKeyDisplay().split(' + ')[0]}
+                  </kbd>
+                  <span className="text-muted-foreground font-mono font-bold">+</span>
+                  <kbd className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg shadow-sm min-w-[2rem] text-center">
+                    Enter
+                  </kbd>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {t('settings.shortcuts.cmdEnter.name')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {tr('settings.shortcuts.cmdEnter.desc', { key: getShortcutKeyDisplay() })}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('settings.shortcuts.cmdEnter.name')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {tr('settings.shortcuts.cmdEnter.desc', { key: getShortcutKeyDisplay() })}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                const newEnabled = !shortcutCmdEnterEnabled;
-                setShortcutCmdEnterState(newEnabled ? 'enabled' : 'disabled');
-                setShortcutCmdEnterEnabledState(newEnabled);
-              }}
-              className={`relative w-12 h-7 rounded-full transition-colors ${
-                shortcutCmdEnterEnabled
-                  ? 'bg-primary'
-                  : 'bg-muted'
-              }`}
-            >
-              <motion.div
-                className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-sm"
-                animate={{
-                  left: shortcutCmdEnterEnabled ? '26px' : '4px',
+              <button
+                onClick={() => {
+                  const newEnabled = !shortcutCmdEnterEnabled;
+                  setShortcutCmdEnterState(newEnabled ? 'enabled' : 'disabled');
+                  setShortcutCmdEnterEnabledState(newEnabled);
                 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              />
-            </button>
+                className={`relative w-12 h-7 rounded-full transition-colors ${shortcutCmdEnterEnabled
+                  ? 'bg-primary'
+                  : 'bg-secondary' // Changed from bg-muted to bg-secondary to match other toggles
+                  }`}
+                title={shortcutCmdEnterEnabled ? t('common.disable') : t('common.enable')}
+              >
+                <motion.div
+                  className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-sm"
+                  animate={{
+                    left: shortcutCmdEnterEnabled ? '24px' : '4px', // Adjusted position slightly
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              </button>
+            </div>
           </div>
         </div>
       </section>

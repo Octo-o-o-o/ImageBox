@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { getImagesByFolder, getFolders, createFolder, updateFolder, deleteFolder, deleteImage, toggleFavorite, moveImageToFolder, getStorageConfig, openLocalFolder } from '@/app/actions';
 import { getImageUrl, getThumbnailUrl } from '@/lib/imageUrl';
 import { isDesktopApp } from '@/lib/env';
@@ -75,7 +77,7 @@ export default function LibraryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
-  
+
   // Batch selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
@@ -90,18 +92,18 @@ export default function LibraryPage() {
   const [isComposing, setIsComposing] = useState(false);
 
   // Image preview state
-  const [previewImage, setPreviewImage] = useState<{ 
-    id: string, 
-    url: string, 
-    prompt: string, 
-    createdAt: Date | string, 
+  const [previewImage, setPreviewImage] = useState<{
+    id: string,
+    url: string,
+    prompt: string,
+    createdAt: Date | string,
     isFavorite: boolean,
     modelName: string,
     params: string,
     templateName?: string,
     folderName?: string
   } | null>(null);
-  
+
   // Move image state
   const [movingImageId, setMovingImageId] = useState<string | null>(null);
   const [targetFolderId, setTargetFolderId] = useState<string>('');
@@ -168,28 +170,28 @@ export default function LibraryPage() {
     setLoading(false);
   };
 
-  const totalImagesCount = useMemo(() => 
-    folders.reduce((sum, folder) => sum + folder._count.images, 0), 
+  const totalImagesCount = useMemo(() =>
+    folders.reduce((sum, folder) => sum + folder._count.images, 0),
     [folders]
   );
-  
-  const favoriteImagesCount = useMemo(() => 
-    images.filter(img => img.isFavorite).length, 
+
+  const favoriteImagesCount = useMemo(() =>
+    images.filter(img => img.isFavorite).length,
     [images]
   );
-  
+
   // Filter images based on favorites and search
   const displayedImages = useMemo(() => {
     let filtered = showFavoritesOnly ? images.filter(img => img.isFavorite) : images;
-    
+
     if (searchKeyword.trim()) {
       const keyword = searchKeyword.toLowerCase();
-      filtered = filtered.filter(img => 
-        img.finalPrompt?.toLowerCase().includes(keyword) || 
+      filtered = filtered.filter(img =>
+        img.finalPrompt?.toLowerCase().includes(keyword) ||
         img.modelName?.toLowerCase().includes(keyword)
       );
     }
-    
+
     return filtered;
   }, [images, showFavoritesOnly, searchKeyword]);
 
@@ -231,23 +233,23 @@ export default function LibraryPage() {
 
     // If file is missing, delete immediately without confirmation (as per requirements)
     if (headers.fileMissing) {
-       // Optimistic delete immediately
-       setDeleteImageId(id); // Set state correctly for the confirm function to pick up if we were to call it, but we call equivalent logic
-       // Actually simpler to just set ID then call confirm immediately? 
-       // confirmDeleteImage relies on state, but state update is async.
-       // So we replicate logic or use a useEffect? 
-       // Replicating logic is safer.
-       
-       // TRIGGER IMMEDIATE DELETE
-        const previousImages = images;
-        setImages(prev => prev.filter(img => img.id !== id));
-        if (previewImage?.id === id) setPreviewImage(null);
-        
-        deleteImage(id).then(() => loadFolders()).catch(err => {
-             setImages(previousImages);
-             alert(err.message);
-        });
-       return;
+      // Optimistic delete immediately
+      setDeleteImageId(id); // Set state correctly for the confirm function to pick up if we were to call it, but we call equivalent logic
+      // Actually simpler to just set ID then call confirm immediately? 
+      // confirmDeleteImage relies on state, but state update is async.
+      // So we replicate logic or use a useEffect? 
+      // Replicating logic is safer.
+
+      // TRIGGER IMMEDIATE DELETE
+      const previousImages = images;
+      setImages(prev => prev.filter(img => img.id !== id));
+      if (previewImage?.id === id) setPreviewImage(null);
+
+      deleteImage(id).then(() => loadFolders()).catch(err => {
+        setImages(previousImages);
+        alert(err.message);
+      });
+      return;
     }
 
     setDeleteImageId(id);
@@ -258,7 +260,7 @@ export default function LibraryPage() {
 
     // Check if we skipping confirmation (logic moved to handleDeleteImage, but safety here)
     // If file is missing, we still proceed with delete
-    
+
     // 乐观更新：立即移除图片
     const previousImages = images;
     const previousFolders = folders;
@@ -374,8 +376,8 @@ export default function LibraryPage() {
   };
 
   const toggleImageSelection = (imageId: string) => {
-    setSelectedImageIds(prev => 
-      prev.includes(imageId) 
+    setSelectedImageIds(prev =>
+      prev.includes(imageId)
         ? prev.filter(id => id !== imageId)
         : [...prev, imageId]
     );
@@ -391,11 +393,11 @@ export default function LibraryPage() {
 
   const handleBatchDelete = async () => {
     if (selectedImageIds.length === 0) return;
-    
+
     if (!confirm(tr('library.deleteSelectedConfirm', { count: selectedImageIds.length }))) return;
 
     const previousImages = images;
-    
+
     // Optimistic update
     setImages(prevImages => prevImages.filter(img => !selectedImageIds.includes(img.id)));
     setSelectedImageIds([]);
@@ -639,8 +641,8 @@ export default function LibraryPage() {
                         : 'text-muted-foreground group-hover:text-foreground'
                     )}
                   >
-                    {selectedFolderId === folder.id ? 
-                      <FolderOpen className={clsx("w-4 h-4 text-primary shrink-0")} /> : 
+                    {selectedFolderId === folder.id ?
+                      <FolderOpen className={clsx("w-4 h-4 text-primary shrink-0")} /> :
                       <Folder className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                     }
                     <span className="truncate">
@@ -650,34 +652,34 @@ export default function LibraryPage() {
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!folder.isDefault && (
-                        <>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingName(folder.name); }}
-                            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-background/80 rounded transition-colors"
-                            title={tr('common.edit')}
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingName(folder.name); }}
+                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-background/80 rounded transition-colors"
+                          title={tr('common.edit')}
                         >
-                            <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); setDeleteFolderId(folder.id); }}
-                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-background/80 rounded transition-colors"
-                            title={tr('common.delete')}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteFolderId(folder.id); }}
+                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-background/80 rounded transition-colors"
+                          title={tr('common.delete')}
                         >
-                            <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                        </>
+                      </>
                     )}
-                    
+
                     <button
-                        onClick={(e) => handleOpenLocalFolder(folder.id, e)}
-                        className="p-1.5 text-muted-foreground hover:text-primary hover:bg-background/80 rounded transition-colors"
-                        title={tr('library.openFolder')}
+                      onClick={(e) => handleOpenLocalFolder(folder.id, e)}
+                      className="p-1.5 text-muted-foreground hover:text-primary hover:bg-background/80 rounded transition-colors"
+                      title={tr('library.openFolder')}
                     >
-                        <FolderOpen className="w-3.5 h-3.5" />
+                      <FolderOpen className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
-                   <span className="text-xs text-muted-foreground opacity-70 ml-2 w-8 text-right flex-shrink-0">{folder._count.images}</span>
+                  <span className="text-xs text-muted-foreground opacity-70 ml-2 w-8 text-right flex-shrink-0">{folder._count.images}</span>
                 </div>
               );
             })}
@@ -690,9 +692,9 @@ export default function LibraryPage() {
         {/* Header - Redesigned */}
         <div className="h-16 px-6 border-b border-border flex items-center justify-between bg-background/80 backdrop-blur-md sticky top-0 z-10 gap-6">
           <div className="flex-1 max-w-xl">
-             <div className="relative group">
+            <div className="relative group">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input 
+              <input
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 placeholder={tr('library.searchPlaceholder')}
@@ -700,49 +702,49 @@ export default function LibraryPage() {
               />
             </div>
           </div>
-          
-          <div className="flex items-center gap-3">
-             {/* Batch selection mode button */}
-             <button
-               onClick={toggleSelectionMode}
-               className={clsx(
-                 "px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
-                 isSelectionMode
-                   ? "bg-primary text-primary-foreground shadow-sm"
-                   : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/50"
-               )}
-               title={isSelectionMode ? tr('library.selection.exitTitle') : tr('library.selection.enterTitle')}
-             >
-               {isSelectionMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-               <span className="hidden md:inline">{isSelectionMode ? tr('library.selection.exit') : tr('library.selection.enter')}</span>
-             </button>
 
-             <div className="flex items-center p-1 rounded-lg bg-secondary/50 border border-border/50">
-               <button
-                 onClick={() => setViewMode('grid')}
-                 className={clsx(
-                   "p-1.5 rounded-md transition-all duration-200",
-                 viewMode === 'grid' 
-                   ? "bg-background text-primary shadow-sm" 
-                   : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-               )}
-                 title={tr('library.view.grid')}
-               >
-                 <LayoutGrid className="w-4 h-4" />
-               </button>
-               <button
-                 onClick={() => setViewMode('list')}
-                 className={clsx(
-                   "p-1.5 rounded-md transition-all duration-200",
-                  viewMode === 'list' 
-                    ? "bg-background text-primary shadow-sm" 
+          <div className="flex items-center gap-3">
+            {/* Batch selection mode button */}
+            <button
+              onClick={toggleSelectionMode}
+              className={clsx(
+                "px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+                isSelectionMode
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/50"
+              )}
+              title={isSelectionMode ? tr('library.selection.exitTitle') : tr('library.selection.enterTitle')}
+            >
+              {isSelectionMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+              <span className="hidden md:inline">{isSelectionMode ? tr('library.selection.exit') : tr('library.selection.enter')}</span>
+            </button>
+
+            <div className="flex items-center p-1 rounded-lg bg-secondary/50 border border-border/50">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={clsx(
+                  "p-1.5 rounded-md transition-all duration-200",
+                  viewMode === 'grid'
+                    ? "bg-background text-primary shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                 )}
-                 title={tr('library.view.list')}
-               >
-                 <ListIcon className="w-4 h-4" />
-               </button>
-             </div>
+                title={tr('library.view.grid')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={clsx(
+                  "p-1.5 rounded-md transition-all duration-200",
+                  viewMode === 'list'
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                )}
+                title={tr('library.view.list')}
+              >
+                <ListIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -823,19 +825,19 @@ export default function LibraryPage() {
           </AnimatePresence>
 
           {loading ? (
-             viewMode === 'grid' ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-                  {[...Array(10)].map((_, i) => (
-                    <div key={i} className="aspect-square rounded-xl bg-muted animate-pulse border border-border/40" />
-                  ))}
-                </div>
-             ) : (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="h-16 w-full rounded-xl bg-muted animate-pulse border border-border/40" />
-                  ))}
-                </div>
-             )
+            viewMode === 'grid' ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+                {[...Array(10)].map((_, i) => (
+                  <div key={i} className="aspect-square rounded-xl bg-muted animate-pulse border border-border/40" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-16 w-full rounded-xl bg-muted animate-pulse border border-border/40" />
+                ))}
+              </div>
+            )
           ) : displayedImages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground pb-20">
               <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mb-6">
@@ -845,15 +847,15 @@ export default function LibraryPage() {
               <p className="text-sm max-w-sm text-center mb-8">
                 {tr('library.noImages.desc')}
               </p>
-              <a
+              <Link
                 href="/create"
                 className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors shadow-sm"
               >
                 {tr('library.noImages.cta')}
-              </a>
+              </Link>
             </div>
           ) : (
-             viewMode === 'grid' ? (
+            viewMode === 'grid' ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
                 {displayedImages.map((img, i) => (
                   <ImageGridItem
@@ -876,7 +878,7 @@ export default function LibraryPage() {
                 ))}
               </div>
             ) : (
-               /* List View */
+              /* List View */
               <div className="min-w-full">
                 {/* Table Header */}
                 <div className={clsx(
@@ -905,7 +907,7 @@ export default function LibraryPage() {
                   <div className={isSelectionMode ? "hidden md:block" : "col-span-3 md:col-span-3"}>{tr('library.table.created')}</div>
                   {!isSelectionMode && <div className="col-span-3 md:col-span-2 text-right">{tr('library.table.actions')}</div>}
                 </div>
-                
+
                 {/* Table Rows */}
                 <div className="divide-y divide-border/40">
                   {displayedImages.map((img, i) => (
@@ -958,7 +960,7 @@ export default function LibraryPage() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase block mb-2">{tr('library.moveModal.label')}</label>
@@ -1116,7 +1118,7 @@ function ImageGridItem({
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         loading="lazy"
       />
-      
+
       {/* Selection Checkbox */}
       {isSelectionMode && (
         <div className="absolute top-3 left-3 z-10">
@@ -1143,8 +1145,8 @@ function ImageGridItem({
             onClick={onToggleFavorite}
             className={clsx(
               "p-2 rounded-lg backdrop-blur-md transition-colors",
-              img.isFavorite 
-                ? "bg-yellow-500/90 hover:bg-yellow-600 text-white" 
+              img.isFavorite
+                ? "bg-yellow-500/90 hover:bg-yellow-600 text-white"
                 : "bg-black/20 hover:bg-yellow-500/90 text-white"
             )}
             title={img.isFavorite ? tr('library.favorite.remove') : tr('library.favorite.add')}
@@ -1159,37 +1161,37 @@ function ImageGridItem({
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
-        
+
         {img.fileMissing ? (
-             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center">
-                 <div className="bg-destructive/80 text-white text-xs py-1 px-2 rounded-full mx-4 font-semibold backdrop-blur-md border border-white/20">
-                     {tr('library.fileDeleted')}
-                 </div>
-             </div>
-        ) : (
-            <div className="flex items-center gap-1 justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-            <button
-                onClick={onMove}
-                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-                title={tr('library.actions.move')}
-            >
-                <FolderInput className="w-4 h-4" />
-            </button>
-            <button
-                onClick={onCopy}
-                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-                title={tr('library.actions.copy')}
-            >
-                <Copy className="w-4 h-4" />
-            </button>
-            <button
-                onClick={onDownload}
-                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
-                title={tr('library.actions.download')}
-            >
-                <Download className="w-4 h-4" />
-            </button>
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center">
+            <div className="bg-destructive/80 text-white text-xs py-1 px-2 rounded-full mx-4 font-semibold backdrop-blur-md border border-white/20">
+              {tr('library.fileDeleted')}
             </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+            <button
+              onClick={onMove}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+              title={tr('library.actions.move')}
+            >
+              <FolderInput className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onCopy}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+              title={tr('library.actions.copy')}
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onDownload}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+              title={tr('library.actions.download')}
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
         )}
       </div>
     </motion.div>
@@ -1296,9 +1298,9 @@ function ImageListItem({
             loading="lazy"
           />
           {img.fileMissing && (
-             <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center">
-                 <AlertTriangle className="w-4 h-4 text-destructive" />
-             </div>
+            <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+            </div>
           )}
         </div>
         <p className="text-sm text-foreground truncate">{img.finalPrompt}</p>
@@ -1316,7 +1318,7 @@ function ImageListItem({
         "text-sm text-muted-foreground",
         isSelectionMode ? "hidden md:block" : "col-span-3 md:col-span-3"
       )}>
-        {new Date(img.createdAt).toLocaleDateString()} 
+        {new Date(img.createdAt).toLocaleDateString()}
         {!isSelectionMode && (
           <span className="text-xs opacity-50 hidden md:inline ml-1">
             {new Date(img.createdAt).toLocaleTimeString()}
@@ -1339,37 +1341,37 @@ function ImageListItem({
           >
             <Star className={clsx("w-3.5 h-3.5", img.isFavorite && "fill-yellow-500")} />
           </button>
-          
+
           {img.fileMissing ? (
-             <div className="flex items-center px-4 py-1.5 rounded-md bg-destructive/10 text-destructive text-xs font-semibold mr-auto">
-                 {tr('library.fileDeleted')}
-             </div>
+            <div className="flex items-center px-4 py-1.5 rounded-md bg-destructive/10 text-destructive text-xs font-semibold mr-auto">
+              {tr('library.fileDeleted')}
+            </div>
           ) : (
-             <>
-                <button
+            <>
+              <button
                 onClick={onMove}
                 className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
                 title={tr('library.actions.move')}
-                >
+              >
                 <FolderInput className="w-3.5 h-3.5" />
-                </button>
-                <button
+              </button>
+              <button
                 onClick={onCopy}
                 className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
                 title={tr('library.actions.copy')}
-                >
+              >
                 <Copy className="w-3.5 h-3.5" />
-                </button>
-                <button
+              </button>
+              <button
                 onClick={onDownload}
                 className="p-1.5 rounded-md text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm border border-transparent hover:border-border transition-all"
                 title={tr('library.actions.download')}
-                >
+              >
                 <Download className="w-3.5 h-3.5" />
-                </button>
+              </button>
             </>
           )}
-          
+
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1380,7 +1382,7 @@ function ImageListItem({
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
-          
+
           <button
             onClick={onDelete}
             className="p-1.5 rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-destructive hover:shadow-sm border border-transparent hover:border-destructive/20 transition-all"
@@ -1506,11 +1508,10 @@ function PreviewModal({
               {/* Star/Favorite button */}
               <button
                 onClick={onToggleFavorite}
-                className={`group/star relative p-2 rounded-lg transition-all ${
-                  previewImage.isFavorite
-                    ? 'text-yellow-500 hover:bg-yellow-500/10'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
+                className={`group/star relative p-2 rounded-lg transition-all ${previewImage.isFavorite
+                  ? 'text-yellow-500 hover:bg-yellow-500/10'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  }`}
               >
                 <Star className={`w-4 h-4 ${previewImage.isFavorite ? 'fill-yellow-500' : ''}`} />
                 <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/star:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
@@ -1521,11 +1522,10 @@ function PreviewModal({
               {/* Copy Image button */}
               <button
                 onClick={handleCopy}
-                className={`group/copyimg relative p-2 rounded-lg transition-all ${
-                  copySuccess
-                    ? 'bg-green-500/10 text-green-500'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
+                className={`group/copyimg relative p-2 rounded-lg transition-all ${copySuccess
+                  ? 'bg-green-500/10 text-green-500'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  }`}
               >
                 {copySuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/copyimg:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
@@ -1567,7 +1567,7 @@ function PreviewModal({
               </button>
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
             {/* Parameters */}
             {previewImage.params && previewImage.params !== '{}' && (
@@ -1652,11 +1652,10 @@ function PreviewModal({
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr('library.details.prompt')}</label>
                 <button
                   onClick={handleCopyPrompt}
-                  className={`group/copyprompt relative p-1.5 rounded-md transition-all ${
-                    promptCopySuccess
-                      ? 'bg-green-500/10 text-green-500'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                  }`}
+                  className={`group/copyprompt relative p-1.5 rounded-md transition-all ${promptCopySuccess
+                    ? 'bg-green-500/10 text-green-500'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    }`}
                 >
                   {promptCopySuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   <span className="absolute bottom-full mb-2 right-0 bg-popover text-popover-foreground border border-border/50 px-2 py-1 rounded-md shadow-xl pointer-events-none opacity-0 group-hover/copyprompt:opacity-100 transition-opacity duration-200 whitespace-nowrap text-xs font-medium">
