@@ -17,9 +17,11 @@
 /.next/
 /out/
 
-# production (Next.js build output, but keep electron-builder entitlements)
+# production (Next.js build output, but keep electron-builder files)
 /build
 !/build/entitlements.mac.plist
+!/build/entitlements.mas.plist
+!/build/*.provisionprofile
 
 # misc
 .DS_Store
@@ -53,6 +55,7 @@ dev.db-journal
 # CLAUDE.md is now tracked (documentation for AI assistants)
 PRODUCT_DESIGN.md
 /docs/
+!/docs/MAC_APP_STORE_GUIDE.md
 
 # Electron
 /electron/
