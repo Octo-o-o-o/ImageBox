@@ -1,7 +1,7 @@
 {
   "name": "imagebox",
   "description": "ImageBox - AI image generation & prompt workflow (Next.js + Electron)",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "private": true,
   "author": "wangyixiao <wangyixiao@users.noreply.github.com>",
   "main": "electron/main.js",
@@ -22,6 +22,7 @@
     "electron:build": "npm run electron:compile && npm run db:generate && npm run db:template && npm run build && npm run electron:prepare && electron-builder --publish never",
     "electron:build:mac": "npm run electron:compile && npm run db:generate && npm run db:template && npm run build && npm run electron:prepare && electron-builder --mac --publish never",
     "electron:build:win": "npm run electron:compile && npm run db:generate && npm run db:template && npm run build && npm run electron:prepare && electron-builder --win --publish never",
+    "electron:build:win:diag": "node -e \"const {spawnSync}=require('child_process'); const env={...process.env, IMAGEBOX_DIAG:'1'}; const npmCmd=process.platform==='win32'?'npm.cmd':'npm'; const r=spawnSync(npmCmd,['run','electron:build:win'],{stdio:'inherit',env}); process.exit(typeof r.status==='number'?r.status:1);\"",
     "electron:build:linux": "npm run electron:compile && npm run db:generate && npm run db:template && npm run build && npm run electron:prepare && electron-builder --linux --publish never",
     "electron:build:all": "npm run electron:compile && npm run db:generate && npm run db:template && npm run build && npm run electron:prepare && electron-builder --mac --win --linux --publish never",
     "electron:publish": "npm run electron:compile && npm run db:generate && npm run db:template && npm run build && npm run electron:prepare && electron-builder --publish always",

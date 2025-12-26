@@ -72,6 +72,13 @@ jobs:
       - name: Package macOS (${{ matrix.arch }})
         env:
           CI: "true"
+          # macOS 代码签名
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS 公证 (Notarization)
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx --yes electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: Upload macOS artifacts

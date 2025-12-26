@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, utilityProcess } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, utilityProcess, clipboard } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import log from 'electron-log';
@@ -13,9 +13,14 @@ interface ExtendedApp extends Electron.App {
 }
 const extApp = app as ExtendedApp;
 
+const DIAG_ENABLED =
+  process.env.IMAGEBOX_DIAG === '1' ||
+  process.argv.includes('--imagebox-diag') ||
+  process.argv.includes('--diag');
+
 // 配置日志
-log.transports.file.level = 'info';
-log.transports.console.level = 'debug';
+log.transports.file.level = DIAG_ENABLED ? 'debug' : 'info';
+log.transports.console.level = DIAG_ENABLED ? 'debug' : 'debug';
 try {
   log.info('Log file path:', log.transports.file.getFile().path);
 } catch {
@@ -60,6 +65,42 @@ function getAppPath(): string {
     return process.cwd();
   }
   return app.getAppPath();
+}
+
+function getLogFilePathSafe(): string {
+  try {
+    return log.transports.file.getFile().path;
+  } catch {
+    return '';
+  }
+}
+
+function ensureDiagnosticsDir(): string {
+  const dir = path.join(app.getPath('userData'), 'diagnostics');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    // ignore
+  }
+  return dir;
+}
+
+function writeDiagnosticsFile(filename: string, content: string | Buffer): string {
+  const dir = ensureDiagnosticsDir();
+  const filePath = path.join(dir, filename);
+  try {
+    fs.writeFileSync(filePath, content);
+  } catch (err) {
+    log.warn('Failed to write diagnostics file:', filePath, err);
+  }
+  return filePath;
+}
+
+let serverStdoutTail = '';
+let serverStderrTail = '';
+function appendTail(current: string, chunk: string, maxLen = 20000): string {
+  const next = (current + chunk).slice(-maxLen);
+  return next;
 }
 
 /**
@@ -191,6 +232,7 @@ async function startNextServer(): Promise<void> {
 
     serverProcess.stdout?.on('data', (data) => {
       const output = data.toString();
+      serverStdoutTail = appendTail(serverStdoutTail, output);
       log.info(`Server: ${output}`);
       if (output.includes('Ready') || output.includes('started server') || output.includes('localhost')) {
         serverReady = true;
@@ -200,10 +242,23 @@ async function startNextServer(): Promise<void> {
 
     serverProcess.stderr?.on('data', (data) => {
       const msg = data.toString();
+      serverStderrTail = appendTail(serverStderrTail, msg);
       log.error(`Server Error: ${msg}`);
       // 有些情况下 stdout 不会出现 Ready，这里先记录最近一次错误，便于 fallback 展示
       if (!serverReady && !serverStartupError) {
         serverStartupError = msg.trim().slice(0, 500);
+      }
+    });
+
+    serverProcess.on('error', (err) => {
+      const message =
+        err && typeof err === 'object' && 'message' in (err as any)
+          ? String((err as any).message)
+          : String(err);
+      const m = `Server process error: ${message}`;
+      log.error(m);
+      if (!serverReady && !serverStartupError) {
+        serverStartupError = m;
       }
     });
 
@@ -251,6 +306,43 @@ async function createWindow(): Promise<void> {
   });
   mainWindow = win;
 
+  // If anything goes wrong, we want a timestamped diagnostic bundle the user can send back.
+  const writeStartupDiagnostics = async (reason: string): Promise<void> => {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const metaPath = writeDiagnosticsFile(
+      `diag-${ts}.json`,
+      JSON.stringify(
+        {
+          reason,
+          time: new Date().toISOString(),
+          platform: process.platform,
+          arch: process.arch,
+          version: app.getVersion(),
+          isPackaged: app.isPackaged,
+          appPath: getAppPath(),
+          resourcesPath: process.resourcesPath,
+          userData: app.getPath('userData'),
+          url: win.webContents.getURL?.() ?? '',
+          serverStartupError,
+          serverStdoutTail,
+          serverStderrTail,
+          logFile: getLogFilePathSafe()
+        },
+        null,
+        2
+      )
+    );
+
+    try {
+      const img = await win.webContents.capturePage();
+      const pngPath = writeDiagnosticsFile(`diag-${ts}.png`, img.toPNG());
+      log.info('Diagnostics written:', { metaPath, pngPath });
+    } catch (err) {
+      log.warn('Failed to capture diagnostics screenshot:', err);
+      log.info('Diagnostics written:', { metaPath });
+    }
+  };
+
   // 记录渲染进程日志/崩溃信息，便于排查“白屏”
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     // level: 0=log,1=warn,2=error,3=debug (Electron)
@@ -260,10 +352,22 @@ async function createWindow(): Promise<void> {
 
   win.webContents.on('render-process-gone', (_event, details) => {
     log.error('Renderer process gone:', details);
+    void writeStartupDiagnostics(`render-process-gone:${details?.reason ?? 'unknown'}`);
   });
 
   win.webContents.on('unresponsive', () => {
     log.warn('Renderer became unresponsive');
+    void writeStartupDiagnostics('renderer-unresponsive');
+  });
+
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    log.error('did-fail-load:', { errorCode, errorDescription, validatedURL });
+    void writeStartupDiagnostics(`did-fail-load:${errorCode}:${errorDescription}`);
+  });
+
+  win.webContents.on('did-fail-provisional-load', (_event, errorCode, errorDescription, validatedURL) => {
+    log.error('did-fail-provisional-load:', { errorCode, errorDescription, validatedURL });
+    void writeStartupDiagnostics(`did-fail-provisional-load:${errorCode}:${errorDescription}`);
   });
 
   // 页面加载失败时自动重试，避免打包后 Next 服务器启动慢导致白屏
@@ -285,6 +389,7 @@ async function createWindow(): Promise<void> {
         return;
       } catch (err) {
         log.error(`Attempt ${attempt}/${maxRetries} failed to load URL:`, err);
+        void writeStartupDiagnostics(`load-url-attempt-${attempt}-failed`);
         // 如果服务器明确启动失败，减少无意义重试，尽快给用户反馈
         if (serverStartupError && attempt >= 2) break;
         // small backoff
@@ -295,18 +400,16 @@ async function createWindow(): Promise<void> {
     log.error('All attempts failed. Showing fallback error page.');
     try {
       if (win.isDestroyed()) return;
-      const logPath = (() => {
-        try {
-          return log.transports.file.getFile().path;
-        } catch {
-          return '';
-        }
-      })();
+      const logPath = getLogFilePathSafe();
+      const diagDir = ensureDiagnosticsDir();
 
       const detail = [
         serverStartupError ? `Server: ${serverStartupError}` : '',
-        logPath ? `Log: ${logPath}` : ''
+        logPath ? `Log: ${logPath}` : '',
+        `Diagnostics: ${diagDir}`
       ].filter(Boolean).join('<br/>');
+
+      clipboard.writeText([logPath, diagDir].filter(Boolean).join('\n'));
 
       await win.loadURL(`data:text/html,
         <html>
@@ -318,16 +421,23 @@ async function createWindow(): Promise<void> {
                 本地服务未能启动或页面加载失败。请稍后重试，或查看日志文件以定位原因。
               </p>
               ${detail ? `<div style="margin:0 0 16px 0;opacity:.85;line-height:1.5;font-size:12px;word-break:break-all">${detail}</div>` : ''}
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button onclick="location.reload()" style="padding:10px 14px;border-radius:10px;border:0;
                 background:#4f46e5;color:#fff;font-weight:600;cursor:pointer">
                 重试
               </button>
+              <button onclick="try{window.electronAPI&&window.electronAPI.showInFinder&&window.electronAPI.showInFinder('${(logPath || diagDir).replace(/\\/g, '\\\\')}')}catch(e){}" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.2);
+                background:transparent;color:#fff;font-weight:600;cursor:pointer">打开日志位置</button>
+              <button onclick="try{navigator.clipboard&&navigator.clipboard.writeText('${[logPath, diagDir].filter(Boolean).join('\\n').replace(/\\/g, '\\\\')}')}catch(e){}" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.2);
+                background:transparent;color:#fff;font-weight:600;cursor:pointer">复制路径</button>
+              </div>
             </div>
           </body>
         </html>
       `);
       win.show();
       closeSplashWindow();
+      await writeStartupDiagnostics('fallback-error-page');
     } catch {
       // ignore
     }
@@ -374,7 +484,7 @@ async function createWindow(): Promise<void> {
   }
 
   // 生产模式默认不打开 DevTools；如需排查线上问题可临时设置环境变量 IMAGEBOX_DEVTOOLS=1
-  if (!isDev && process.env.IMAGEBOX_DEVTOOLS === '1') {
+  if (!isDev && (process.env.IMAGEBOX_DEVTOOLS === '1' || DIAG_ENABLED)) {
     win.webContents.openDevTools();
   }
 
@@ -399,6 +509,14 @@ async function createWindow(): Promise<void> {
   // 加载页面
   // 注：生产环境 utilityProcess 启动 Next 服务器可能更慢（尤其是 Windows 首次启动/杀软扫描），这里做探活+重试兜底
   await loadMainUrlWithRetry();
+
+  // Diagnostic watchdog: if the window is visible but still “blank”, dump a screenshot+state after a short delay.
+  if (DIAG_ENABLED) {
+    setTimeout(() => {
+      if (!isWindowAlive(win)) return;
+      void writeStartupDiagnostics('watchdog-10s');
+    }, 10000);
+  }
 
   // macOS：点击关闭按钮时隐藏而不是退出
   win.on('close', (e) => {
@@ -457,6 +575,14 @@ function setupIPC(): void {
       userData: app.getPath('userData')
     };
   });
+
+  ipcMain.on('diagnostics:rendererError', (_evt, payload: unknown) => {
+    log.error('[diagnostics:rendererError]', payload);
+  });
+
+  ipcMain.on('diagnostics:rendererConsole', (_evt, payload: unknown) => {
+    log.info('[diagnostics:rendererConsole]', payload);
+  });
 }
 
 /**
@@ -464,6 +590,17 @@ function setupIPC(): void {
  */
 app.whenReady().then(async () => {
   log.info('App is ready, initializing...');
+
+  process.on('uncaughtException', (err) => {
+    log.error('uncaughtException:', err);
+  });
+  process.on('unhandledRejection', (reason) => {
+    log.error('unhandledRejection:', reason);
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    log.error('child-process-gone:', details);
+  });
 
   // 显示启动画面
   createSplashWindow();

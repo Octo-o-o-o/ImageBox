@@ -90,6 +90,10 @@ npm run electron:build:mac
 ## 日志位置（macOS）
 - Electron 主进程日志：`~/Library/Logs/imagebox/main.log`
 
+## 日志位置（Windows）
+- Electron 主进程日志（默认）：`%APPDATA%\\ImageBox\\logs\\main.log`
+- 自动诊断包（白屏/崩溃时会生成）：`%APPDATA%\\ImageBox\\diagnostics\\diag-*.{json,png}`
+
 **排查关键词（按优先级）**
 - `dlopen` / `better_sqlite3.node`（架构不匹配）
 - `Cannot find module '.prisma/client/default'`（Prisma runtime 缺失）

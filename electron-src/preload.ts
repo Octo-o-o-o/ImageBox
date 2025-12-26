@@ -3,6 +3,95 @@ import { contextBridge, ipcRenderer } from 'electron';
 /**
  * 暴露给渲染进程的 API
  */
+const DIAG_ENABLED =
+  process.env.IMAGEBOX_DIAG === '1' ||
+  process.argv.includes('--imagebox-diag') ||
+  process.argv.includes('--diag');
+
+function safeSend(channel: string, payload: unknown): void {
+  try {
+    ipcRenderer.send(channel, payload);
+  } catch {
+    // ignore
+  }
+}
+
+// Early error hooks: helps diagnose “white screen” when renderer crashes/hydration fails
+// We keep error/unhandledrejection ALWAYS on (low noise, high value).
+try {
+  const w = globalThis as any;
+
+  w.addEventListener('error', (e: any) => {
+    const anyE = e as any;
+    safeSend('diagnostics:rendererError', {
+      type: 'error',
+      message: anyE?.message,
+      filename: anyE?.filename,
+      lineno: anyE?.lineno,
+      colno: anyE?.colno,
+      error: anyE?.error ? String(anyE.error?.stack || anyE.error) : undefined
+    });
+  });
+
+  w.addEventListener('unhandledrejection', (e: any) => {
+    const anyE = e as any;
+    const reason = (anyE as any)?.reason;
+    safeSend('diagnostics:rendererError', {
+      type: 'unhandledrejection',
+      reason: reason ? String(reason?.stack || reason) : String(reason)
+    });
+  });
+
+  // Mirror console.* into main process log (in addition to webContents console-message) - diag only
+  if (DIAG_ENABLED) {
+    const wrapConsole =
+      (level: 'log' | 'warn' | 'error' | 'debug') =>
+      (...args: unknown[]) => {
+        safeSend('diagnostics:rendererConsole', {
+          level,
+          args: args.map((a) => {
+            try {
+              return typeof a === 'string' ? a : JSON.stringify(a);
+            } catch {
+              return String(a);
+            }
+          })
+        });
+      };
+
+    // eslint-disable-next-line no-console
+    const origLog = console.log.bind(console);
+    // eslint-disable-next-line no-console
+    const origWarn = console.warn.bind(console);
+    // eslint-disable-next-line no-console
+    const origError = console.error.bind(console);
+    // eslint-disable-next-line no-console
+    const origDebug = console.debug.bind(console);
+    // eslint-disable-next-line no-console
+    console.log = (...args: unknown[]) => {
+      wrapConsole('log')(...args);
+      origLog(...args);
+    };
+    // eslint-disable-next-line no-console
+    console.warn = (...args: unknown[]) => {
+      wrapConsole('warn')(...args);
+      origWarn(...args);
+    };
+    // eslint-disable-next-line no-console
+    console.error = (...args: unknown[]) => {
+      wrapConsole('error')(...args);
+      origError(...args);
+    };
+    // eslint-disable-next-line no-console
+    console.debug = (...args: unknown[]) => {
+      wrapConsole('debug')(...args);
+      origDebug(...args);
+    };
+  }
+} catch {
+  // ignore
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * 选择文件夹

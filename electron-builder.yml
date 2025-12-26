@@ -12,6 +12,8 @@ directories:
 files:
   # Next.js standalone build (includes static files after prepare script)
   - .next/standalone/**/*
+  # Explicitly include dot-folders used by Prisma when nested under standalone node_modules (Windows packaging safety)
+  - .next/standalone/node_modules/.prisma/**/*
   # Electron main process
   - electron/**/*
   # Static assets
@@ -49,10 +51,13 @@ mac:
         - arm64
   icon: assets/icon.png
   category: public.app-category.graphics-design
-  # 未签名时不需要这些配置
-  # hardenedRuntime: true
-  # entitlements: build/entitlements.mac.plist
-  # entitlementsInherit: build/entitlements.mac.plist
+  # 代码签名配置 (需要在 GitHub Secrets 中配置 CSC_LINK 和 CSC_KEY_PASSWORD)
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # 公证配置 (需要在环境变量中配置 APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID)
+  notarize: true
 
 # DMG 配置
 dmg:
