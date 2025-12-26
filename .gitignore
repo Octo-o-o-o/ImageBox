@@ -17,8 +17,9 @@
 /.next/
 /out/
 
-# production
+# production (Next.js build output, but keep electron-builder entitlements)
 /build
+!/build/entitlements.mac.plist
 
 # misc
 .DS_Store
