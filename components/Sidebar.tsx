@@ -137,7 +137,7 @@ export function Sidebar() {
           <>
             <img src="/app_icon.png" alt="ImageBox" className="w-10 h-10 rounded-lg shadow-lg shrink-0" />
             <div className="flex flex-col justify-center gap-0.5">
-              <span className="text-xl font-bold leading-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600 dark:from-white dark:to-white/70">
+              <span className="text-xl font-bold leading-tight text-[#F97316]">
                 ImageBox
               </span>
 
@@ -161,15 +161,15 @@ export function Sidebar() {
                 'relative flex items-center gap-3 rounded-lg transition-colors duration-200 group cursor-pointer',
                 isCollapsed ? 'px-2 py-2.5 justify-center' : 'px-3 py-2.5',
                 isActive
-                  ? 'text-orange-600 dark:text-white'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-white/5'
+                  ? 'text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
               )}
               title={isCollapsed ? item.name : undefined}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeNav"
-                  className="absolute inset-0 bg-orange-50 dark:bg-white/10 rounded-lg border border-orange-100 dark:border-white/5"
+                  className="absolute inset-0 bg-primary/10 dark:bg-white/10 rounded-lg border border-primary/20 dark:border-white/5"
                   initial={false}
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 />

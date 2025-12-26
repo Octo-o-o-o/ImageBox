@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { resourcesStore, type ProviderRecord, type ModelRecord } from '@/lib/store';
 import fs from 'fs/promises';
 import path from 'path';
 import { detectHardware, type HardwareInfo } from '@/lib/hardwareDetection';
@@ -56,31 +56,44 @@ export async function quickSetupLocalModelAction(data: {
       return { success: false, error: `Cannot connect to service: ${check.error}` };
     }
 
+    const now = new Date().toISOString();
+    const providerId = crypto.randomUUID();
+    const modelId = crypto.randomUUID();
+
     // Create provider
-    const provider = await prisma.provider.create({
-      data: {
-        name: data.providerName,
-        type: 'LOCAL',
-        baseUrl: data.serviceUrl,
-        localBackend: data.localBackend,
-      }
-    });
+    const provider: ProviderRecord = {
+      id: providerId,
+      name: data.providerName,
+      type: 'LOCAL',
+      baseUrl: data.serviceUrl,
+      apiKey: null,
+      localBackend: data.localBackend,
+      localModelPath: null,
+      createdAt: now
+    };
 
     // Create model
-    const model = await prisma.aIModel.create({
-      data: {
-        name: data.modelName,
-        modelIdentifier: data.modelIdentifier,
-        type: 'IMAGE',
-        providerId: provider.id,
-        parameterConfig: data.parameterConfig,
-      }
-    });
+    const model: ModelRecord = {
+      id: modelId,
+      name: data.modelName,
+      modelIdentifier: data.modelIdentifier,
+      type: 'IMAGE',
+      providerId: providerId,
+      parameterConfig: data.parameterConfig,
+      createdAt: now
+    };
+
+    // Save both to resourcesStore
+    await resourcesStore.update(d => ({
+      ...d,
+      providers: { ...d.providers, [providerId]: provider },
+      models: { ...d.models, [modelId]: model }
+    }));
 
     return {
       success: true,
-      providerId: provider.id,
-      modelId: model.id
+      providerId,
+      modelId
     };
   } catch (error) {
     console.error('Quick setup local model failed:', error);
@@ -96,9 +109,8 @@ export async function quickSetupLocalModelAction(data: {
  */
 export async function checkLocalProviderStatusAction(providerId: string): Promise<{ online: boolean; error?: string }> {
   try {
-    const provider = await prisma.provider.findUnique({
-      where: { id: providerId }
-    });
+    const resources = await resourcesStore.read();
+    const provider = resources.providers[providerId];
 
     if (!provider || provider.type !== 'LOCAL') {
       return { online: false, error: 'Not a local provider' };
@@ -156,7 +168,7 @@ export async function installPrerequisiteAction(
       case 'cmake': {
         if (platform === 'darwin') {
           // Try brew first
-          let result = await runCommand('brew install cmake');
+          const result = await runCommand('brew install cmake');
           if (result.success) {
             return { success: true, message: 'CMake installed successfully (via Homebrew)' };
           }

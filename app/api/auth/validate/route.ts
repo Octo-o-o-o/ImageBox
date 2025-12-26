@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { configStore } from '@/lib/store';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,12 +13,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查远程访问开关
-    const remoteAccessSetting = await prisma.setting.findUnique({
-      where: { key: 'remoteAccessEnabled' }
-    });
+    const config = await configStore.read();
 
-    if (remoteAccessSetting?.value !== 'true') {
+    // 检查远程访问开关
+    if (config.settings['remoteAccessEnabled'] !== 'true') {
       return NextResponse.json(
         { valid: false, error: 'Remote access is disabled' },
         { status: 403 }
@@ -26,9 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证 token
-    const accessToken = await prisma.accessToken.findUnique({
-      where: { token }
-    });
+    const accessToken = Object.values(config.tokens).find(t => t.token === token);
 
     if (!accessToken) {
       return NextResponse.json(
@@ -44,7 +40,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (accessToken.expiresAt < new Date()) {
+    const expiresAt = new Date(accessToken.expiresAt);
+    if (expiresAt < new Date()) {
       return NextResponse.json(
         { valid: false, error: 'Token has expired' },
         { status: 401 }
@@ -52,10 +49,16 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新最后使用时间
-    await prisma.accessToken.update({
-      where: { id: accessToken.id },
-      data: { lastUsedAt: new Date() }
-    });
+    await configStore.update(d => ({
+      ...d,
+      tokens: {
+        ...d.tokens,
+        [accessToken.id]: {
+          ...accessToken,
+          lastUsedAt: new Date().toISOString()
+        }
+      }
+    }));
 
     return NextResponse.json({
       valid: true,
@@ -70,5 +73,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-

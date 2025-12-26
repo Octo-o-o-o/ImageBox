@@ -259,11 +259,11 @@ export function SetupWizard() {
             <div className="space-y-8">
                 {/* Header */}
                 <div className="text-center space-y-2">
-                    <div className="w-16 h-16 bg-orange-50 dark:bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-orange-500 shadow-sm">
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-primary shadow-sm">
                         <Settings2 size={32} />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">{tr('setup.wizard.title')}</h2>
-                    <p className="text-gray-500 dark:text-gray-400">{tr('setup.wizard.subtitle')}</p>
+                    <h2 className="text-2xl font-bold text-foreground tracking-tight">{tr('setup.wizard.title')}</h2>
+                    <p className="text-muted-foreground">{tr('setup.wizard.subtitle')}</p>
                 </div>
 
                 {/* Content */}
@@ -271,34 +271,34 @@ export function SetupWizard() {
 
                     {/* Storage Location */}
                     <div className="space-y-3">
-                        <label className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                            <Folder size={16} className="text-orange-500" />
+                        <label className="text-sm font-bold text-foreground flex items-center gap-2">
+                            <Folder size={16} className="text-primary" />
                             {tr('setup.storage.label')}
                         </label>
-                        <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 flex items-center justify-between gap-4 transition-colors">
+                        <div className="p-4 bg-secondary/50 rounded-2xl border border-border flex items-center justify-between gap-4 transition-colors">
                             <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{tr('setup.storage.filesWillBeSavedTo')}</p>
-                                <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate font-mono" title={storagePath}>
+                                <p className="text-xs text-muted-foreground mb-1">{tr('setup.storage.filesWillBeSavedTo')}</p>
+                                <p className="text-sm font-medium text-foreground truncate font-mono" title={storagePath}>
                                     {storagePath || tr('library.loading')}
                                 </p>
                             </div>
                             <button
                                 onClick={handleSelectFolder}
-                                className="shrink-0 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-200 dark:hover:border-orange-500/50 transition-all active:scale-95"
+                                className="shrink-0 px-4 py-2 bg-background border border-border shadow-sm rounded-xl text-xs font-semibold text-foreground hover:text-primary hover:border-primary/50 transition-all active:scale-95"
                             >
                                 {tr('setup.storage.modify')}
                             </button>
                         </div>
                     </div>
 
-                    <div className="w-full h-px bg-gray-100 dark:bg-white/10 my-2" />
+                    <div className="w-full h-px bg-border my-2" />
 
                     {/* Image Provider (Required) */}
                     <div className="space-y-3">
-                        <label className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                            <Key size={16} className="text-orange-500" />
+                        <label className="text-sm font-bold text-foreground flex items-center gap-2">
+                            <Key size={16} className="text-primary" />
                             {tr('setup.provider.image.title')}
-                            <span className="text-orange-500 text-xs font-normal ml-auto">* Required</span>
+                            <span className="text-primary text-xs font-normal ml-auto">* Required</span>
                         </label>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -306,13 +306,13 @@ export function SetupWizard() {
                                 <select
                                     value={imageProviderId}
                                     onChange={(e) => setImageProviderId(e.target.value)}
-                                    className="w-full appearance-none px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20 focus:border-orange-500 shadow-sm transition-all pr-10 font-medium text-gray-700 dark:text-gray-200"
+                                    className="w-full appearance-none px-4 py-3 bg-background rounded-xl border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all pr-10 font-medium text-foreground"
                                 >
                                     {imageProviders.map(p => (
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                                     <ChevronRight size={16} className="rotate-90" />
                                 </div>
                             </div>
@@ -322,7 +322,7 @@ export function SetupWizard() {
                                     value={imageApiKey}
                                     onChange={(e) => setImageApiKey(e.target.value)}
                                     placeholder={tr('setup.api.placeholder', { provider: selectedImageProvider?.name || 'Provider' })}
-                                    className="w-full px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20 focus:border-orange-500 shadow-sm transition-all pr-10 font-mono dark:text-gray-200"
+                                    className="w-full px-4 py-3 bg-background rounded-xl border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all pr-10 font-mono text-foreground"
                                 />
                                 {imageApiKey && (
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
@@ -333,10 +333,10 @@ export function SetupWizard() {
                         </div>
 
                         <div className="flex items-center justify-between px-1">
-                            <p className="text-xs text-gray-400 dark:text-gray-500 line-clamp-1">{getProviderDesc(selectedImageProvider)}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{getProviderDesc(selectedImageProvider)}</p>
                             <button
                                 onClick={() => selectedImageProvider?.apiKeyApplyUrl && openProviderUrl(selectedImageProvider.apiKeyApplyUrl)}
-                                className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline shrink-0"
+                                className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 hover:underline shrink-0"
                             >
                                 <ExternalLink size={12} />
                                 {tr('setup.api.getKey', { provider: selectedImageProvider?.name || '' })}
@@ -346,12 +346,12 @@ export function SetupWizard() {
 
                     {/* Prompt Provider (Optional) */}
                     <div className="space-y-3 pt-2">
-                        <label className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between gap-2">
+                        <label className="text-sm font-bold text-foreground flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                                <Key size={16} className="text-gray-400 dark:text-gray-500" />
+                                <Key size={16} className="text-muted-foreground" />
                                 <span>
                                     {tr('setup.provider.prompt.title')}
-                                    <span className="text-gray-400 dark:text-gray-500 font-normal ml-1">{tr('setup.provider.prompt.optional')}</span>
+                                    <span className="text-muted-foreground font-normal ml-1">{tr('setup.provider.prompt.optional')}</span>
                                 </span>
                             </div>
                         </label>
@@ -362,11 +362,11 @@ export function SetupWizard() {
                             onClick={() => setSameProvider(!sameProvider)}
                         >
                             {sameProvider ? (
-                                <CheckSquare size={18} className="text-orange-500" />
+                                <CheckSquare size={18} className="text-primary" />
                             ) : (
-                                <Square size={18} className="text-gray-300 dark:text-gray-600 group-hover:text-gray-400 dark:group-hover:text-gray-500" />
+                                <Square size={18} className="text-muted-foreground/50 group-hover:text-muted-foreground" />
                             )}
-                            <span className="text-sm text-gray-600 dark:text-gray-400 select-none group-hover:text-gray-800 dark:group-hover:text-gray-200">
+                            <span className="text-sm text-muted-foreground select-none group-hover:text-foreground">
                                 {tr('setup.provider.prompt.sameAsImage')}
                             </span>
                         </div>
@@ -379,13 +379,13 @@ export function SetupWizard() {
                                         <select
                                             value={promptProviderId}
                                             onChange={(e) => setPromptProviderId(e.target.value)}
-                                            className="w-full appearance-none px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20 focus:border-orange-500 shadow-sm transition-all pr-10 font-medium text-gray-700 dark:text-gray-200"
+                                            className="w-full appearance-none px-4 py-3 bg-background rounded-xl border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all pr-10 font-medium text-foreground"
                                         >
                                             {textProviders.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}
                                         </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                                             <ChevronRight size={16} className="rotate-90" />
                                         </div>
                                     </div>
@@ -395,7 +395,7 @@ export function SetupWizard() {
                                             value={promptApiKey}
                                             onChange={(e) => setPromptApiKey(e.target.value)}
                                             placeholder={tr('setup.api.placeholder', { provider: selectedPromptProvider?.name || 'Provider' })}
-                                            className="w-full px-4 py-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20 focus:border-orange-500 shadow-sm transition-all pr-10 font-mono dark:text-gray-200"
+                                            className="w-full px-4 py-3 bg-background rounded-xl border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all pr-10 font-mono text-foreground"
                                         />
                                         {promptApiKey && (
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
@@ -405,10 +405,10 @@ export function SetupWizard() {
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between px-1">
-                                    <p className="text-xs text-gray-400 dark:text-gray-500 line-clamp-1">{getProviderDesc(selectedPromptProvider)}</p>
+                                    <p className="text-xs text-muted-foreground line-clamp-1">{getProviderDesc(selectedPromptProvider)}</p>
                                     <button
                                         onClick={() => selectedPromptProvider?.apiKeyApplyUrl && openProviderUrl(selectedPromptProvider.apiKeyApplyUrl)}
-                                        className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline shrink-0"
+                                        className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 hover:underline shrink-0"
                                     >
                                         <ExternalLink size={12} />
                                         {tr('setup.api.getKey', { provider: selectedPromptProvider?.name || '' })}
@@ -425,7 +425,7 @@ export function SetupWizard() {
                     <button
                         onClick={handleFinish}
                         disabled={!imageApiKey}
-                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-bold shadow-lg shadow-orange-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-bold shadow-lg shadow-primary/25 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                     >
                         {tr('setup.cta.getStarted')}
                         <ArrowRight size={20} />
@@ -433,7 +433,7 @@ export function SetupWizard() {
 
                     <button
                         onClick={handleSkip}
-                        className="w-full text-xs font-medium text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors py-2"
+                        className="w-full text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
                     >
                         {tr('setup.cta.skipForNow')}
                     </button>

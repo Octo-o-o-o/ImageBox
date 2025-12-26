@@ -5,6 +5,9 @@ export const PRESET_TEMPLATES: Array<{
   promptTemplate: string;
   systemPrompt: string;
   promptGeneratorId: null;
+  icon?: string | null;
+  description?: string | null;
+  isEnabled?: boolean;
 }> = [
   {
     name: 'Universal Optimizer',

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { configStore } from '@/lib/store';
 
 /**
  * 获取系统安全配置状态
@@ -7,15 +7,14 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET() {
   try {
+    const config = await configStore.read();
+
     // 检查是否有任何授权码（包括过期和撤销的，因为它们表明用户已经配置过）
-    const tokenCount = await prisma.accessToken.count();
-    
+    const tokenCount = Object.keys(config.tokens).length;
+
     // 获取远程访问开关状态
-    const setting = await prisma.setting.findUnique({
-      where: { key: 'remoteAccessEnabled' }
-    });
-    const remoteAccessEnabled = setting?.value === 'true';
-    
+    const remoteAccessEnabled = config.settings['remoteAccessEnabled'] === 'true';
+
     return NextResponse.json({
       hasAnyToken: tokenCount > 0,
       remoteAccessEnabled,
@@ -29,5 +28,3 @@ export async function GET() {
     );
   }
 }
-
-

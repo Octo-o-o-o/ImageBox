@@ -25,7 +25,6 @@ const nextConfig: NextConfig = {
   },
   images: {
     // Disable Next.js image optimization for Electron builds
-    // Sharp module has compatibility issues with Electron's runtime
     // Local images don't benefit from server-side optimization anyway
     unoptimized: true,
   },

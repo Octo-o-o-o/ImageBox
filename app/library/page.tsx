@@ -6,7 +6,9 @@ import { isDesktopApp } from '@/lib/env';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
+// Using regular img instead of Next.js Image component because:
+// 1. Image optimization is disabled globally in next.config.ts
+// 2. Next.js Image has issues with dynamic API routes for local files
 import {
   Image as ImageIcon,
   Folder,
@@ -920,8 +922,8 @@ export default function LibraryPage() {
                       onToggleFavorite={(e) => handleToggleFavorite(img.id, e)}
                       onDelete={(e) => handleDeleteImage(img.id, e)}
                       onMove={(e) => openMoveDialog(img.id, e)}
-                      onCopy={(e) => handleCopyImage(getImageUrl(img.path, isCustomStoragePath), e)}
-                      onDownload={(e) => handleDownloadImage(getImageUrl(img.path, isCustomStoragePath), img.finalPrompt, e)}
+                      onCopy={(e) => handleCopyImage(getImageUrl(img.path, isCustomStoragePath, isDesktopMode), e)}
+                      onDownload={(e) => handleDownloadImage(getImageUrl(img.path, isCustomStoragePath, isDesktopMode), img.finalPrompt, e)}
                       tr={tr}
                     />
                   ))}
@@ -1086,9 +1088,6 @@ function ImageGridItem({
     return getImageUrl(img.path, isCustomStoragePath, isDesktopMode);
   }, [img.thumbnailPath, img.path, isCustomStoragePath, isDesktopMode]);
 
-  // Use unoptimized for API-served images (desktop mode or custom storage path)
-  const useUnoptimized = isDesktopMode || isCustomStoragePath;
-
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -1111,15 +1110,11 @@ function ImageGridItem({
         }
       }}
     >
-      <Image
+      <img
         src={imageUrl}
         alt={img.finalPrompt || 'Generated image'}
-        fill
-        sizes="384px"
-        className="object-cover transition-transform duration-500 group-hover:scale-110"
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         loading="lazy"
-        quality={75}
-        unoptimized={useUnoptimized}
       />
       
       {/* Selection Checkbox */}
@@ -1247,9 +1242,6 @@ function ImageListItem({
     return getImageUrl(img.path, isCustomStoragePath, isDesktopMode);
   }, [img.thumbnailPath, img.path, isCustomStoragePath, isDesktopMode]);
 
-  // Use unoptimized for API-served images (desktop mode or custom storage path)
-  const useUnoptimized = isDesktopMode || isCustomStoragePath;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -1297,15 +1289,11 @@ function ImageListItem({
         isSelectionMode ? "" : "col-span-6 md:col-span-5"
       )}>
         <div className="relative w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0 border border-border">
-          <Image
+          <img
             src={imageUrl}
             alt=""
-            fill
-            sizes="40px"
-            className="object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
-            quality={50}
-            unoptimized={useUnoptimized}
           />
           {img.fileMissing && (
              <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center">
@@ -1503,15 +1491,10 @@ function PreviewModal({
 
         {/* Image Area */}
         <div className="flex-1 bg-black/5 dark:bg-black/40 relative flex items-center justify-center p-4 min-h-[300px]">
-          <Image
+          <img
             src={previewImage.url}
             alt={previewImage.prompt}
-            fill
-            className="object-contain"
-            sizes="(max-width: 768px) 100vw, 60vw"
-            priority
-            quality={90}
-            unoptimized
+            className="max-w-full max-h-full object-contain"
           />
         </div>
 

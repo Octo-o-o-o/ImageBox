@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getRunLogs } from '@/app/actions';
+import { getRunLogs, getAllRunLogs } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Activity, 
@@ -75,31 +75,39 @@ export default function RunLogPage() {
   const loadLogs = async () => {
     setLoading(true);
     try {
-      // Calculate date range based on timeRange
-      let start: Date | undefined;
-      const now = new Date();
+      // Calculate days based on timeRange
+      let days: number | undefined;
 
       switch (timeRange) {
         case '24h':
-          start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          days = 1;
           break;
         case '7d':
-          start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          days = 7;
           break;
         case '30d':
-          start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          days = 30;
           break;
         case 'all':
         default:
-          start = undefined;
+          days = undefined;
           break;
       }
 
-      const serverLogs = await getRunLogs({
-        type: filterType || undefined,
-        status: filterStatus || undefined,
-        start,
-      });
+      let serverLogs;
+      if (days === undefined) {
+        // Load all logs
+        serverLogs = await getAllRunLogs({
+          type: filterType || undefined,
+          status: filterStatus || undefined,
+        });
+      } else {
+        serverLogs = await getRunLogs({
+          type: filterType || undefined,
+          status: filterStatus || undefined,
+          days,
+        });
+      }
       setLogs(serverLogs);
     } catch (e) {
       console.error(e);

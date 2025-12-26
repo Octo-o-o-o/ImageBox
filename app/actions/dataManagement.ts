@@ -1,6 +1,6 @@
 'use server'
 
-import { prisma } from '@/lib/prisma';
+import { configStore, resourcesStore, libraryStore, runLogStore } from '@/lib/store';
 import crypto from 'crypto';
 import path from 'path';
 import { PRESET_TEMPLATE_NAMES } from '@/lib/presetTemplates';
@@ -51,16 +51,6 @@ interface BackupData {
     isEnabled: boolean;
   }>;
 }
-
-type BackupAccessTokenRow = {
-  name: string;
-  description: string | null;
-  token: string;
-  expiresAt: Date;
-  isRevoked: boolean;
-  createdAt: Date;
-  lastUsedAt: Date | null;
-};
 
 // Derive encryption key from password
 function deriveKey(password: string, salt: Buffer): Buffer {
@@ -123,98 +113,75 @@ export async function createBackup(password: string): Promise<{
       return { success: false, error: 'Password is required' };
     }
 
-    // Fetch remote access settings + tokens
-    const remoteAccessSetting = await prisma.setting.findUnique({
-      where: { key: 'remoteAccessEnabled' },
-      select: { value: true },
-    });
-    const remoteAccessEnabled = remoteAccessSetting?.value === 'true';
+    // Read all stores
+    const config = await configStore.read();
+    const resources = await resourcesStore.read();
 
-    const accessTokens = await prisma.accessToken.findMany({
-      select: {
-        name: true,
-        description: true,
-        token: true,
-        expiresAt: true,
-        isRevoked: true,
-        createdAt: true,
-        lastUsedAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Get remote access setting
+    const remoteAccessEnabled = config.settings['remoteAccessEnabled'] === 'true';
 
-    // Fetch all providers
-    const providers = await prisma.provider.findMany({
-      select: {
-        name: true,
-        type: true,
-        baseUrl: true,
-        apiKey: true,
-      },
-    });
+    // Get access tokens
+    const accessTokens = Object.values(config.tokens).map(t => ({
+      name: t.name,
+      description: t.description,
+      token: t.token,
+      expiresAt: t.expiresAt,
+      isRevoked: t.isRevoked,
+      createdAt: t.createdAt,
+      lastUsedAt: t.lastUsedAt,
+    }));
 
-    // Fetch all models
-    const models = await prisma.aIModel.findMany({
-      select: {
-        name: true,
-        modelIdentifier: true,
-        type: true,
-        parameterConfig: true,
-        provider: { select: { name: true } },
-      },
-    });
+    // Get providers
+    const providers = Object.values(resources.providers).map(p => ({
+      name: p.name,
+      type: p.type,
+      baseUrl: p.baseUrl,
+      apiKey: p.apiKey,
+    }));
 
-    // Fetch all templates
-    const templates = await prisma.template.findMany({
-      select: {
-        name: true,
-        icon: true,
-        description: true,
-        promptTemplate: true,
-        systemPrompt: true,
-        promptGenerator: { select: { name: true } },
-        isEnabled: true,
-      },
-    });
+    // Build provider ID to name map for models
+    const providerIdToName: Record<string, string> = {};
+    for (const p of Object.values(resources.providers)) {
+      providerIdToName[p.id] = p.name;
+    }
+
+    // Get models with provider names
+    const models = Object.values(resources.models)
+      .filter(m => m.providerId && providerIdToName[m.providerId])
+      .map(m => ({
+        name: m.name,
+        modelIdentifier: m.modelIdentifier,
+        providerName: providerIdToName[m.providerId!],
+        type: m.type,
+        parameterConfig: m.parameterConfig,
+      }));
+
+    // Build model ID to name map for templates
+    const modelIdToName: Record<string, string> = {};
+    for (const m of Object.values(resources.models)) {
+      modelIdToName[m.id] = m.name;
+    }
+
+    // Get templates
+    const templates = Object.values(resources.templates).map(t => ({
+      name: t.name,
+      icon: t.icon,
+      description: t.description,
+      promptTemplate: t.promptTemplate,
+      systemPrompt: t.systemPrompt,
+      promptGeneratorName: t.promptGeneratorId ? modelIdToName[t.promptGeneratorId] || null : null,
+      isEnabled: t.isEnabled,
+    }));
 
     // Structure backup data
     const backupData: BackupData = {
       version: '1.1',
       timestamp: new Date().toISOString(),
       remoteAccessEnabled,
-      accessTokens: accessTokens.map((t: BackupAccessTokenRow) => ({
-        name: t.name,
-        description: t.description ?? null,
-        token: t.token,
-        expiresAt: t.expiresAt.toISOString(),
-        isRevoked: t.isRevoked,
-        createdAt: t.createdAt.toISOString(),
-        lastUsedAt: t.lastUsedAt ? t.lastUsedAt.toISOString() : null,
-      })),
-      providers: providers.map(p => ({
-        name: p.name,
-        type: p.type,
-        baseUrl: p.baseUrl,
-        apiKey: p.apiKey,
-      })),
-      models: models
-        .filter(m => m.provider !== null)
-        .map(m => ({
-          name: m.name,
-          modelIdentifier: m.modelIdentifier,
-          providerName: m.provider!.name,
-          type: m.type,
-          parameterConfig: m.parameterConfig,
-        })),
-      templates: templates.map(t => ({
-        name: t.name,
-        icon: t.icon,
-        description: t.description,
-        promptTemplate: t.promptTemplate,
-        systemPrompt: t.systemPrompt,
-        promptGeneratorName: t.promptGenerator?.name ?? null,
-        isEnabled: t.isEnabled,
-      })),
+      accessTokens,
+      providers,
+      models,
+      templates,
     };
 
     // Encrypt backup
@@ -275,135 +242,148 @@ export async function restoreBackup(
       return { success: false, error: 'Invalid backup file format' };
     }
 
-    // Use transaction for atomic restore
-    const result = await prisma.$transaction(async (tx) => {
-      let providersRestored = 0;
-      let modelsRestored = 0;
-      let templatesRestored = 0;
+    const resources = await resourcesStore.read();
+    const config = await configStore.read();
 
-      // Restore providers (skip if exists)
-      for (const provider of backupData.providers) {
-        const existing = await tx.provider.findFirst({
-          where: { name: provider.name },
-        });
+    let providersRestored = 0;
+    let modelsRestored = 0;
+    let templatesRestored = 0;
 
-        if (!existing) {
-          await tx.provider.create({
-            data: {
-              name: provider.name,
-              type: provider.type,
-              baseUrl: provider.baseUrl,
-              apiKey: provider.apiKey,
-            },
-          });
-          providersRestored++;
+    // Build name-to-id maps for existing data
+    const existingProviderByName: Record<string, string> = {};
+    for (const p of Object.values(resources.providers)) {
+      existingProviderByName[p.name] = p.id;
+    }
+
+    const existingModelByNameAndProvider: Record<string, string> = {};
+    for (const m of Object.values(resources.models)) {
+      if (m.providerId) {
+        const provider = resources.providers[m.providerId];
+        if (provider) {
+          existingModelByNameAndProvider[`${m.name}:${provider.name}`] = m.id;
         }
       }
+    }
 
-      // Restore models (skip if exists)
-      for (const model of backupData.models) {
-        // Find provider
-        const provider = await tx.provider.findFirst({
-          where: { name: model.providerName },
-        });
+    const existingTemplateByName: Record<string, string> = {};
+    for (const t of Object.values(resources.templates)) {
+      existingTemplateByName[t.name] = t.id;
+    }
 
-        if (!provider) {
-          console.warn(`Provider ${model.providerName} not found for model ${model.name}`);
-          continue;
-        }
+    const now = new Date().toISOString();
 
-        const existing = await tx.aIModel.findFirst({
-          where: {
-            name: model.name,
-            providerId: provider.id,
-          },
-        });
+    // Restore providers (skip if exists)
+    for (const provider of backupData.providers) {
+      if (!existingProviderByName[provider.name]) {
+        const id = crypto.randomUUID();
+        resources.providers[id] = {
+          id,
+          name: provider.name,
+          type: provider.type as "GEMINI" | "OPENAI" | "LOCAL",
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+          localBackend: null,
+          localModelPath: null,
+          createdAt: now,
+        };
+        existingProviderByName[provider.name] = id;
+        providersRestored++;
+      }
+    }
 
-        if (!existing) {
-          await tx.aIModel.create({
-            data: {
-              name: model.name,
-              modelIdentifier: model.modelIdentifier,
-              type: model.type,
-              parameterConfig: model.parameterConfig,
-              providerId: provider.id,
-            },
-          });
-          modelsRestored++;
-        }
+    // Restore models (skip if exists)
+    for (const model of backupData.models) {
+      const providerId = existingProviderByName[model.providerName];
+      if (!providerId) {
+        console.warn(`Provider ${model.providerName} not found for model ${model.name}`);
+        continue;
       }
 
-      // Restore templates (skip if exists)
-      for (const template of backupData.templates) {
-        const existing = await tx.template.findFirst({
-          where: { name: template.name },
-        });
-
-        if (!existing) {
-          // Find prompt generator if specified
-          let promptGenerator = null;
-          if (template.promptGeneratorName) {
-            promptGenerator = await tx.aIModel.findFirst({
-              where: { name: template.promptGeneratorName },
-            });
-          }
-
-          await tx.template.create({
-            data: {
-              name: template.name,
-              icon: template.icon,
-              description: template.description,
-              promptTemplate: template.promptTemplate,
-              systemPrompt: template.systemPrompt,
-              promptGeneratorId: promptGenerator?.id,
-              isEnabled: template.isEnabled,
-            },
-          });
-          templatesRestored++;
-        }
+      const modelKey = `${model.name}:${model.providerName}`;
+      if (!existingModelByNameAndProvider[modelKey]) {
+        const id = crypto.randomUUID();
+        resources.models[id] = {
+          id,
+          name: model.name,
+          modelIdentifier: model.modelIdentifier,
+          type: model.type as "TEXT" | "IMAGE",
+          providerId,
+          parameterConfig: model.parameterConfig,
+          createdAt: now,
+        };
+        existingModelByNameAndProvider[modelKey] = id;
+        modelsRestored++;
       }
+    }
 
-      // Restore remote access settings (if present in backup)
-      if (typeof backupData.remoteAccessEnabled === 'boolean') {
-        await tx.setting.upsert({
-          where: { key: 'remoteAccessEnabled' },
-          update: { value: backupData.remoteAccessEnabled ? 'true' : 'false' },
-          create: { key: 'remoteAccessEnabled', value: backupData.remoteAccessEnabled ? 'true' : 'false' },
-        });
+    // Build model name to ID map after restoring models
+    const modelNameToId: Record<string, string> = {};
+    for (const m of Object.values(resources.models)) {
+      modelNameToId[m.name] = m.id;
+    }
+
+    // Restore templates (skip if exists)
+    for (const template of backupData.templates) {
+      if (!existingTemplateByName[template.name]) {
+        const id = crypto.randomUUID();
+        const promptGeneratorId = template.promptGeneratorName
+          ? modelNameToId[template.promptGeneratorName] || null
+          : null;
+
+        resources.templates[id] = {
+          id,
+          name: template.name,
+          icon: template.icon,
+          description: template.description,
+          promptTemplate: template.promptTemplate,
+          systemPrompt: template.systemPrompt,
+          promptGeneratorId,
+          isEnabled: template.isEnabled,
+          createdAt: now,
+          updatedAt: now,
+        };
+        templatesRestored++;
       }
+    }
 
-      // Restore access tokens (skip if token already exists)
-      if (Array.isArray(backupData.accessTokens)) {
-        for (const t of backupData.accessTokens) {
-          if (!t?.token) continue;
-          const existing = await tx.accessToken.findUnique({
-            where: { token: t.token },
-          });
-          if (existing) continue;
+    // Save resources
+    await resourcesStore.write(resources);
 
-          await tx.accessToken.create({
-            data: {
-              name: t.name,
-              description: t.description ?? null,
-              token: t.token,
-              expiresAt: new Date(t.expiresAt),
-              isRevoked: !!t.isRevoked,
-              createdAt: new Date(t.createdAt),
-              lastUsedAt: t.lastUsedAt ? new Date(t.lastUsedAt) : null,
-            },
-          });
-        }
+    // Restore remote access settings (if present in backup)
+    if (typeof backupData.remoteAccessEnabled === 'boolean') {
+      config.settings['remoteAccessEnabled'] = backupData.remoteAccessEnabled ? 'true' : 'false';
+    }
+
+    // Restore access tokens (skip if token already exists)
+    if (Array.isArray(backupData.accessTokens)) {
+      const existingTokens = new Set(Object.values(config.tokens).map(t => t.token));
+
+      for (const t of backupData.accessTokens) {
+        if (!t?.token || existingTokens.has(t.token)) continue;
+
+        const id = crypto.randomUUID();
+        config.tokens[id] = {
+          id,
+          name: t.name,
+          description: t.description,
+          token: t.token,
+          expiresAt: t.expiresAt,
+          isRevoked: t.isRevoked,
+          createdAt: t.createdAt,
+          lastUsedAt: t.lastUsedAt,
+        };
       }
+    }
 
-      return { providersRestored, modelsRestored, templatesRestored };
-    });
+    // Save config
+    await configStore.write(config);
 
     return {
       success: true,
       summary: {
-        providers: result.providersRestored,
-        models: result.modelsRestored,
-        templates: result.templatesRestored,
+        providers: providersRestored,
+        models: modelsRestored,
+        templates: templatesRestored,
       },
     };
   } catch (error) {
@@ -424,71 +404,63 @@ export async function resetDatabase(): Promise<{
   error?: string;
 }> {
   try {
-    // Use transaction for atomic reset
-    await prisma.$transaction(async (tx) => {
-      // 0. Delete remote access tokens
-      await tx.accessToken.deleteMany({});
+    // Read all stores
+    const resources = await resourcesStore.read();
+    const config = await configStore.read();
 
-      // 1. Delete user data (Images, Folders, RunLogs)
-      await tx.image.deleteMany({});
-      await tx.folder.deleteMany({});
-      await tx.runLog.deleteMany({});
+    // 1. Clear access tokens
+    config.tokens = {};
 
-      // 2. Delete user-created templates (keep preset templates)
-      await tx.template.deleteMany({
-        where: {
-          name: {
-            notIn: PRESET_TEMPLATE_NAMES
-          }
-        }
-      });
-
-      // 3. Delete user-created models (keep preset models with id starting with "preset-")
-      await tx.aIModel.deleteMany({
-        where: {
-          NOT: {
-            id: {
-              startsWith: 'preset-'
-            }
-          }
-        }
-      });
-
-      // 4. Delete user-created providers (keep preset providers with id starting with "preset-")
-      await tx.provider.deleteMany({
-        where: {
-          NOT: {
-            id: {
-              startsWith: 'preset-'
-            }
-          }
-        }
-      });
-
-      // 5. Clear API keys from preset providers (back to unconfigured state)
-      await tx.provider.updateMany({
-        where: {
-          id: {
-            startsWith: 'preset-'
-          }
-        },
-        data: {
-          apiKey: null
-        }
-      });
-
-      // 6. Delete settings except preset initialization flags
-      await tx.setting.deleteMany({
-        where: {
-          AND: [
-            { key: { not: 'presetsInitialized' } },
-            { key: { not: 'presetsTemplatesInitialized' } }
-          ]
-        }
-      });
+    // 2. Clear library data (images and folders)
+    await libraryStore.write({
+      version: '1.0',
+      folders: {},
+      images: {}
     });
 
-    // No need to re-initialize presets since we preserved them
+    // 3. Delete run logs
+    await runLogStore.deleteAll();
+
+    // 4. Delete user-created templates (keep preset templates)
+    const presetTemplateNames = new Set(PRESET_TEMPLATE_NAMES);
+    for (const [id, template] of Object.entries(resources.templates)) {
+      if (!presetTemplateNames.has(template.name)) {
+        delete resources.templates[id];
+      }
+    }
+
+    // 5. Delete user-created models (keep preset models with id starting with "preset-")
+    for (const [id] of Object.entries(resources.models)) {
+      if (!id.startsWith('preset-')) {
+        delete resources.models[id];
+      }
+    }
+
+    // 6. Delete user-created providers (keep preset providers with id starting with "preset-")
+    // And clear API keys from preset providers
+    for (const [id, provider] of Object.entries(resources.providers)) {
+      if (!id.startsWith('preset-')) {
+        delete resources.providers[id];
+      } else {
+        // Clear API key from preset provider
+        resources.providers[id] = { ...provider, apiKey: null };
+      }
+    }
+
+    // 7. Clear settings except preset initialization flags
+    const preserveKeys = new Set(['presetsInitialized', 'presetsTemplatesInitialized', 'presetMigrationV2Done']);
+    const newSettings: Record<string, string> = {};
+    for (const [key, value] of Object.entries(config.settings)) {
+      if (preserveKeys.has(key)) {
+        newSettings[key] = value;
+      }
+    }
+    config.settings = newSettings;
+
+    // Save changes
+    await resourcesStore.write(resources);
+    await configStore.write(config);
+
     return { success: true };
   } catch (error) {
     console.error('Database reset error:', error);

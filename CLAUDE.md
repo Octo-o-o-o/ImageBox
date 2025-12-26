@@ -11,7 +11,6 @@ ImageBox is a local-first AI image generation tool built with Next.js 16. It all
 ### Setup
 ```bash
 npm install                    # Install dependencies
-npm run db:setup               # Initialize database (generate + push)
 ```
 
 ### Development
@@ -20,14 +19,6 @@ npm run dev                    # Start Next.js dev server (http://localhost:3000
 npm run build                  # Build for production
 npm start                      # Start production server
 npm run lint                   # Run ESLint
-```
-
-### Database Management
-```bash
-npm run db:studio              # Open Prisma Studio to view/edit database
-npm run db:push                # Push schema changes to SQLite
-npm run db:generate            # Generate Prisma client types
-npm run db:setup               # Generate + push (combined)
 ```
 
 ### Docker Deployment
@@ -59,14 +50,13 @@ git tag v0.1.x && git push origin v0.1.x
 - Images pushed to: `octoooo/imagebox:{version}` and `octoooo/imagebox:latest`
 
 **Common Build Issues:**
-- **Prerender error with Prisma**: Add `export const dynamic = 'force-dynamic'` to pages with database operations
 - **TypeScript errors**: Run `npm run build` locally before releasing to catch type errors early
 
 ## Architecture
 
 ### Tech Stack
 - **Framework**: Next.js 16 (App Router, React Server Components)
-- **Database**: SQLite via Prisma ORM
+- **Storage**: JSON file storage (no external database required)
 - **Styling**: Tailwind CSS v4 + Framer Motion for animations
 - **AI Models**:
   - Cloud: Google Gemini, OpenAI DALL-E 3, OpenAI-compatible endpoints
@@ -89,46 +79,58 @@ components/
   ├── ThemeProvider.tsx     # Theme system (dark/light/system)
   └── LanguageProvider.tsx  # i18n system (13 languages)
 lib/
-  ├── prisma.ts                # Prisma client singleton
-  ├── modelParameters.ts       # Model parameter definitions and API mapping
-  ├── presetProviders.ts       # Built-in provider and model presets (Google Gemini, OpenRouter)
-  ├── localModelInstaller.ts   # Local model (stable-diffusion.cpp) installation automation
-  └── i18n/index.ts            # Translation definitions
-prisma/
-  └── schema.prisma         # Database schema (Provider, AIModel, Template, Image, Folder, Setting, RunLog)
-public/generated/           # Generated images stored here (auto-created)
+  ├── store/                    # JSON file storage system
+  │   ├── index.ts              # Store instances (configStore, resourcesStore, libraryStore, runLogStore)
+  │   ├── types.ts              # TypeScript types for all records
+  │   ├── jsonStore.ts          # Generic JSON store with atomic writes
+  │   ├── runLogStore.ts        # JSONL store for run logs (organized by month)
+  │   └── utils.ts              # Path utilities (getDataPath)
+  ├── modelParameters.ts        # Model parameter definitions and API mapping
+  ├── presetProviders.ts        # Built-in provider and model presets (Google Gemini, OpenRouter)
+  ├── presetTemplates.ts        # Built-in template presets
+  ├── localModelInstaller.ts    # Local model (stable-diffusion.cpp) installation automation
+  └── i18n/index.ts             # Translation definitions
+data/                           # Runtime data directory (auto-created)
+  ├── config.json               # Settings + Access tokens
+  ├── resources.json            # Providers + Models + Templates
+  ├── library.json              # Folders + Images
+  └── run-logs/*.jsonl          # Run logs by month (e.g., 2025-01.jsonl)
+public/generated/               # Generated images stored here (auto-created)
 ```
 
 ### Key Design Patterns
 
 **Server Actions Pattern**: All database and AI API calls are in `app/actions.ts` as Server Actions. Client components import and call these actions directly. This keeps the client bundle small and API keys secure.
 
-**Preset Providers System**: On first app launch, `ensurePresetProvidersAndModels()` auto-creates preset providers (Google Gemini, OpenRouter) and their models in the database. This happens only once (tracked by `presetsInitialized` setting) and won't re-add user-deleted presets. Presets are defined in `lib/presetProviders.ts`.
+**Preset System**:
+- **Templates**: On first app launch, `ensurePresetTemplates()` auto-creates preset templates. Presets defined in `lib/presetTemplates.ts`.
+- **Providers/Models**: Created on-demand via `activatePresetProvider()` when user configures an API key in SetupWizard. Presets defined in `lib/presetProviders.ts`.
 
-**Database Schema**:
-- `Provider`: AI service providers (Google Gemini, OpenAI, custom endpoints)
-- `AIModel`: Individual models with parameter configurations (Gemini 2.5/3 Pro, DALL-E 3, etc.)
-- `Template`: Reusable prompts with `{{variable}}` slots, linked to prompt/image models
-- `Image`: Generated image metadata (path, prompt, model, params, favorite status)
-- `Folder`: Organization system for images (default + user-created)
-- `RunLog`: Complete API call history (request, response, duration, errors)
-- `Setting`: Key-value store for app configuration
+**Data Schema** (stored in JSON files):
+- `ProviderRecord`: AI service providers (Google Gemini, OpenAI, custom endpoints)
+- `ModelRecord`: Individual models with parameter configurations (Gemini 2.5/3 Pro, DALL-E 3, etc.)
+- `TemplateRecord`: Reusable prompts with `{{variable}}` slots, linked to prompt/image models
+- `ImageRecord`: Generated image metadata (path, prompt, model, params, favorite status)
+- `FolderRecord`: Organization system for images (default + user-created)
+- `RunLog`: Complete API call history (request, response, duration, errors) - stored as JSONL
+- `TokenRecord`: Access tokens for remote access
+- Settings: Key-value store for app configuration
 
-**Image Storage**: Generated images are saved as base64-decoded PNG files in `public/generated/` with timestamp-uuid filenames. The database stores the relative path (`/generated/{filename}.png`).
+**Image Storage**: Generated images are saved as base64-decoded PNG files in `public/generated/` with timestamp-uuid filenames. The JSON store records the relative path (`/generated/{filename}.png`).
 
 **Data Flow for Image Generation**:
 1. User enters prompt in Create page (`app/create/page.tsx`)
 2. Calls `generateImageAction()` from `app/actions.ts`
-3. Action fetches provider/model config from database, calls AI API
+3. Action fetches provider/model config from JSON store, calls AI API
 4. API returns base64 image data in response
-5. Action calls `saveGeneratedImage()` to write file to disk and create DB record
+5. Action calls `saveGeneratedImage()` to write file to disk and create JSON record
 6. Client updates UI with new image path
 
 ### Component Architecture
 
 **Client vs Server**:
 - All route pages are client components (`'use client'`) to support interactivity
-- Server Actions handle all server-side logic (DB, API, file I/O)
+- Server Actions handle all server-side logic (JSON store, API, file I/O)
 - No API routes (`/api`) are used; Server Actions replace them
 
 **State Management**:
@@ -140,8 +142,12 @@ public/generated/           # Generated images stored here (auto-created)
 
 ## Important Implementation Notes
 
-### Prisma Configuration
-The Prisma client is configured for SQLite in `prisma/schema.prisma`. The database file is `dev.db` in the root directory. Use `lib/prisma.ts` to import the singleton client instance.
+### JSON Store System
+The app uses a custom JSON file storage system (`lib/store/`):
+- **JsonStore**: Generic class for reading/writing JSON files with atomic writes (tmp + rename) and in-memory caching
+- **RunLogStore**: JSONL-specific store for append-only logs, organized by month (YYYY-MM.jsonl)
+- **Data path**: `data/` directory in project root (dev) or `ELECTRON_USER_DATA_PATH/data` (Electron)
+- Import stores from `@/lib/store`: `configStore`, `resourcesStore`, `libraryStore`, `runLogStore`
 
 ### Path Aliases
 TypeScript is configured with `@/*` pointing to the root directory. Use `@/app/actions` instead of `../app/actions`.
@@ -157,7 +163,7 @@ Framer Motion is used for:
 Keep animations subtle and performant.
 
 ### Environment Variables & Provider Setup
-The app stores API keys in the database (Provider table) rather than `.env` files. Users configure providers and models via the Models page UI (`/models`). On first launch, preset providers (Google Gemini, OpenRouter) and models are auto-created by `ensurePresetProvidersAndModels()` with null API keys. Users must configure API keys before use.
+The app stores API keys in JSON files (resources.json) rather than `.env` files. Users configure providers and models via the Models page UI (`/models`) or SetupWizard. Preset providers and models are created on-demand via `activatePresetProvider()` when user enters an API key.
 
 ### Image Generation Error Handling
 The Gemini API may return text instead of images if the prompt is refused or fails. Always check `response.candidates[0].content.parts` for `inlineData` with `mimeType` starting with `image/`. If no images are returned, display the error message to the user.
@@ -183,16 +189,16 @@ Multi-model support with automatic parameter mapping (`lib/modelParameters.ts`):
 2. Add route to `navItems` array in `components/Sidebar.tsx`
 3. Import icon from `lucide-react`
 
-### Adding a Database Model
-1. Edit `prisma/schema.prisma`
-2. Run `npm run db:setup` to apply changes and update TypeScript types
-3. Add Server Actions in `app/actions.ts` for CRUD operations
+### Adding a Data Model
+1. Add type definition in `lib/store/types.ts`
+2. Add to appropriate store (configStore, resourcesStore, or libraryStore)
+3. Add Server Actions in `app/actions/` for CRUD operations
 
 ### Adding a Server Action
-1. Add `'use server'` function to `app/actions.ts`
-2. Import `prisma` from `@/lib/prisma` if accessing database
-3. Return plain objects (no functions, dates as strings if needed)
-4. Import and call from client components
+1. Add `'use server'` function to appropriate file in `app/actions/`
+2. Import store from `@/lib/store` if accessing data
+3. Return plain objects (dates as ISO strings)
+4. Export from `app/actions.ts` and import in client components
 
 ### Working with Templates
 Templates use a simple variable replacement system. The `basePrompt` field can contain variables like `{{subject}}` or `{{style}}`. When implementing variable substitution, extract variable names using regex `\{\{(\w+)\}\}` and build a form UI for each variable.
@@ -216,11 +222,11 @@ Templates use a simple variable replacement system. The `basePrompt` field can c
 ## Gotchas and Important Notes
 
 - **Generated Images Directory**: The `public/generated/` folder is auto-created by `saveGeneratedImage()`. Don't manually create it or add it to git.
-- **SQLite Limitations**: SQLite doesn't support many concurrent writes. If implementing multi-user features, consider PostgreSQL.
-- **API Key Security**: The API key is stored in the database, not environment variables. This is intentional for the local-first design.
+- **Data Directory**: The `data/` folder is auto-created on first run. Contains all app data in JSON format.
+- **API Key Security**: API keys are stored in JSON files (resources.json), not environment variables. This is intentional for the local-first design.
 - **Model Name**: The default model is `gemini-3-pro-image-preview`. Verify this is the correct model name for the Gemini API version being used.
-- **Base64 Image Handling**: Images from Gemini come as base64 in the API response. They must be decoded and written to disk, not stored in the database.
-- **No Git Repository**: This workspace is not a git repository. If implementing version control features, initialize git first.
+- **Base64 Image Handling**: Images from Gemini come as base64 in the API response. They must be decoded and written to disk, not stored in JSON.
+- **Date Handling**: All dates are stored as ISO 8601 strings in JSON. Server Actions convert them to Date objects when returning to callers.
 
 ## Roadmap & TODO
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { configStore } from '@/lib/store';
 
 /**
  * 检测请求是否通过 HTTPS
@@ -11,7 +11,7 @@ function isSecureRequest(request: NextRequest): boolean {
   if (forwardedProto === 'https') {
     return true;
   }
-  
+
   // 检查请求 URL
   const url = new URL(request.url);
   return url.protocol === 'https:';
@@ -29,12 +29,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查远程访问开关
-    const remoteAccessSetting = await prisma.setting.findUnique({
-      where: { key: 'remoteAccessEnabled' }
-    });
+    const config = await configStore.read();
 
-    if (remoteAccessSetting?.value !== 'true') {
+    // 检查远程访问开关
+    if (config.settings['remoteAccessEnabled'] !== 'true') {
       return NextResponse.json(
         { error: 'Remote access is disabled' },
         { status: 403 }
@@ -42,9 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证 token
-    const accessToken = await prisma.accessToken.findUnique({
-      where: { token }
-    });
+    const accessToken = Object.values(config.tokens).find(t => t.token === token);
 
     if (!accessToken) {
       return NextResponse.json(
@@ -60,7 +56,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (accessToken.expiresAt < new Date()) {
+    const expiresAt = new Date(accessToken.expiresAt);
+    if (expiresAt < new Date()) {
       return NextResponse.json(
         { error: 'Token has expired' },
         { status: 401 }
@@ -68,10 +65,16 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新最后使用时间
-    await prisma.accessToken.update({
-      where: { id: accessToken.id },
-      data: { lastUsedAt: new Date() }
-    });
+    await configStore.update(d => ({
+      ...d,
+      tokens: {
+        ...d.tokens,
+        [accessToken.id]: {
+          ...accessToken,
+          lastUsedAt: new Date().toISOString()
+        }
+      }
+    }));
 
     // 设置 Cookie
     const response = NextResponse.json({
@@ -81,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Cookie 有效期与 token 一致，但最长7天
     const maxAge = Math.min(
-      Math.floor((accessToken.expiresAt.getTime() - Date.now()) / 1000),
+      Math.floor((expiresAt.getTime() - Date.now()) / 1000),
       7 * 24 * 60 * 60 // 7 days
     );
 
@@ -106,5 +109,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-

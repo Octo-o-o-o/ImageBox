@@ -12,35 +12,17 @@ directories:
 files:
   # Next.js standalone build (includes static files after prepare script)
   - .next/standalone/**/*
-  # Explicitly include dot-folders used by Prisma when nested under standalone node_modules (Windows packaging safety)
-  - .next/standalone/node_modules/.prisma/**/*
   # Electron main process
   - electron/**/*
   # Static assets
   - assets/**/*
-  # Prisma native bindings
-  - node_modules/.prisma/**/*
-  - node_modules/@prisma/**/*
-  # Native modules
-  - node_modules/better-sqlite3/**/*
   # Exclusions
   - "!**/*.map"
   - "!**/*.md"
-  - "!**/dev.db"
-  - "!**/*.db-journal"
   - "!**/dist-electron/**"
   - "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md}"
   - "!**/node_modules/*/{test,tests,__tests__}/**"
   - "!**/node_modules/**/*.d.ts"
-
-# 额外资源（不打包进 asar）
-extraResources:
-  - from: prisma/
-    to: prisma/
-    filter:
-      - "**/*"
-      - "!dev.db"
-      - "!*.db-journal"
 
 # macOS 配置
 mac:
@@ -137,4 +119,3 @@ publish:
 
 # 构建钩子
 afterSign: null
-afterPack: scripts/afterPack.js

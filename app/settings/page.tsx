@@ -45,6 +45,7 @@ import { replaceTemplate } from '@/lib/i18n';
 import { FolderBrowser } from '@/components/FolderBrowser';
 import { isDesktopApp } from '@/lib/env';
 import { DataManagement } from '@/components/DataManagement';
+import { isShortcutCmdEnterEnabled, setShortcutCmdEnterState, getShortcutKeyDisplay } from '@/lib/shortcutSettings';
 
 type AccessTokenDisplay = {
   id: string;
@@ -71,29 +72,29 @@ function SettingsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isSetupMode = searchParams.get('setup') === 'true';
-  
+
   const [loading, setLoading] = useState(true);
   const [remoteEnabled, setRemoteEnabled] = useState(false);
   const [tokens, setTokens] = useState<AccessTokenDisplay[]>([]);
   const [localIp, setLocalIp] = useState('localhost');
-  
+
   // Setup mode states
   const [setupStep, setSetupStep] = useState<'welcome' | 'create' | 'done'>('welcome');
   const [setupToken, setSetupToken] = useState<AccessTokenDisplay | null>(null);
-  
+
   // Create state
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [creating, setCreating] = useState(false);
-  
+
   // Token detail modal state
   const [selectedToken, setSelectedToken] = useState<AccessTokenDisplay | null>(null);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionInput, setDescriptionInput] = useState('');
   const [savingDescription, setSavingDescription] = useState(false);
-  
+
   // Delete confirm
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  
+
   // Copy states
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
@@ -112,6 +113,9 @@ function SettingsContent() {
   const [pendingStoragePath, setPendingStoragePath] = useState('');
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [isDesktopMode, setIsDesktopMode] = useState(() => isDesktopApp());
+
+  // Keyboard shortcuts state
+  const [shortcutCmdEnterEnabled, setShortcutCmdEnterEnabledState] = useState(() => isShortcutCmdEnterEnabled());
 
   // Helper for i18n with variables
   const tr = (key: string, vars?: Record<string, string | number>) =>
@@ -323,12 +327,12 @@ function SettingsContent() {
     const now = new Date();
     const expiry = new Date(date);
     const diff = expiry.getTime() - now.getTime();
-    
+
     if (diff < 0) return t('settings.tokens.expired');
-    
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
+
     if (days > 365 * 10) return t('settings.tokens.expiry.permanent');
     if (days > 0) return t('settings.tokens.expiresIn').replace('{time}', `${days}${t('settings.tokens.days')}`);
     if (hours > 0) return t('settings.tokens.expiresIn').replace('{time}', `${hours}${t('settings.tokens.hours')}`);
@@ -389,9 +393,9 @@ function SettingsContent() {
       const result = await updateStoragePath(newPath, { migrate });
       if (result.success) {
         if (migrate && (result.migratedCount || result.failedCount)) {
-          alert(tr('settings.storage.migrateSuccess', { 
-            moved: result.migratedCount || 0, 
-            failed: result.failedCount || 0 
+          alert(tr('settings.storage.migrateSuccess', {
+            moved: result.migratedCount || 0,
+            failed: result.failedCount || 0
           }));
         }
         await loadData();
@@ -454,7 +458,7 @@ function SettingsContent() {
               <p className="text-muted-foreground mb-6">
                 {t('settings.setup.welcomeDesc')}
               </p>
-              
+
               <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl mb-6">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
@@ -463,7 +467,7 @@ function SettingsContent() {
                   </p>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => setSetupStep('create')}
                 className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
@@ -475,7 +479,7 @@ function SettingsContent() {
               </button>
             </div>
           )}
-          
+
           {/* Create Step */}
           {setupStep === 'create' && (
             <div className="bg-card border border-border rounded-2xl p-8">
@@ -490,7 +494,7 @@ function SettingsContent() {
                   {t('settings.setup.selectExpiryDesc')}
                 </p>
               </div>
-              
+
               <div className="space-y-2 mb-6">
                 {EXPIRY_OPTIONS.map((opt) => (
                   <button
@@ -506,7 +510,7 @@ function SettingsContent() {
                   </button>
                 ))}
               </div>
-              
+
               <button
                 onClick={() => setSetupStep('welcome')}
                 className="w-full px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -517,7 +521,7 @@ function SettingsContent() {
               </button>
             </div>
           )}
-          
+
           {/* Done Step */}
           {setupStep === 'done' && setupToken && (
             <div className="bg-card border border-border rounded-2xl p-8">
@@ -532,7 +536,7 @@ function SettingsContent() {
                   {t('settings.setup.successDesc')}
                 </p>
               </div>
-              
+
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground uppercase mb-2">
@@ -559,7 +563,7 @@ function SettingsContent() {
                     </button>
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground uppercase mb-2">
                     {t('settings.tokens.quickLink')}
@@ -589,7 +593,7 @@ function SettingsContent() {
                   </p>
                 </div>
               </div>
-              
+
               <button
                 onClick={finishSetup}
                 className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
@@ -640,9 +644,8 @@ function SettingsContent() {
                 }}
                 readOnly={isDesktopApp()}
                 placeholder={t('settings.storage.pathPlaceholder')}
-                className={`flex-1 bg-secondary/50 border border-border rounded-lg p-3 focus:ring-2 focus:ring-primary/50 outline-none text-foreground text-sm font-mono ${
-                  isDesktopApp() ? 'cursor-pointer' : ''
-                }`}
+                className={`flex-1 bg-secondary/50 border border-border rounded-lg p-3 focus:ring-2 focus:ring-primary/50 outline-none text-foreground text-sm font-mono ${isDesktopApp() ? 'cursor-pointer' : ''
+                  }`}
                 onClick={isDesktopApp() ? handleBrowseStoragePath : undefined}
               />
               <button
@@ -673,11 +676,10 @@ function SettingsContent() {
 
             {/* Path validation result */}
             {pathValidation && (
-              <div className={`mt-2 p-2 rounded-lg flex items-center gap-2 text-sm ${
-                pathValidation.valid
+              <div className={`mt-2 p-2 rounded-lg flex items-center gap-2 text-sm ${pathValidation.valid
                   ? 'bg-green-500/10 text-green-600 dark:text-green-400'
                   : 'bg-red-500/10 text-red-600 dark:text-red-400'
-              }`}>
+                }`}>
                 {pathValidation.valid ? (
                   <CheckCircle2 className="w-4 h-4" />
                 ) : (
@@ -695,192 +697,248 @@ function SettingsContent() {
 
       {/* Remote Access Section */}
       <section className="space-y-4">
-        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <Globe className="w-5 h-5 text-primary" />
-          {t('settings.remoteAccess.title')}
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Globe className="w-5 h-5 text-primary" />
+            {t('settings.remoteAccess.title')}
+          </h2>
 
-        {/* Enable Remote Access Card */}
-        <div className="p-6 rounded-2xl bg-card border border-border">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h3 className="font-semibold text-foreground">{t('settings.remoteAccess.enable')}</h3>
-              <p className="text-sm text-muted-foreground">
-                {t('settings.remoteAccess.description')}
-              </p>
-            </div>
-
-            {/* Toggle Switch */}
-            <button
-              onClick={handleToggleRemote}
-              className={`relative w-14 h-8 rounded-full transition-colors duration-200 ${
-                remoteEnabled ? 'bg-primary' : 'bg-secondary'
+          {/* Toggle Switch */}
+          <button
+            onClick={handleToggleRemote}
+            className={`relative w-14 h-8 rounded-full transition-colors duration-200 ${remoteEnabled ? 'bg-primary' : 'bg-secondary'
               }`}
-              title={t('settings.remoteAccess.enable')}
-              aria-label={t('settings.remoteAccess.enable')}
+            title={t('settings.remoteAccess.enable')}
+            aria-label={t('settings.remoteAccess.enable')}
+          >
+            <motion.div
+              className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+              animate={{ left: remoteEnabled ? '1.75rem' : '0.25rem' }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {remoteEnabled && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-4 overflow-hidden"
+            >
+              {/* Enable Remote Access Card (Description) */}
+              <div className="p-6 rounded-2xl bg-card border border-border">
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-foreground">{t('settings.remoteAccess.enable')}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.remoteAccess.description')}
+                  </p>
+                </div>
+
+                {/* Status hint */}
+                <div className="mt-4 p-3 bg-muted/50 rounded-lg flex items-start gap-2">
+                  <ExternalLink className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="text-sm flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-foreground font-medium">{t('settings.remoteAccess.enabledHint')}</span>
+                      <span className="text-muted-foreground">{getExternalUrl()}</span>
+                      <button
+                        onClick={handleRefreshIp}
+                        disabled={refreshingIp}
+                        className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        title={t('settings.remoteAccess.refreshIp')}
+                        aria-label={t('settings.remoteAccess.refreshIp')}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${refreshingIp ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Access Tokens Card */}
+              <div className="p-6 rounded-2xl bg-card border border-border">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-semibold text-foreground">{t('settings.tokens.title')}</h3>
+                  </div>
+
+                  {/* Create Token Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowCreateMenu(!showCreateMenu)}
+                      disabled={creating}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      title={t('settings.tokens.create')}
+                      aria-label={t('settings.tokens.create')}
+                    >
+                      {creating ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      {t('settings.tokens.create')}
+                    </button>
+
+                    <AnimatePresence>
+                      {showCreateMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute right-0 top-full mt-2 w-48 bg-popover border border-border rounded-xl shadow-xl z-10 overflow-hidden"
+                        >
+                          {EXPIRY_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => handleCreateToken(opt.value)}
+                              className="w-full px-4 py-3 text-left text-sm hover:bg-secondary/50 transition-colors text-foreground"
+                              title={t(opt.label)}
+                              aria-label={t(opt.label)}
+                            >
+                              {t(opt.label)}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                {/* Tokens List */}
+                {tokens.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Key className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>{t('settings.tokens.empty')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {tokens.map((token) => (
+                      <div
+                        key={token.id}
+                        onClick={() => openTokenDetail(token)}
+                        className={`p-4 rounded-xl border transition-all cursor-pointer ${token.isExpired || token.isRevoked
+                            ? 'bg-muted/30 border-border opacity-60'
+                            : 'bg-secondary/30 border-border hover:border-primary/30 hover:bg-secondary/50'
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm text-foreground">{token.token.slice(0, 8)}...{token.token.slice(-4)}</span>
+                              {(token.isExpired || token.isRevoked) && (
+                                <span className="px-2 py-0.5 text-xs rounded-full bg-destructive/20 text-destructive">
+                                  {token.isRevoked ? t('settings.tokens.revoked') : t('settings.tokens.expired')}
+                                </span>
+                              )}
+                            </div>
+                            {token.description && (
+                              <p className="text-sm text-muted-foreground mt-1">{token.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatExpiry(token.expiresAt)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(token.token, 'token', token.id);
+                              }}
+                              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                              title={t('settings.tokens.copyToken')}
+                              aria-label={t('settings.tokens.copyToken')}
+                            >
+                              {copiedTokenId === token.id ? (
+                                <Check className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDeleteConfirm(token.id);
+                              }}
+                              className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                              title={t('common.delete')}
+                              aria-label={t('common.delete')}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
+      {/* Keyboard Shortcuts Section */}
+      <section className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-border flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+            <Key className="w-6 h-6 text-purple-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+              {t('settings.shortcuts.title')}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t('settings.shortcuts.desc')}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Quick Generate Shortcut */}
+          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <kbd className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground bg-muted border border-border rounded-lg shadow-sm">
+                  {getShortcutKeyDisplay()}
+                </kbd>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {t('settings.shortcuts.cmdEnter.name')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {tr('settings.shortcuts.cmdEnter.desc', { key: getShortcutKeyDisplay() })}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const newEnabled = !shortcutCmdEnterEnabled;
+                setShortcutCmdEnterState(newEnabled ? 'enabled' : 'disabled');
+                setShortcutCmdEnterEnabledState(newEnabled);
+              }}
+              className={`relative w-12 h-7 rounded-full transition-colors ${
+                shortcutCmdEnterEnabled
+                  ? 'bg-primary'
+                  : 'bg-muted'
+              }`}
             >
               <motion.div
-                className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: remoteEnabled ? '1.75rem' : '0.25rem' }}
+                className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-sm"
+                animate={{
+                  left: shortcutCmdEnterEnabled ? '26px' : '4px',
+                }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
               />
             </button>
           </div>
-
-          {/* Status hint */}
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg flex items-start gap-2">
-            {remoteEnabled ? (
-              <>
-                <ExternalLink className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                <div className="text-sm flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-foreground font-medium">{t('settings.remoteAccess.enabledHint')}</span>
-                    <span className="text-muted-foreground">{getExternalUrl()}</span>
-                    <button
-                      onClick={handleRefreshIp}
-                      disabled={refreshingIp}
-                      className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                      title={t('settings.remoteAccess.refreshIp')}
-                      aria-label={t('settings.remoteAccess.refreshIp')}
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${refreshingIp ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <Shield className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <p className="text-sm text-muted-foreground">
-                  {t('settings.remoteAccess.disabledHint')}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Access Tokens Card */}
-        <div className="p-6 rounded-2xl bg-card border border-border">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Key className="w-5 h-5 text-primary" />
-              <h3 className="text-lg font-semibold text-foreground">{t('settings.tokens.title')}</h3>
-            </div>
-
-            {/* Create Token Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowCreateMenu(!showCreateMenu)}
-                disabled={creating}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-                title={t('settings.tokens.create')}
-                aria-label={t('settings.tokens.create')}
-              >
-                {creating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                {t('settings.tokens.create')}
-              </button>
-
-              <AnimatePresence>
-                {showCreateMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 top-full mt-2 w-48 bg-popover border border-border rounded-xl shadow-xl z-10 overflow-hidden"
-                  >
-                    {EXPIRY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleCreateToken(opt.value)}
-                        className="w-full px-4 py-3 text-left text-sm hover:bg-secondary/50 transition-colors text-foreground"
-                        title={t(opt.label)}
-                        aria-label={t(opt.label)}
-                      >
-                        {t(opt.label)}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Tokens List */}
-          {tokens.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Key className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>{t('settings.tokens.empty')}</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {tokens.map((token) => (
-                <div
-                  key={token.id}
-                  onClick={() => openTokenDetail(token)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                    token.isExpired || token.isRevoked
-                      ? 'bg-muted/30 border-border opacity-60'
-                      : 'bg-secondary/30 border-border hover:border-primary/30 hover:bg-secondary/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm text-foreground">{token.token.slice(0, 8)}...{token.token.slice(-4)}</span>
-                        {(token.isExpired || token.isRevoked) && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-destructive/20 text-destructive">
-                            {token.isRevoked ? t('settings.tokens.revoked') : t('settings.tokens.expired')}
-                          </span>
-                        )}
-                      </div>
-                      {token.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{token.description}</p>
-                      )}
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {formatExpiry(token.expiresAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(token.token, 'token', token.id);
-                        }}
-                        className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                        title={t('settings.tokens.copyToken')}
-                        aria-label={t('settings.tokens.copyToken')}
-                      >
-                        {copiedTokenId === token.id ? (
-                          <Check className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDeleteConfirm(token.id);
-                        }}
-                        className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                        title={t('common.delete')}
-                        aria-label={t('common.delete')}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </section>
 
@@ -912,17 +970,17 @@ function SettingsContent() {
                   {t('settings.storage.migrateTitle')}
                 </h3>
               </div>
-              
+
               <p className="text-sm text-muted-foreground mb-4">
                 {t('settings.storage.migrateDesc')}
               </p>
-              
+
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg mb-6">
                 <p className="text-sm text-amber-600 dark:text-amber-400">
                   {t('settings.storage.migrateWarning')}
                 </p>
               </div>
-              
+
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => doSaveStoragePath(pendingStoragePath, false)}
@@ -951,8 +1009,8 @@ function SettingsContent() {
 
       {/* Click outside to close create menu */}
       {showCreateMenu && (
-        <div 
-          className="fixed inset-0 z-0" 
+        <div
+          className="fixed inset-0 z-0"
           onClick={() => setShowCreateMenu(false)}
         />
       )}
@@ -997,7 +1055,7 @@ function SettingsContent() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 {/* Token */}
                 <div>
@@ -1025,7 +1083,7 @@ function SettingsContent() {
                     </button>
                   </div>
                 </div>
-                
+
                 {/* Quick Link */}
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground uppercase mb-2">
@@ -1055,7 +1113,7 @@ function SettingsContent() {
                     {t('settings.tokens.quickLinkHint')}
                   </p>
                 </div>
-                
+
                 {/* Description */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -1077,7 +1135,7 @@ function SettingsContent() {
                       </button>
                     )}
                   </div>
-                  
+
                   {editingDescription ? (
                     <div className="space-y-2">
                       <input
@@ -1115,7 +1173,7 @@ function SettingsContent() {
                   )}
                 </div>
               </div>
-              
+
               <div className="flex justify-between mt-6 pt-4 border-t border-border">
                 <button
                   onClick={() => setShowDeleteConfirm(selectedToken.id)}

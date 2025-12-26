@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { configStore, libraryStore } from '@/lib/store';
 import fs from 'fs/promises';
 import path from 'path';
 import { getGeneratedPath } from '@/lib/paths';
@@ -8,16 +8,15 @@ import { getGeneratedPath } from '@/lib/paths';
 // --- Settings ---
 
 export async function getSettings() {
-  const settings = await prisma.setting.findMany();
-  return settings.reduce((acc: Record<string, string>, curr: { key: string; value: string }) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>);
+  const data = await configStore.read();
+  return data.settings;
 }
 
 export async function saveSetting(key: string, value: string) {
-  await prisma.setting.upsert({
-    where: { key },
-    update: { value },
-    create: { key, value },
-  });
+  await configStore.update(data => ({
+    ...data,
+    settings: { ...data.settings, [key]: value }
+  }));
 }
 
 // --- Storage Configuration ---
@@ -26,8 +25,8 @@ export async function saveSetting(key: string, value: string) {
  * Get default storage path
  */
 function getDefaultStoragePath() {
-  // 桌面模式：USER_DATA_PATH/generated
-  // Web 模式：<cwd>/public/generated
+  // Desktop mode: USER_DATA_PATH/generated
+  // Web mode: <cwd>/public/generated
   return getGeneratedPath();
 }
 
@@ -35,12 +34,11 @@ function getDefaultStoragePath() {
  * Get storage configuration
  */
 export async function getStorageConfig() {
-  const type = await prisma.setting.findUnique({ where: { key: 'imageStorageType' } });
-  const storagePath = await prisma.setting.findUnique({ where: { key: 'imageStoragePath' } });
+  const settings = await getSettings();
 
   return {
-    type: (type?.value || 'local') as 'local' | 'r2',
-    path: storagePath?.value || '',
+    type: (settings['imageStorageType'] || 'local') as 'local' | 'r2',
+    path: settings['imageStoragePath'] || '',
     defaultPath: getDefaultStoragePath()
   };
 }
@@ -74,8 +72,9 @@ export async function validateStoragePath(targetPath: string): Promise<{ valid: 
     await fs.writeFile(testFile, 'test');
     await fs.unlink(testFile);
     return { valid: true };
-  } catch (e: any) {
-    return { valid: false, error: `Cannot write to path: ${e.message}` };
+  } catch (e: unknown) {
+    const error = e as Error;
+    return { valid: false, error: `Cannot write to path: ${error.message}` };
   }
 }
 
@@ -83,7 +82,8 @@ export async function validateStoragePath(targetPath: string): Promise<{ valid: 
  * Get storage statistics
  */
 export async function getStorageStats() {
-  const imageCount = await prisma.image.count();
+  const library = await libraryStore.read();
+  const imageCount = Object.keys(library.images).length;
   const config = await getStorageConfig();
 
   return {
@@ -118,7 +118,8 @@ export async function updateStoragePath(
   let failedCount = 0;
 
   if (options.migrate) {
-    const images = await prisma.image.findMany();
+    const library = await libraryStore.read();
+    const images = Object.values(library.images);
     await fs.mkdir(actualNewPath, { recursive: true });
 
     for (const image of images) {
@@ -138,16 +139,8 @@ export async function updateStoragePath(
     }
   }
 
-  await prisma.setting.upsert({
-    where: { key: 'imageStorageType' },
-    update: { value: 'local' },
-    create: { key: 'imageStorageType', value: 'local' }
-  });
-  await prisma.setting.upsert({
-    where: { key: 'imageStoragePath' },
-    update: { value: newPath },
-    create: { key: 'imageStoragePath', value: newPath }
-  });
+  await saveSetting('imageStorageType', 'local');
+  await saveSetting('imageStoragePath', newPath);
 
   return { success: true, migratedCount, failedCount };
 }

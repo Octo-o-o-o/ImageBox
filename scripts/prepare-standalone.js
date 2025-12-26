@@ -126,81 +126,11 @@ try {
     fs.rmSync(generatedInPublic, { recursive: true });
     console.log('   🗑️  Removed .next/standalone/public/generated');
   }
-  // Recreate empty dirs for compatibility
-  fs.mkdirSync(path.join(publicDest, 'generated', 'thumbnails'), { recursive: true });
-  console.log('   ✅ Recreated empty public/generated/thumbnails');
+  // Recreate empty dir for compatibility
+  fs.mkdirSync(path.join(publicDest, 'generated'), { recursive: true });
+  console.log('   ✅ Recreated empty public/generated');
 } catch (e) {
   console.log('   ⚠️  Failed to clean public/generated (continuing):', e?.message || e);
-}
-
-// 3. Copy prisma folder (for schema reference and template.db)
-const prismaSrc = path.join(projectRoot, 'prisma');
-const prismaDest = path.join(standaloneDir, 'prisma');
-
-console.log('📁 Copying prisma folder...');
-if (copyDir(prismaSrc, prismaDest)) {
-  // Remove dev.db and journal files from copied prisma folder
-  const devDbPath = path.join(prismaDest, 'dev.db');
-  const journalPath = path.join(prismaDest, 'dev.db-journal');
-
-  if (fs.existsSync(devDbPath)) fs.unlinkSync(devDbPath);
-  if (fs.existsSync(journalPath)) fs.unlinkSync(journalPath);
-
-  console.log(`   ✅ Copied to ${path.relative(projectRoot, prismaDest)}`);
-} else {
-  console.log('   ⚠️  Prisma folder not found');
-}
-
-// 4. Copy Electron-rebuilt better-sqlite3 to standalone
-const betterSqlite3Src = path.join(projectRoot, 'node_modules', 'better-sqlite3');
-const betterSqlite3Dest = path.join(standaloneDir, 'node_modules', 'better-sqlite3');
-
-console.log('📁 Copying Electron-rebuilt better-sqlite3...');
-if (fs.existsSync(betterSqlite3Src)) {
-  // Only copy the build directory with the native binding
-  const buildSrc = path.join(betterSqlite3Src, 'build');
-  const buildDest = path.join(betterSqlite3Dest, 'build');
-
-  if (fs.existsSync(buildSrc)) {
-    if (copyDir(buildSrc, buildDest)) {
-      console.log('   ✅ Copied Electron-rebuilt native binding');
-    }
-  }
-} else {
-  console.log('   ⚠️  better-sqlite3 not found in root node_modules');
-}
-
-// Verify better-sqlite3 native module exists
-if (fs.existsSync(betterSqlite3Dest)) {
-  const bindingPath = path.join(betterSqlite3Dest, 'build', 'Release', 'better_sqlite3.node');
-  if (fs.existsSync(bindingPath)) {
-    console.log('✅ better-sqlite3 native binding verified');
-  } else {
-    console.log('⚠️  better-sqlite3 native binding NOT found - may need rebuild');
-  }
-} else {
-  console.log('⚠️  better-sqlite3 not in standalone');
-}
-
-// 5. Copy Prisma runtime folders required at runtime
-// Prisma 7 driver adapters still need `node_modules/.prisma/client/*` (e.g. `.prisma/client/default`)
-// Next.js standalone output may omit these, which would cause runtime errors like:
-// "Cannot find module '.prisma/client/default'"
-console.log('📁 Copying Prisma runtime folders...');
-const prismaScopeSrc = path.join(projectRoot, 'node_modules', '@prisma');
-const prismaScopeDest = path.join(standaloneDir, 'node_modules', '@prisma');
-if (copyDir(prismaScopeSrc, prismaScopeDest)) {
-  console.log(`   ✅ Copied to ${path.relative(projectRoot, prismaScopeDest)}`);
-} else {
-  console.log('   ⚠️  @prisma scope not found (may cause issues)');
-}
-
-const dotPrismaSrc = path.join(projectRoot, 'node_modules', '.prisma');
-const dotPrismaDest = path.join(standaloneDir, 'node_modules', '.prisma');
-if (copyDir(dotPrismaSrc, dotPrismaDest)) {
-  console.log(`   ✅ Copied to ${path.relative(projectRoot, dotPrismaDest)}`);
-} else {
-  console.log('   ⚠️  .prisma folder not found (may cause issues)');
 }
 
 console.log('\n✅ Standalone preparation complete!\n');

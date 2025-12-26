@@ -293,7 +293,7 @@ export default function ModelsPage() {
           </div>
           <button
             onClick={() => setAddProviderModalOpen(true)}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
             title={t('models.providers.add')}
             aria-label={t('models.providers.add')}
           >
@@ -304,8 +304,8 @@ export default function ModelsPage() {
         {/* Empty State */}
         {providers.length === 0 && !loading && (
           <div className="p-8 bg-card border border-dashed border-border rounded-2xl text-center">
-            <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-6 h-6 text-orange-500" />
+            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-6 h-6 text-primary" />
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {t('models.providers.emptyTitle') || '开始添加服务商'}
@@ -315,7 +315,7 @@ export default function ModelsPage() {
             </p>
             <button
               onClick={() => setAddProviderModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors"
               title={t('models.providers.addFirst') || '添加第一个服务商'}
               aria-label={t('models.providers.addFirst') || '添加第一个服务商'}
             >
@@ -470,17 +470,17 @@ export default function ModelsPage() {
 
       {/* 2. Models Section */}
       <section className="space-y-6">
-        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+        <div className="flex items-center justify-between border-b border-border/40 pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-pink-500/10 rounded-lg text-pink-400"><Cpu className="w-5 h-5" /></div>
             <div>
               <h2 className="text-xl font-semibold">{t('models.models.title')}</h2>
-              <p className="text-xs text-zinc-500">{t('models.models.desc')}</p>
+              <p className="text-xs text-muted-foreground">{t('models.models.desc')}</p>
             </div>
           </div>
           <button
             onClick={openNewModel}
-            className="flex items-center gap-2 bg-white text-black px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-zinc-200 transition-colors"
+            className="flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-foreground px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
             title={t('models.models.add')}
             aria-label={t('models.models.add')}
           >

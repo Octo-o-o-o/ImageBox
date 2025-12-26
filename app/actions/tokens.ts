@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { configStore, type TokenRecord } from '@/lib/store';
 import os from 'os';
 
 // --- Remote Access ---
@@ -9,21 +9,18 @@ import os from 'os';
  * Get remote access toggle state
  */
 export async function getRemoteAccessEnabled(): Promise<boolean> {
-  const setting = await prisma.setting.findUnique({
-    where: { key: 'remoteAccessEnabled' }
-  });
-  return setting?.value === 'true';
+  const data = await configStore.read();
+  return data.settings['remoteAccessEnabled'] === 'true';
 }
 
 /**
  * Set remote access toggle
  */
 export async function setRemoteAccessEnabled(enabled: boolean) {
-  await prisma.setting.upsert({
-    where: { key: 'remoteAccessEnabled' },
-    update: { value: enabled ? 'true' : 'false' },
-    create: { key: 'remoteAccessEnabled', value: enabled ? 'true' : 'false' }
-  });
+  await configStore.update(data => ({
+    ...data,
+    settings: { ...data.settings, remoteAccessEnabled: enabled ? 'true' : 'false' }
+  }));
 }
 
 /**
@@ -43,14 +40,18 @@ function generateToken(): string {
  * Get all access tokens (return full token, no need to hide for personal project)
  */
 export async function getAccessTokens() {
-  const tokens = await prisma.accessToken.findMany({
-    orderBy: { createdAt: 'desc' }
-  });
+  const data = await configStore.read();
+  const tokens = Object.values(data.tokens);
 
-  return tokens.map((t: typeof tokens[number]) => ({
-    ...t,
-    isExpired: t.expiresAt < new Date()
-  }));
+  return tokens
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map(t => ({
+      ...t,
+      expiresAt: new Date(t.expiresAt),
+      createdAt: new Date(t.createdAt),
+      lastUsedAt: t.lastUsedAt ? new Date(t.lastUsedAt) : null,
+      isExpired: new Date(t.expiresAt) < new Date()
+    }));
 }
 
 /**
@@ -71,24 +72,36 @@ export async function createAccessToken(expiresIn: number) {
   }
 
   // Auto-generate name: Token + sequence
-  const count = await prisma.accessToken.count();
+  const data = await configStore.read();
+  const count = Object.keys(data.tokens).length;
   const name = `Token ${count + 1}`;
 
-  const accessToken = await prisma.accessToken.create({
-    data: {
-      name,
-      token,
-      expiresAt
-    }
-  });
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const accessToken: TokenRecord = {
+    id,
+    name,
+    description: null,
+    token,
+    expiresAt: expiresAt.toISOString(),
+    isRevoked: false,
+    createdAt: now,
+    lastUsedAt: null
+  };
+
+  await configStore.update(d => ({
+    ...d,
+    tokens: { ...d.tokens, [id]: accessToken }
+  }));
 
   return {
     id: accessToken.id,
     name: accessToken.name,
     description: accessToken.description,
     token: accessToken.token,
-    expiresAt: accessToken.expiresAt,
-    createdAt: accessToken.createdAt
+    expiresAt: new Date(accessToken.expiresAt),
+    createdAt: new Date(accessToken.createdAt)
   };
 }
 
@@ -112,32 +125,38 @@ export async function createAccessTokenWithRemoteAccess(expiresIn: number) {
   }
 
   // Auto-generate name: Token + sequence
-  const count = await prisma.accessToken.count();
+  const data = await configStore.read();
+  const count = Object.keys(data.tokens).length;
   const name = `Token ${count + 1}`;
 
-  // Use transaction to ensure both operations complete atomically
-  const [accessToken] = await prisma.$transaction([
-    prisma.accessToken.create({
-      data: {
-        name,
-        token,
-        expiresAt
-      }
-    }),
-    prisma.setting.upsert({
-      where: { key: 'remoteAccessEnabled' },
-      update: { value: 'true' },
-      create: { key: 'remoteAccessEnabled', value: 'true' }
-    })
-  ]);
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const accessToken: TokenRecord = {
+    id,
+    name,
+    description: null,
+    token,
+    expiresAt: expiresAt.toISOString(),
+    isRevoked: false,
+    createdAt: now,
+    lastUsedAt: null
+  };
+
+  // Atomic update: create token AND enable remote access
+  await configStore.update(d => ({
+    ...d,
+    settings: { ...d.settings, remoteAccessEnabled: 'true' },
+    tokens: { ...d.tokens, [id]: accessToken }
+  }));
 
   return {
     id: accessToken.id,
     name: accessToken.name,
     description: accessToken.description,
     token: accessToken.token,
-    expiresAt: accessToken.expiresAt,
-    createdAt: accessToken.createdAt
+    expiresAt: new Date(accessToken.expiresAt),
+    createdAt: new Date(accessToken.createdAt)
   };
 }
 
@@ -145,18 +164,31 @@ export async function createAccessTokenWithRemoteAccess(expiresIn: number) {
  * Update access token description/note
  */
 export async function updateAccessTokenDescription(id: string, description: string) {
-  return await prisma.accessToken.update({
-    where: { id },
-    data: { description: description || null }
-  });
+  const data = await configStore.read();
+  const token = data.tokens[id];
+  if (!token) return null;
+
+  const updated = { ...token, description: description || null };
+  await configStore.update(d => ({
+    ...d,
+    tokens: { ...d.tokens, [id]: updated }
+  }));
+
+  return {
+    ...updated,
+    expiresAt: new Date(updated.expiresAt),
+    createdAt: new Date(updated.createdAt),
+    lastUsedAt: updated.lastUsedAt ? new Date(updated.lastUsedAt) : null
+  };
 }
 
 /**
  * Delete access token
  */
 export async function deleteAccessToken(id: string) {
-  return await prisma.accessToken.delete({
-    where: { id }
+  await configStore.update(data => {
+    const { [id]: _, ...rest } = data.tokens;
+    return { ...data, tokens: rest };
   });
 }
 
@@ -164,34 +196,46 @@ export async function deleteAccessToken(id: string) {
  * Revoke access token (soft delete)
  */
 export async function revokeAccessToken(id: string) {
-  return await prisma.accessToken.update({
-    where: { id },
-    data: { isRevoked: true }
-  });
+  const data = await configStore.read();
+  const token = data.tokens[id];
+  if (!token) return null;
+
+  const updated = { ...token, isRevoked: true };
+  await configStore.update(d => ({
+    ...d,
+    tokens: { ...d.tokens, [id]: updated }
+  }));
+
+  return {
+    ...updated,
+    expiresAt: new Date(updated.expiresAt),
+    createdAt: new Date(updated.createdAt),
+    lastUsedAt: updated.lastUsedAt ? new Date(updated.lastUsedAt) : null
+  };
 }
 
 /**
  * Validate access token
  * @returns token info if valid, null if invalid
  */
-export async function validateAccessToken(token: string) {
-  const accessToken = await prisma.accessToken.findUnique({
-    where: { token }
-  });
+export async function validateAccessToken(tokenValue: string) {
+  const data = await configStore.read();
+  const token = Object.values(data.tokens).find(t => t.token === tokenValue);
 
-  if (!accessToken) return null;
-  if (accessToken.isRevoked) return null;
-  if (accessToken.expiresAt < new Date()) return null;
+  if (!token) return null;
+  if (token.isRevoked) return null;
+  if (new Date(token.expiresAt) < new Date()) return null;
 
   // Update last used time
-  await prisma.accessToken.update({
-    where: { id: accessToken.id },
-    data: { lastUsedAt: new Date() }
-  });
+  const updated = { ...token, lastUsedAt: new Date().toISOString() };
+  await configStore.update(d => ({
+    ...d,
+    tokens: { ...d.tokens, [token.id]: updated }
+  }));
 
   return {
-    id: accessToken.id,
-    name: accessToken.name
+    id: token.id,
+    name: token.name
   };
 }
 
@@ -205,11 +249,7 @@ export async function getLocalIpAddress() {
 
   const platform = process.platform;
 
-  // 平台相关的“更可能是物理网卡”的命名规则（用于加权，不作为硬过滤）
-  // 说明：
-  // - macOS: en0/en1 通常分别对应 Wi‑Fi/以太网；bridge/utun/awdl 等更常见于热点共享/VPN/直连等场景
-  // - Windows: Ethernet / Wi‑Fi / Local Area Connection
-  // - Linux: eth*/enp* / wlan*/wlp*
+  // Platform-specific interface naming rules for scoring
   const preferredInterfaceRules: Array<{ test: (nameLower: string) => boolean; score: number }> = [
     ...(platform === 'darwin'
       ? [
@@ -235,31 +275,11 @@ export async function getLocalIpAddress() {
       : []),
   ];
 
-  // 常见虚拟/隧道/直连接口关键字（强过滤）
-  // 目标：避免选到 VPN / Docker / 虚拟机 / 容器桥接 / Apple 的直连与共享网卡等导致“地址看似对但不可用”
+  // Common virtual/tunnel interface keywords (strong filter)
   const virtualInterfaceKeywords = [
-    'docker',
-    'vbox',
-    'virtualbox',
-    'vmware',
-    'veth',
-    'br-',
-    'virbr',
-    'lxc',
-    'cni',
-    'flannel',
-    'cilium',
-    'kube',
-    'zt', // ZeroTier
-    'tailscale',
-    'wg', // wireguard
-    'tun',
-    'tap',
-    'utun', // macOS VPN
-    'awdl', // Apple Wireless Direct Link
-    'llw',  // Low Latency WLAN
-    'p2p',  // Apple P2P
-    'bridge', // macOS 共享/桥接更常见
+    'docker', 'vbox', 'virtualbox', 'vmware', 'veth', 'br-', 'virbr', 'lxc',
+    'cni', 'flannel', 'cilium', 'kube', 'zt', 'tailscale', 'wg', 'tun', 'tap',
+    'utun', 'awdl', 'llw', 'p2p', 'bridge',
   ];
 
   for (const [name, addrs] of Object.entries(interfaces)) {
@@ -299,7 +319,6 @@ export async function getLocalIpAddress() {
       } else if (ip.startsWith('10.')) {
         priority += 30;
       } else if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) {
-        // 172.16/12 虽然也是私网，但在某些环境下更容易对应热点共享/隧道网络，适度降权
         priority += 15;
       }
 

@@ -1,59 +1,52 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { PRESET_PROVIDERS, PRESET_MODELS, isPresetProvider } from '@/lib/presetProviders';
+import { resourcesStore, configStore, type ProviderRecord, type ModelRecord } from '@/lib/store';
+import { PRESET_PROVIDERS, PRESET_MODELS } from '@/lib/presetProviders';
 
 // --- Providers ---
 
 /**
  * Migrate existing preset providers: clean up those without API keys.
  * This runs once on first access after the refactor.
- * 
+ *
  * New behavior: Preset providers are NOT auto-created anymore.
  * They are only created when user explicitly activates them via activatePresetProvider().
  */
 export async function migratePresetProviders() {
   const migrationKey = 'presetMigrationV2Done';
 
-  const migrationDone = await prisma.setting.findUnique({
-    where: { key: migrationKey }
-  });
-
-  if (migrationDone) return;
+  const config = await configStore.read();
+  if (config.settings[migrationKey]) return;
 
   console.log('[Migration] Starting preset provider migration v2...');
 
+  const data = await resourcesStore.read();
+
   // Find all preset providers without API keys and remove them (and their models)
-  const presetsWithoutKeys = await prisma.provider.findMany({
-    where: {
-      id: { startsWith: 'preset-' },
-      OR: [
-        { apiKey: null },
-        { apiKey: '' }
-      ]
-    }
-  });
+  const presetsWithoutKeys = Object.values(data.providers).filter(
+    p => p.id.startsWith('preset-') && (!p.apiKey || p.apiKey === '')
+  );
 
   for (const provider of presetsWithoutKeys) {
-    try {
-      // Delete associated models first
-      await prisma.aIModel.deleteMany({
-        where: { providerId: provider.id }
-      });
-      // Then delete the provider
-      await prisma.provider.delete({
-        where: { id: provider.id }
-      });
-      console.log(`[Migration] Removed inactive preset provider: ${provider.name}`);
-    } catch (e) {
-      console.log(`[Migration] Failed to remove ${provider.name}:`, e);
+    // Delete associated models first
+    const modelIds = Object.keys(data.models).filter(
+      id => data.models[id].providerId === provider.id
+    );
+    for (const modelId of modelIds) {
+      delete data.models[modelId];
     }
+    // Then delete the provider
+    delete data.providers[provider.id];
+    console.log(`[Migration] Removed inactive preset provider: ${provider.name}`);
   }
 
+  await resourcesStore.write(data);
+
   // Mark migration as complete
-  await prisma.setting.create({
-    data: { key: migrationKey, value: 'true' }
-  });
+  await configStore.update(d => ({
+    ...d,
+    settings: { ...d.settings, [migrationKey]: 'true' }
+  }));
 
   console.log('[Migration] Preset provider migration v2 complete.');
 }
@@ -61,7 +54,7 @@ export async function migratePresetProviders() {
 /**
  * Activate a preset provider by creating it with API key and optionally selected models.
  * This is the main entry point for adding a preset provider.
- * 
+ *
  * @param presetProviderId - The preset provider ID (e.g., 'preset-google-gemini')
  * @param apiKey - The API key for this provider
  * @param selectedModelIds - Optional array of model IDs to create. If undefined, creates all preset models for this provider.
@@ -78,28 +71,28 @@ export async function activatePresetProvider(
   }
 
   try {
+    const data = await resourcesStore.read();
+    const now = new Date().toISOString();
+
     // Create or update the provider with API key
-    const existingProvider = await prisma.provider.findUnique({
-      where: { id: preset.id }
-    });
+    const existingProvider = data.providers[preset.id];
 
     if (existingProvider) {
       // Update existing provider with new API key
-      await prisma.provider.update({
-        where: { id: preset.id },
-        data: { apiKey }
-      });
+      data.providers[preset.id] = { ...existingProvider, apiKey };
     } else {
       // Create new provider
-      await prisma.provider.create({
-        data: {
-          id: preset.id,
-          name: preset.name,
-          type: preset.type,
-          baseUrl: preset.baseUrl || null,
-          apiKey,
-        }
-      });
+      const provider: ProviderRecord = {
+        id: preset.id,
+        name: preset.name,
+        type: preset.type as "GEMINI" | "OPENAI" | "LOCAL",
+        baseUrl: preset.baseUrl || null,
+        apiKey,
+        localBackend: null,
+        localModelPath: null,
+        createdAt: now
+      };
+      data.providers[preset.id] = provider;
     }
 
     // Get models to create for this provider
@@ -110,23 +103,21 @@ export async function activatePresetProvider(
 
     // Create models that don't exist yet
     for (const model of modelsToCreate) {
-      const existingModel = await prisma.aIModel.findUnique({
-        where: { id: model.id }
-      });
-
-      if (!existingModel) {
-        await prisma.aIModel.create({
-          data: {
-            id: model.id,
-            name: model.name,
-            modelIdentifier: model.modelIdentifier,
-            type: model.type,
-            providerId: model.providerId,
-            parameterConfig: model.parameterConfig,
-          }
-        });
+      if (!data.models[model.id]) {
+        const modelRecord: ModelRecord = {
+          id: model.id,
+          name: model.name,
+          modelIdentifier: model.modelIdentifier,
+          type: model.type as "TEXT" | "IMAGE",
+          providerId: model.providerId,
+          parameterConfig: model.parameterConfig || null,
+          createdAt: now
+        };
+        data.models[model.id] = modelRecord;
       }
     }
+
+    await resourcesStore.write(data);
 
     console.log(`[Activate] Activated preset provider: ${preset.name} with ${modelsToCreate.length} models`);
     return { success: true };
@@ -142,7 +133,13 @@ export async function activatePresetProvider(
  */
 export async function getProviders() {
   await migratePresetProviders();
-  return await prisma.provider.findMany({ orderBy: { name: 'asc' } });
+  const data = await resourcesStore.read();
+  return Object.values(data.providers)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(p => ({
+      ...p,
+      createdAt: new Date(p.createdAt)
+    }));
 }
 
 /**
@@ -150,12 +147,10 @@ export async function getProviders() {
  * Used by AddProviderModal to show which presets are available.
  */
 export async function getAvailablePresetProviders(): Promise<typeof PRESET_PROVIDERS> {
-  const existingProviders = await prisma.provider.findMany({
-    where: { id: { startsWith: 'preset-' } },
-    select: { id: true }
-  });
-
-  const existingIds = new Set(existingProviders.map(p => p.id));
+  const data = await resourcesStore.read();
+  const existingIds = new Set(
+    Object.keys(data.providers).filter(id => id.startsWith('preset-'))
+  );
 
   return PRESET_PROVIDERS.filter(p => !existingIds.has(p.id));
 }
@@ -177,67 +172,182 @@ export async function saveProvider(data: {
   localBackend?: string;
   localModelPath?: string;
 }) {
+  const resources = await resourcesStore.read();
+  const now = new Date().toISOString();
+
   if (data.id) {
-    return await prisma.provider.update({ where: { id: data.id }, data });
+    // Update existing
+    const existing = resources.providers[data.id];
+    if (!existing) return null;
+
+    const updated: ProviderRecord = {
+      ...existing,
+      name: data.name,
+      type: data.type as "GEMINI" | "OPENAI" | "LOCAL",
+      baseUrl: data.baseUrl || null,
+      apiKey: data.apiKey || null,
+      localBackend: data.localBackend || null,
+      localModelPath: data.localModelPath || null
+    };
+
+    await resourcesStore.update(d => ({
+      ...d,
+      providers: { ...d.providers, [data.id!]: updated }
+    }));
+
+    return { ...updated, createdAt: new Date(updated.createdAt) };
   } else {
-    return await prisma.provider.create({ data });
+    // Create new
+    const id = crypto.randomUUID();
+    const provider: ProviderRecord = {
+      id,
+      name: data.name,
+      type: data.type as "GEMINI" | "OPENAI" | "LOCAL",
+      baseUrl: data.baseUrl || null,
+      apiKey: data.apiKey || null,
+      localBackend: data.localBackend || null,
+      localModelPath: data.localModelPath || null,
+      createdAt: now
+    };
+
+    await resourcesStore.update(d => ({
+      ...d,
+      providers: { ...d.providers, [id]: provider }
+    }));
+
+    return { ...provider, createdAt: new Date(provider.createdAt) };
   }
 }
 
 export async function deleteProvider(id: string) {
-  return await prisma.provider.delete({ where: { id } });
+  const data = await resourcesStore.read();
+  const provider = data.providers[id];
+  if (!provider) return null;
+
+  // Also delete associated models
+  const modelIdsToDelete = Object.keys(data.models).filter(
+    modelId => data.models[modelId].providerId === id
+  );
+
+  await resourcesStore.update(d => {
+    const { [id]: _, ...restProviders } = d.providers;
+    const newModels = { ...d.models };
+    for (const modelId of modelIdsToDelete) {
+      delete newModels[modelId];
+    }
+    return { ...d, providers: restProviders, models: newModels };
+  });
+
+  return { ...provider, createdAt: new Date(provider.createdAt) };
 }
 
 // --- Models ---
 
 export async function getModels() {
-  return await prisma.aIModel.findMany({
-    orderBy: { name: 'asc' },
-    include: { provider: true }
-  });
+  const data = await resourcesStore.read();
+  return Object.values(data.models)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(m => ({
+      ...m,
+      createdAt: new Date(m.createdAt),
+      provider: m.providerId ? data.providers[m.providerId] || null : null
+    }));
 }
 
-export async function saveModel(data: { id?: string; name: string; modelIdentifier: string; type: string; providerId: string; parameterConfig?: string }) {
-  const { id, name, modelIdentifier, type, providerId, parameterConfig } = data;
-  const saveData = { name, modelIdentifier, type, providerId, parameterConfig };
+export async function saveModel(data: {
+  id?: string;
+  name: string;
+  modelIdentifier: string;
+  type: string;
+  providerId: string;
+  parameterConfig?: string;
+}) {
+  const resources = await resourcesStore.read();
+  const now = new Date().toISOString();
 
-  if (id) {
-    return await prisma.aIModel.update({ where: { id }, data: saveData });
+  if (data.id) {
+    // Update existing
+    const existing = resources.models[data.id];
+    if (!existing) return null;
+
+    const updated: ModelRecord = {
+      ...existing,
+      name: data.name,
+      modelIdentifier: data.modelIdentifier,
+      type: data.type as "TEXT" | "IMAGE",
+      providerId: data.providerId,
+      parameterConfig: data.parameterConfig || null
+    };
+
+    await resourcesStore.update(d => ({
+      ...d,
+      models: { ...d.models, [data.id!]: updated }
+    }));
+
+    return {
+      ...updated,
+      createdAt: new Date(updated.createdAt),
+      provider: resources.providers[updated.providerId || ''] || null
+    };
   } else {
-    return await prisma.aIModel.create({ data: saveData });
+    // Create new
+    const id = crypto.randomUUID();
+    const model: ModelRecord = {
+      id,
+      name: data.name,
+      modelIdentifier: data.modelIdentifier,
+      type: data.type as "TEXT" | "IMAGE",
+      providerId: data.providerId,
+      parameterConfig: data.parameterConfig || null,
+      createdAt: now
+    };
+
+    await resourcesStore.update(d => ({
+      ...d,
+      models: { ...d.models, [id]: model }
+    }));
+
+    return {
+      ...model,
+      createdAt: new Date(model.createdAt),
+      provider: resources.providers[model.providerId || ''] || null
+    };
   }
 }
 
 export async function deleteModel(id: string) {
-  return await prisma.aIModel.delete({ where: { id } });
+  const data = await resourcesStore.read();
+  const model = data.models[id];
+  if (!model) return null;
+
+  await resourcesStore.update(d => {
+    const { [id]: _, ...rest } = d.models;
+    return { ...d, models: rest };
+  });
+
+  return {
+    ...model,
+    createdAt: new Date(model.createdAt),
+    provider: model.providerId ? data.providers[model.providerId] || null : null
+  };
 }
 
 export async function hasImageGenerationModel() {
-  const count = await prisma.aIModel.count({
-    where: { type: 'IMAGE' }
-  });
-  return count > 0;
+  const data = await resourcesStore.read();
+  const imageModels = Object.values(data.models).filter(m => m.type === 'IMAGE');
+  return imageModels.length > 0;
 }
 
 /**
  * Test if a provider's API key is valid by making a simple API call.
- *
- * Supported provider types:
- * - GEMINI: Tests by calling /v1beta/models endpoint
- * - OPENAI: Tests by calling /v1/models endpoint
- * - LOCAL: Not supported (no API key required)
- *
- * @param providerId - The provider ID to test
- * @returns Test result with success status and message
  */
 export async function testProviderApiKey(providerId: string): Promise<{
   success: boolean;
   message: string;
   details?: string;
 }> {
-  const provider = await prisma.provider.findUnique({
-    where: { id: providerId }
-  });
+  const data = await resourcesStore.read();
+  const provider = data.providers[providerId];
 
   if (!provider) {
     return { success: false, message: 'Provider not found' };
@@ -267,8 +377,8 @@ export async function testProviderApiKey(providerId: string): Promise<{
       const latency = Date.now() - startTime;
 
       if (response.ok) {
-        const data = await response.json();
-        const modelCount = data.models?.length || 0;
+        const responseData = await response.json();
+        const modelCount = responseData.models?.length || 0;
         return {
           success: true,
           message: `OK (${latency}ms)`,
@@ -299,8 +409,8 @@ export async function testProviderApiKey(providerId: string): Promise<{
       const latency = Date.now() - startTime;
 
       if (response.ok) {
-        const data = await response.json();
-        const modelCount = data.data?.length || 0;
+        const responseData = await response.json();
+        const modelCount = responseData.data?.length || 0;
         return {
           success: true,
           message: `OK (${latency}ms)`,

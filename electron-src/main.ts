@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, utilityProcess, clipboard }
 import path from 'path';
 import fs from 'fs';
 import log from 'electron-log';
-import { ensureDatabase } from './database';
+import { ensureDataDirectory } from './database';
 import { createTray, destroyTray, setTrayLanguage } from './tray';
 import { registerShortcuts, unregisterShortcuts } from './shortcuts';
 import { initAutoUpdater } from './updater';
@@ -617,11 +617,11 @@ app.whenReady().then(async () => {
     fs.mkdirSync(thumbnailPath, { recursive: true });
   }
 
-  // 初始化数据库
+  // 初始化数据目录
   try {
-    await ensureDatabase();
+    await ensureDataDirectory();
   } catch (err) {
-    log.error('Failed to initialize database:', err);
+    log.error('Failed to initialize data directory:', err);
   }
 
   // 设置 IPC

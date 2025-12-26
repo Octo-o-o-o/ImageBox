@@ -274,7 +274,7 @@ export function DataManagement() {
         </h2>
 
         <div className="p-6 rounded-2xl bg-card border border-border">
-          <div className="grid grid-cols-1 gap-3 items-start w-fit">
+          <div className="flex flex-row flex-wrap gap-3 items-start w-full">
             {/* Backup Button */}
             <button
               onClick={() => setShowBackupModal(true)}

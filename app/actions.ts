@@ -60,6 +60,7 @@ export {
   generateTextAction,
   generateImageAction,
   getRunLogs,
+  getAllRunLogs,
 } from './actions/generation';
 
 // --- Library (Images & Folders) ---

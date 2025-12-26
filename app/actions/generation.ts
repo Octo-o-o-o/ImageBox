@@ -1,7 +1,7 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { resourcesStore, runLogStore, type RunLog } from '@/lib/store';
+import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { mapParametersForAPI } from '@/lib/modelParameters';
 import { saveGeneratedImage } from './library';
@@ -11,14 +11,14 @@ import { E } from '@/lib/errors';
 // --- Logic Helpers ---
 
 async function getClientForModel(modelId: string) {
-  const modelDef = await prisma.aIModel.findUnique({
-    where: { id: modelId },
-    include: { provider: true }
-  });
+  const data = await resourcesStore.read();
+  const modelDef = data.models[modelId];
 
-  if (!modelDef || !modelDef.provider) throw new Error(`[${E.MODEL_NOT_FOUND}]`);
+  if (!modelDef || !modelDef.providerId) throw new Error(`[${E.MODEL_NOT_FOUND}]`);
 
-  const provider = modelDef.provider;
+  const provider = data.providers[modelDef.providerId];
+  if (!provider) throw new Error(`[${E.MODEL_NOT_FOUND}]`);
+
   const globalSettings = await getSettings();
 
   // Determine API Key: Provider Specific > Global Fallback
@@ -65,37 +65,43 @@ async function getClientForModel(modelId: string) {
 
 // --- Generation Actions ---
 
-export async function generateTextAction(modelId: string, prompt: string, systemInstruction?: string, configParams: any = {}) {
+export async function generateTextAction(modelId: string, prompt: string, systemInstruction?: string, configParams: Record<string, unknown> = {}) {
   const startTime = Date.now();
   let runLogId = '';
+  let requestTime = '';
 
   try {
     // Fetch model and provider info for logging
-    const modelDef = await prisma.aIModel.findUnique({
-      where: { id: modelId },
-      include: { provider: true }
-    });
-    const modelDisplayName = modelDef?.provider?.name && modelDef?.name
-      ? `${modelDef.provider.name}+${modelDef.name}`
+    const data = await resourcesStore.read();
+    const modelDef = data.models[modelId];
+    const provider = modelDef?.providerId ? data.providers[modelDef.providerId] : null;
+    const modelDisplayName = provider?.name && modelDef?.name
+      ? `${provider.name}+${modelDef.name}`
       : modelDef?.name || modelId;
 
     // 1. Start Log
-    const log = await prisma.runLog.create({
-      data: {
-        type: 'PROMPT_GEN',
-        status: 'RUNNING',
-        modelUsed: modelDisplayName,
-        actualInput: prompt,
-        configParams: JSON.stringify(configParams),
-      }
-    });
-    runLogId = log.id;
+    runLogId = crypto.randomUUID();
+    requestTime = new Date().toISOString();
+    const log: RunLog = {
+      id: runLogId,
+      type: 'PROMPT_GEN',
+      status: 'RUNNING',
+      requestTime,
+      completionTime: null,
+      duration: null,
+      modelUsed: modelDisplayName,
+      actualInput: prompt,
+      output: null,
+      parentTaskId: null,
+      configParams: JSON.stringify(configParams),
+    };
+    await runLogStore.append(log);
 
     const wrapper = await getClientForModel(modelId);
     let outputText = '';
 
     if (wrapper.type === 'GEMINI') {
-      const requestOptions: any = {};
+      const requestOptions: Record<string, unknown> = {};
       if (wrapper.baseUrl) requestOptions.baseUrl = wrapper.baseUrl;
 
       const model = (wrapper.client as GoogleGenerativeAI).getGenerativeModel({
@@ -106,7 +112,7 @@ export async function generateTextAction(modelId: string, prompt: string, system
       outputText = result.response.text();
     }
     else if (wrapper.type === 'OPENAI') {
-      const messages: any[] = [];
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
       if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
       messages.push({ role: 'user', content: prompt });
 
@@ -121,89 +127,89 @@ export async function generateTextAction(modelId: string, prompt: string, system
     }
 
     // 2. Success Log
-    await prisma.runLog.update({
-      where: { id: runLogId },
-      data: {
-        status: 'SUCCESS',
-        output: outputText,
-        completionTime: new Date(),
-        duration: Date.now() - startTime
-      }
-    });
+    await runLogStore.update(runLogId, {
+      status: 'SUCCESS',
+      output: outputText,
+      completionTime: new Date().toISOString(),
+      duration: Date.now() - startTime
+    }, requestTime);
 
     return { success: true, text: outputText, runId: runLogId };
 
-  } catch (e: any) {
-    console.error("Text generation error:", e);
+  } catch (e: unknown) {
+    const error = e as Error;
+    console.error("Text generation error:", error);
     // 3. Error Log
-    if (runLogId) {
-      await prisma.runLog.update({
-        where: { id: runLogId },
-        data: {
-          status: 'FAILURE',
-          output: e.message,
-          completionTime: new Date(),
-          duration: Date.now() - startTime
-        }
-      });
+    if (runLogId && requestTime) {
+      await runLogStore.update(runLogId, {
+        status: 'FAILURE',
+        output: error.message,
+        completionTime: new Date().toISOString(),
+        duration: Date.now() - startTime
+      }, requestTime);
     }
-    return { success: false, error: e.message };
+    return { success: false, error: error.message };
   }
 }
 
-export async function generateImageAction(modelId: string, prompt: string, params: any, parentTaskId?: string, templateId?: string, folderId?: string) {
+export async function generateImageAction(modelId: string, prompt: string, params: Record<string, unknown>, parentTaskId?: string, templateId?: string, folderId?: string) {
   const startTime = Date.now();
   let runLogId = '';
+  let requestTime = '';
 
   try {
     // Fetch model and provider info for logging
-    const modelDef = await prisma.aIModel.findUnique({
-      where: { id: modelId },
-      include: { provider: true }
-    });
-    const modelDisplayName = modelDef?.provider?.name && modelDef?.name
-      ? `${modelDef.provider.name}+${modelDef.name}`
+    const data = await resourcesStore.read();
+    const modelDef = data.models[modelId];
+    const provider = modelDef?.providerId ? data.providers[modelDef.providerId] : null;
+    const modelDisplayName = provider?.name && modelDef?.name
+      ? `${provider.name}+${modelDef.name}`
       : modelDef?.name || modelId;
 
-    if (!modelDef || !modelDef.provider) {
+    if (!modelDef || !provider) {
       throw new Error(`[${E.MODEL_NOT_FOUND}]`);
     }
 
     // Map parameters based on provider type and model configuration
     const mappedParams = mapParametersForAPI(
-      modelDef.provider.type,
-      modelDef.provider.baseUrl || null,
+      provider.type,
+      provider.baseUrl || null,
       params,
       modelDef.parameterConfig || null
     );
 
     // 1. Start Log
-    const log = await prisma.runLog.create({
-      data: {
-        type: 'IMAGE_GEN',
-        status: 'RUNNING',
-        modelUsed: modelDisplayName,
-        actualInput: prompt,
-        parentTaskId: parentTaskId || null,
-        configParams: JSON.stringify(mappedParams),
-      }
-    });
-    runLogId = log.id;
+    runLogId = crypto.randomUUID();
+    requestTime = new Date().toISOString();
+    const log: RunLog = {
+      id: runLogId,
+      type: 'IMAGE_GEN',
+      status: 'RUNNING',
+      requestTime,
+      completionTime: null,
+      duration: null,
+      modelUsed: modelDisplayName,
+      actualInput: prompt,
+      output: null,
+      parentTaskId: parentTaskId || null,
+      configParams: JSON.stringify(mappedParams),
+    };
+    await runLogStore.append(log);
 
     const wrapper = await getClientForModel(modelId);
     let base64Images: (string | Buffer)[] = [];
 
     // Check if using Grsai custom API
     if (mappedParams._useGrsaiAPI) {
-      const baseUrl = modelDef.provider.baseUrl;
-      const apiKey = modelDef.provider.apiKey;
+      const baseUrl = provider.baseUrl;
+      const apiKey = provider.apiKey;
 
       if (!baseUrl || !apiKey) {
         throw new Error(`[${E.GRSAI_CONFIG_MISSING}]`);
       }
 
       // Build Grsai API request
-      const requestBody: any = {
+      const requestBody: Record<string, unknown> = {
         model: modelDef.modelIdentifier,
         prompt: prompt,
       };
@@ -249,8 +255,8 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
       const decoder = new TextDecoder();
       let buffer = '';
-      let finalResult: any = null;
-      let allChunks: string[] = [];
+      let finalResult: Record<string, unknown> | null = null;
+      const allChunks: string[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -275,17 +281,17 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
               if (!jsonStr) continue; // Skip empty lines
 
-              const data = JSON.parse(jsonStr);
-              console.log('[Grsai] Parsed chunk:', JSON.stringify(data, null, 2));
-              finalResult = data; // Keep latest result
+              const parsedData = JSON.parse(jsonStr);
+              console.log('[Grsai] Parsed chunk:', JSON.stringify(parsedData, null, 2));
+              finalResult = parsedData; // Keep latest result
 
               // Check for errors
-              if (data.status === 'failed') {
-                throw new Error(`[${E.GENERATION_FAILED}]${data.failure_reason || data.error || 'unknown'}`);
+              if (parsedData.status === 'failed') {
+                throw new Error(`[${E.GENERATION_FAILED}]${parsedData.failure_reason || parsedData.error || 'unknown'}`);
               }
-            } catch (e) {
-              if (e instanceof Error && e.message.startsWith(`[${E.GENERATION_FAILED}]`)) {
-                throw e;
+            } catch (parseError) {
+              if (parseError instanceof Error && parseError.message.startsWith(`[${E.GENERATION_FAILED}]`)) {
+                throw parseError;
               }
               console.log('[Grsai] Failed to parse line:', line);
               // Ignore JSON parse errors for incomplete chunks
@@ -305,17 +311,17 @@ export async function generateImageAction(modelId: string, prompt: string, param
           }
 
           if (jsonStr) {
-            const data = JSON.parse(jsonStr);
-            console.log('[Grsai] Final parsed data:', JSON.stringify(data, null, 2));
-            finalResult = data;
+            const parsedData = JSON.parse(jsonStr);
+            console.log('[Grsai] Final parsed data:', JSON.stringify(parsedData, null, 2));
+            finalResult = parsedData;
 
-            if (data.status === 'failed') {
-              throw new Error(`[${E.GENERATION_FAILED}]${data.failure_reason || data.error || 'unknown'}`);
+            if (parsedData.status === 'failed') {
+              throw new Error(`[${E.GENERATION_FAILED}]${parsedData.failure_reason || parsedData.error || 'unknown'}`);
             }
           }
-        } catch (e) {
-          if (e instanceof Error && e.message.startsWith(`[${E.GENERATION_FAILED}]`)) {
-            throw e;
+        } catch (parseError) {
+          if (parseError instanceof Error && parseError.message.startsWith(`[${E.GENERATION_FAILED}]`)) {
+            throw parseError;
           }
           console.log('[Grsai] Failed to parse final buffer');
         }
@@ -324,12 +330,13 @@ export async function generateImageAction(modelId: string, prompt: string, param
       console.log('[Grsai] All chunks received:', allChunks.join(''));
       console.log('[Grsai] Final result:', JSON.stringify(finalResult, null, 2));
 
-      if (!finalResult || !finalResult.results || finalResult.results.length === 0) {
+      const results = (finalResult as Record<string, unknown>)?.results as Array<{ url?: string }> | undefined;
+      if (!finalResult || !results || results.length === 0) {
         throw new Error(`[${E.NO_IMAGE_RETURNED}]`);
       }
 
       // Download images directly as Buffer (faster, no base64 encoding needed)
-      for (const result of finalResult.results) {
+      for (const result of results) {
         if (result.url) {
           const imgRes = await fetch(result.url);
           if (!imgRes.ok) {
@@ -348,15 +355,15 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
     // Check if using Ark Seedream API
     else if (mappedParams._useArkSeedreamAPI) {
-      const baseUrl = modelDef.provider.baseUrl;
-      const apiKey = modelDef.provider.apiKey;
+      const baseUrl = provider.baseUrl;
+      const apiKey = provider.apiKey;
 
       if (!baseUrl || !apiKey) {
         throw new Error(`[${E.GRSAI_CONFIG_MISSING}]`);  // Reuse error code for missing config
       }
 
       // Build Seedream API request (uses images.generate endpoint)
-      const requestBody: any = {
+      const requestBody: Record<string, unknown> = {
         model: modelDef.modelIdentifier,
         prompt: prompt,
         n: 1,
@@ -398,12 +405,12 @@ export async function generateImageAction(modelId: string, prompt: string, param
         throw new Error(`[${E.API_ERROR}]${response.status}: ${errorText.slice(0, 200)}`);
       }
 
-      const data = await response.json();
-      console.log('[Ark Seedream] Response:', JSON.stringify(data, null, 2).substring(0, 500));
+      const responseData = await response.json();
+      console.log('[Ark Seedream] Response:', JSON.stringify(responseData, null, 2).substring(0, 500));
 
       // Parse response (OpenAI images.generate format)
-      if (data.data && Array.isArray(data.data)) {
-        for (const item of data.data) {
+      if (responseData.data && Array.isArray(responseData.data)) {
+        for (const item of responseData.data) {
           if (item.b64_json) {
             // Direct base64 image data
             base64Images.push(Buffer.from(item.b64_json, 'base64'));
@@ -425,7 +432,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
     }
 
     else if (wrapper.type === 'GEMINI') {
-      const generationConfig: any = {};
+      const generationConfig: Record<string, unknown> = {};
 
       // Use mapped parameters from parameter mapping system
       if (mappedParams.responseModalities) {
@@ -437,9 +444,9 @@ export async function generateImageAction(modelId: string, prompt: string, param
         generationConfig.imageConfig = mappedParams.imageConfig;
       }
 
-      const requestOptions: any = {};
+      const requestOptions: Record<string, unknown> = {};
       // Pass baseUrl to requestOptions if present
-      if ((wrapper as any).baseUrl) requestOptions.baseUrl = (wrapper as any).baseUrl;
+      if ((wrapper as { baseUrl?: string }).baseUrl) requestOptions.baseUrl = (wrapper as { baseUrl?: string }).baseUrl;
 
       const model = (wrapper.client as GoogleGenerativeAI).getGenerativeModel({
         model: wrapper.modelId,
@@ -447,10 +454,10 @@ export async function generateImageAction(modelId: string, prompt: string, param
       }, requestOptions);
 
       // Construct Prompt Parts
-      const parts: any[] = [{ text: prompt }];
+      const parts: Part[] = [{ text: prompt }];
 
       if (mappedParams.refImages && Array.isArray(mappedParams.refImages)) {
-        for (const imgStr of mappedParams.refImages) {
+        for (const imgStr of mappedParams.refImages as string[]) {
           // imgStr is expected to be "data:image/png;base64,..."
           const match = imgStr.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
           if (match) {
@@ -479,7 +486,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
     }
 
     else if (wrapper.type === 'OPENAI') {
-      const baseUrl = (wrapper as any).baseUrl;
+      const baseUrl = (wrapper as { baseUrl?: string }).baseUrl;
       // Treat as official OpenAI if baseUrl is empty OR equals official OpenAI URL
       const isOfficialOpenAI = !baseUrl || baseUrl === 'https://api.openai.com/v1' || baseUrl === 'https://api.openai.com';
 
@@ -487,12 +494,12 @@ export async function generateImageAction(modelId: string, prompt: string, param
       // Official OpenAI DALL-E uses images.generate API
       if (!isOfficialOpenAI) {
         // Chat Completions API for OpenRouter and other compatible services
-        const messages: any[] = [];
+        const messages: Array<{ role: string; content: unknown }> = [];
 
-        const userContent: any[] = [{ type: 'text', text: prompt }];
+        const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [{ type: 'text', text: prompt }];
 
         if (mappedParams.refImages && Array.isArray(mappedParams.refImages)) {
-          mappedParams.refImages.forEach((img: string) => {
+          (mappedParams.refImages as string[]).forEach((img: string) => {
             userContent.push({
               type: 'image_url',
               image_url: { url: img } // img is already base64 data url
@@ -502,10 +509,10 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
         messages.push({ role: 'user', content: userContent });
 
-        const extraBody: any = {};
+        const extraBody: Record<string, unknown> = {};
 
         // Check if this is Gemini-specific (requires modalities)
-        const isGemini = (wrapper as any).isGemini || wrapper.modelId.toLowerCase().includes('gemini');
+        const isGemini = wrapper.modelId.toLowerCase().includes('gemini');
         if (isGemini) {
           extraBody.modalities = ["image", "text"];
           extraBody.image_config = {};
@@ -514,14 +521,15 @@ export async function generateImageAction(modelId: string, prompt: string, param
         // Add image generation parameters (works for most providers)
         if (mappedParams.aspectRatio || mappedParams.imageSize) {
           if (!extraBody.image_config) extraBody.image_config = {};
-          if (mappedParams.aspectRatio) extraBody.image_config.aspect_ratio = mappedParams.aspectRatio;
-          if (mappedParams.imageSize) extraBody.image_config.image_size = mappedParams.imageSize;
+          const imageConfig = extraBody.image_config as Record<string, unknown>;
+          if (mappedParams.aspectRatio) imageConfig.aspect_ratio = mappedParams.aspectRatio;
+          if (mappedParams.imageSize) imageConfig.image_size = mappedParams.imageSize;
         }
 
         // Call Chat Completions API
-        const completion = await (wrapper.client as any).chat.completions.create({
+        const completion = await (wrapper.client as OpenAI).chat.completions.create({
           model: wrapper.modelId,
-          messages: messages,
+          messages: messages as OpenAI.ChatCompletionMessageParam[],
           ...extraBody
         });
 
@@ -530,11 +538,11 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
         // Method 1: Check all choices for images
         for (const choice of completion.choices || []) {
-          const message = choice.message;
+          const message = choice.message as unknown as Record<string, unknown>;
 
           // Check for images array (OpenRouter Gemini format)
-          if (Array.isArray(message?.images) && message.images.length > 0) {
-            for (const imgObj of message.images) {
+          if (Array.isArray(message?.images) && (message.images as Array<unknown>).length > 0) {
+            for (const imgObj of message.images as Array<{ type?: string; image_url?: { url?: string } }>) {
               if (imgObj.type === 'image_url' && imgObj.image_url?.url) {
                 const imageUrl = imgObj.image_url.url;
 
@@ -591,7 +599,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
           // Check if content is an array (OpenAI vision format)
           if (!imageFound && Array.isArray(message?.content)) {
-            for (const part of message.content) {
+            for (const part of message.content as Array<{ type?: string; image_url?: { url?: string } }>) {
               if (part.type === 'image_url' && part.image_url?.url) {
                 const imageUrl = part.image_url.url;
 
@@ -634,7 +642,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
 
       } else {
         // Official OpenAI DALL-E - use images.generate API
-        const requestBody: any = {
+        const requestBody: Record<string, unknown> = {
           model: wrapper.modelId,
           prompt: prompt,
           n: 1,
@@ -646,23 +654,24 @@ export async function generateImageAction(modelId: string, prompt: string, param
         if (mappedParams.quality) requestBody.quality = mappedParams.quality;
         if (mappedParams.style) requestBody.style = mappedParams.style;
 
-        const response = await (wrapper.client as OpenAI).images.generate(requestBody);
+        const response = await (wrapper.client as OpenAI).images.generate(requestBody as unknown as OpenAI.ImageGenerateParams);
         // Directly convert base64 to Buffer (avoid string concatenation + parsing)
-        base64Images = response.data?.map(d => Buffer.from(d.b64_json || '', 'base64')).filter(b => b.length > 0) || [];
+        const responseData = response as { data?: Array<{ b64_json?: string }> };
+        base64Images = responseData.data?.map(d => Buffer.from(d.b64_json || '', 'base64')).filter(b => b.length > 0) || [];
       }
     }
     else if (wrapper.type === 'LOCAL') {
       // Local model - uses OpenAI-compatible API format
       // For stable-diffusion.cpp server or other local services
-      const localBackend = (wrapper as any).localBackend || 'SD_CPP';
+      const localBackend = (wrapper as { localBackend?: string }).localBackend || 'SD_CPP';
 
       if (localBackend === 'SD_CPP') {
         // stable-diffusion.cpp uses /txt2img endpoint
-        const baseUrl = (wrapper as any).baseUrl || 'http://127.0.0.1:8080';
+        const baseUrl = (wrapper as { baseUrl?: string }).baseUrl || 'http://127.0.0.1:8080';
 
         // Calculate dimensions based on aspect ratio and image size
-        const aspectRatio = params.aspectRatio || '1:1';
-        const imageSize = params.imageSize || '1K';
+        const aspectRatio = (params.aspectRatio as string) || '1:1';
+        const imageSize = (params.imageSize as string) || '1K';
         const [w, h] = aspectRatio.split(':').map(Number);
         const baseSize = imageSize === '2K' ? 2048 : imageSize === '4K' ? 4096 : 1024;
 
@@ -678,21 +687,21 @@ export async function generateImageAction(modelId: string, prompt: string, param
         width = Math.round(width / 64) * 64;
         height = Math.round(height / 64) * 64;
 
-        const requestBody = {
+        const localRequestBody = {
           prompt: prompt,
-          negative_prompt: params.negativePrompt || '',
+          negative_prompt: (params.negativePrompt as string) || '',
           width: width,
           height: height,
-          steps: params.steps || 8,
-          cfg_scale: params.cfgScale || 0,
-          seed: params.seed || -1,
-          batch_size: params.numberOfImages || 1,
+          steps: (params.steps as number) || 8,
+          cfg_scale: (params.cfgScale as number) || 0,
+          seed: (params.seed as number) || -1,
+          batch_size: (params.numberOfImages as number) || 1,
         };
 
         const response = await fetch(`${baseUrl}/txt2img`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify(localRequestBody),
         });
 
         if (!response.ok) {
@@ -700,11 +709,11 @@ export async function generateImageAction(modelId: string, prompt: string, param
           throw new Error(`[${E.LOCAL_SERVICE_ERROR}]${response.status}: ${errorText.slice(0, 100)}`);
         }
 
-        const data = await response.json();
+        const responseData = await response.json();
 
         // sd.cpp returns images in base64 format
-        if (data.images && Array.isArray(data.images)) {
-          for (const img of data.images) {
+        if (responseData.images && Array.isArray(responseData.images)) {
+          for (const img of responseData.images) {
             if (typeof img === 'string') {
               // Extract pure base64 and convert to Buffer
               const pureBase64 = img.startsWith('data:')
@@ -715,11 +724,11 @@ export async function generateImageAction(modelId: string, prompt: string, param
               base64Images.push(Buffer.from(img.data, 'base64'));
             }
           }
-        } else if (data.image) {
+        } else if (responseData.image) {
           // Single image response
-          const pureBase64 = data.image.startsWith('data:')
-            ? data.image.replace(/^data:image\/\w+;base64,/, '')
-            : data.image;
+          const pureBase64 = responseData.image.startsWith('data:')
+            ? responseData.image.replace(/^data:image\/\w+;base64,/, '')
+            : responseData.image;
           base64Images.push(Buffer.from(pureBase64, 'base64'));
         }
 
@@ -729,13 +738,13 @@ export async function generateImageAction(modelId: string, prompt: string, param
       } else {
         // For COMFYUI or other local backends, use OpenAI-compatible API
         // Similar to OpenRouter handling
-        const messages: any[] = [];
-        const userContent: any[] = [{ type: 'text', text: prompt }];
+        const messages: Array<{ role: string; content: unknown }> = [];
+        const userContent: Array<{ type: string; text: string }> = [{ type: 'text', text: prompt }];
         messages.push({ role: 'user', content: userContent });
 
         const completion = await (wrapper.client as OpenAI).chat.completions.create({
           model: wrapper.modelId,
-          messages: messages,
+          messages: messages as OpenAI.ChatCompletionMessageParam[],
         });
 
         // Try to extract image from response
@@ -763,7 +772,7 @@ export async function generateImageAction(modelId: string, prompt: string, param
     const imageResults: { id: string, url: string, prompt: string }[] = [];
     const savedPaths: string[] = [];
 
-    const modelName = (await prisma.aIModel.findUnique({ where: { id: modelId } }))?.name || 'Unknown';
+    const modelName = data.models[modelId]?.name || 'Unknown';
 
     for (const base64 of base64Images) {
       // Reuse saveGeneratedImage Logic internally
@@ -773,49 +782,53 @@ export async function generateImageAction(modelId: string, prompt: string, param
     }
 
     // 3. Success Log
-    await prisma.runLog.update({
-      where: { id: runLogId },
-      data: {
-        status: 'SUCCESS',
-        output: savedPaths.join(', '), // Store comma separated paths
-        completionTime: new Date(),
-        duration: Date.now() - startTime
-      }
-    });
+    await runLogStore.update(runLogId, {
+      status: 'SUCCESS',
+      output: savedPaths.join(', '), // Store comma separated paths
+      completionTime: new Date().toISOString(),
+      duration: Date.now() - startTime
+    }, requestTime);
 
     return { success: true, images: imageResults, runId: runLogId };
 
-  } catch (e: any) {
-    console.error("Image generation error:", e);
-    if (runLogId) {
-      await prisma.runLog.update({
-        where: { id: runLogId },
-        data: {
-          status: 'FAILURE',
-          output: e.message,
-          completionTime: new Date(),
-          duration: Date.now() - startTime
-        }
-      });
+  } catch (e: unknown) {
+    const error = e as Error;
+    console.error("Image generation error:", error);
+    if (runLogId && requestTime) {
+      await runLogStore.update(runLogId, {
+        status: 'FAILURE',
+        output: error.message,
+        completionTime: new Date().toISOString(),
+        duration: Date.now() - startTime
+      }, requestTime);
     }
-    return { success: false, error: e.message };
+    return { success: false, error: error.message };
   }
 }
 
 // --- Run Logs ---
 
-export async function getRunLogs(filters?: { type?: string, status?: string, start?: Date, end?: Date }) {
-  const where: any = {};
-  if (filters?.type) where.type = filters.type;
-  if (filters?.status) where.status = filters.status;
-  if (filters?.start || filters?.end) {
-    where.requestTime = {};
-    if (filters.start) where.requestTime.gte = filters.start;
-    if (filters.end) where.requestTime.lte = filters.end;
-  }
+// Helper to convert RunLog dates from string to Date for client consumption
+function convertRunLogDates(logs: RunLog[]) {
+  return logs.map(log => ({
+    ...log,
+    requestTime: new Date(log.requestTime),
+    completionTime: log.completionTime ? new Date(log.completionTime) : null
+  }));
+}
 
-  return await prisma.runLog.findMany({
-    where,
-    orderBy: { requestTime: 'desc' }
+export async function getRunLogs(filters?: { type?: string, status?: string, days?: number }) {
+  const logs = await runLogStore.getRecent(filters?.days || 30, {
+    type: filters?.type,
+    status: filters?.status
   });
+  return convertRunLogDates(logs);
+}
+
+export async function getAllRunLogs(filters?: { type?: string, status?: string }) {
+  const logs = await runLogStore.getAll({
+    type: filters?.type,
+    status: filters?.status
+  });
+  return convertRunLogDates(logs);
 }

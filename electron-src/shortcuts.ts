@@ -20,22 +20,6 @@ export function registerShortcuts(mainWindow: BrowserWindow): void {
     log.warn('Failed to register shortcut: CommandOrControl+Shift+I');
   }
 
-  // Cmd/Ctrl + Shift + G: 快速进入生成页面
-  const createResult = globalShortcut.register('CommandOrControl+Shift+G', () => {
-    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-    mainWindow.show();
-    mainWindow.focus();
-    try {
-      mainWindow.webContents.send('navigate', '/create');
-    } catch {
-      // ignore
-    }
-  });
-
-  if (!createResult) {
-    log.warn('Failed to register shortcut: CommandOrControl+Shift+G');
-  }
-
   log.info('Global shortcuts registered');
 }
 

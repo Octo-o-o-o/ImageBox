@@ -13,6 +13,7 @@ import { useGeneration } from '@/components/GenerationProvider';
 import { replaceTemplate } from '@/lib/i18n';
 import Link from 'next/link';
 import { ImagePreviewModal } from '@/components/ui';
+import { getShortcutCmdEnterState, setShortcutCmdEnterState, getShortcutKeyDisplay } from '@/lib/shortcutSettings';
 
 const ASPECT_RATIOS = [
   { value: "1:1", label: "1:1" },
@@ -263,6 +264,15 @@ function StudioPageContent() {
     onConfirm: () => { },
   });
 
+  // Shortcut Confirmation Dialog State
+  const [shortcutConfirmDialog, setShortcutConfirmDialog] = useState<{
+    isOpen: boolean;
+    dontAskAgain: boolean;
+  }>({
+    isOpen: false,
+    dontAskAgain: true, // Default checked
+  });
+
   // Template dropdown state
   const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
   const templateDropdownRef = useRef<HTMLDivElement>(null);
@@ -280,6 +290,11 @@ function StudioPageContent() {
           setPreviewImage(null);
           return;
         }
+        // Close shortcut confirm dialog
+        if (shortcutConfirmDialog.isOpen) {
+          setShortcutConfirmDialog({ ...shortcutConfirmDialog, isOpen: false });
+          return;
+        }
         // Close confirm dialog
         if (confirmDialog.isOpen) {
           setConfirmDialog({ ...confirmDialog, isOpen: false });
@@ -289,7 +304,48 @@ function StudioPageContent() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [previewImage, confirmDialog]);
+  }, [previewImage, confirmDialog, shortcutConfirmDialog]);
+
+  // Cmd/Ctrl + Enter keyboard shortcut for quick generation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        // Prevent default behavior
+        e.preventDefault();
+
+        // Don't trigger if already generating or any modal is open
+        if (generatingImage || confirmDialog.isOpen || shortcutConfirmDialog.isOpen || previewImage) {
+          return;
+        }
+
+        // Don't trigger if no prompt or model selected
+        if (!finalImagePrompt.trim() || !selectedImageModelId) {
+          return;
+        }
+
+        // Check shortcut state
+        const shortcutState = getShortcutCmdEnterState();
+
+        if (shortcutState === 'disabled') {
+          // Shortcut is disabled, do nothing
+          return;
+        }
+
+        if (shortcutState === 'unconfirmed') {
+          // First time - show confirmation dialog
+          setShortcutConfirmDialog({ isOpen: true, dontAskAgain: true });
+          return;
+        }
+
+        // Shortcut is enabled - trigger generation
+        handleGenerateImage();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [generatingImage, confirmDialog.isOpen, shortcutConfirmDialog.isOpen, previewImage, finalImagePrompt, selectedImageModelId]);
 
   const showToast = (message: string) => {
     setToast({ message });
@@ -569,7 +625,7 @@ function StudioPageContent() {
     });
   }, []);
 
-  // Listen for config changes (e.g., from SetupWizard) to refresh models and folders
+  // Listen for config changes (e.g., from SetupWizard) to refresh models, folders, and templates
   useEffect(() => {
     const handleConfigChanged = () => {
       // Refresh models and auto-select first available
@@ -596,6 +652,9 @@ function StudioPageContent() {
           setSelectedFolderId(defaultFolder.id);
         }
       });
+
+      // Refresh templates (important for optimize button to appear after SetupWizard configures promptGeneratorId)
+      getTemplates().then(setTemplates);
     };
 
     window.addEventListener('imagebox:config-changed', handleConfigChanged);
@@ -1572,6 +1631,88 @@ function StudioPageContent() {
                   className="flex-1 py-3 px-4 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-lg shadow-orange-500/25"
                 >
                   {tr('create.confirm')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Shortcut Confirmation Dialog */}
+      <AnimatePresence>
+        {shortcutConfirmDialog.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setShortcutConfirmDialog({ ...shortcutConfirmDialog, isOpen: false })}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative max-w-md w-full bg-card border border-border rounded-2xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 pb-4 border-b border-border">
+                <h3 className="text-lg font-bold text-foreground">{tr('create.shortcut.confirm.title')}</h3>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {tr('create.shortcut.confirm.message', { key: getShortcutKeyDisplay() })}
+                </p>
+
+                {/* Don't ask again checkbox */}
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      shortcutConfirmDialog.dontAskAgain
+                        ? 'bg-primary border-primary'
+                        : 'border-muted-foreground/50 group-hover:border-muted-foreground'
+                    }`}
+                    onClick={() => setShortcutConfirmDialog({
+                      ...shortcutConfirmDialog,
+                      dontAskAgain: !shortcutConfirmDialog.dontAskAgain
+                    })}
+                  >
+                    {shortcutConfirmDialog.dontAskAgain && (
+                      <Check className="w-3 h-3 text-primary-foreground" />
+                    )}
+                  </div>
+                  <span className="text-sm text-foreground select-none">
+                    {tr('create.shortcut.confirm.dontShowAgain')}
+                  </span>
+                </label>
+              </div>
+
+              <div className="p-6 pt-4 flex gap-3">
+                <button
+                  onClick={() => {
+                    // Cancel - save as disabled if "don't ask again" is checked
+                    if (shortcutConfirmDialog.dontAskAgain) {
+                      setShortcutCmdEnterState('disabled');
+                    }
+                    setShortcutConfirmDialog({ ...shortcutConfirmDialog, isOpen: false });
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors"
+                >
+                  {tr('create.shortcut.confirm.cancel')}
+                </button>
+                <button
+                  onClick={() => {
+                    // Enable - save as enabled if "don't ask again" is checked
+                    if (shortcutConfirmDialog.dontAskAgain) {
+                      setShortcutCmdEnterState('enabled');
+                    }
+                    setShortcutConfirmDialog({ ...shortcutConfirmDialog, isOpen: false });
+                    // Trigger generation
+                    handleGenerateImage();
+                  }}
+                  className="flex-1 py-3 px-4 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-all shadow-lg shadow-primary/25"
+                >
+                  {tr('create.shortcut.confirm.enable')}
                 </button>
               </div>
             </motion.div>
